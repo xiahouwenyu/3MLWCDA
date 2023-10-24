@@ -21,15 +21,20 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
            save = False, 
            binc="all",
            stack=[],
-           modelindex=[1,2],
+           modelindex=None,
+           pta=[], exta=[],
            smooth=False
            ):  # sourcery skip: default-mutable-arg, low-code-quality# sourcery skip: default-mutable-arg
-    """output:
-    ----------
-    >>> [signal, background, modelbkg, \\
-    signal_smoothed, background_smoothed, modelbkg_smoothed, \\
-    signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
-    modelmap, alpha] \\
+    """Get counts map.
+
+        Args:
+            pta=[1,0,1], exta=[0,0]: if you have 3 pt sources and 2 ext sources, and you only want to keep 1st and 3st sources,you do like this.
+        Returns:
+            ----------
+            >>> [[signal, background, modelbkg, \\
+            signal_smoothed, background_smoothed, modelbkg_smoothed, \\
+            signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
+            modelmap, alpha]....] \\
     """
     #Initialize
     amap = []
@@ -55,7 +60,22 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
     for bin in binc:
         smooth_sigma=smoothsigma[int(bin)]
         active_bin = WCDA._maptree._analysis_bins[bin]
-        model=WCDA._get_expectation(active_bin,bin,modelindex[0],modelindex[1])
+        if modelindex:
+            model=WCDA._get_expectation(active_bin,bin,modelindex[0],modelindex[1])
+        else:
+            model=WCDA._get_expectation(active_bin,bin,0,0)
+            for i,pt in enumerate(pta):
+                if not pt:
+                    model += WCDA._get_expectation(active_bin,bin,i+1,0)
+                    if i != 0:
+                        model -= WCDA._get_expectation(active_bin,bin,i,0)
+            
+            for i,ext in enumerate(exta):
+                if not ext:
+                    model += WCDA._get_expectation(active_bin,bin,0,i+1)
+                    if i != 0:
+                        model -= WCDA._get_expectation(active_bin,bin,0,i)
+
         obs_raw=active_bin.observation_map.as_partial()
         bkg_raw=active_bin.background_map.as_partial()
         res_raw=obs_raw-model
@@ -126,6 +146,17 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
     return amap
 
 def stack_map(map, stack=None):
+    """stack map together.
+
+        Args:
+            stack: weight, usually signal to noise ratio.
+        Returns:
+            ----------
+            >>> [[signal, background, modelbkg, \\
+            signal_smoothed, background_smoothed, modelbkg_smoothed, \\
+            signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
+            modelmap, alpha]....] \\
+    """
     if stack is None:
         return map
     summap = copy.deepcopy(map)
@@ -141,6 +172,17 @@ def stack_map(map, stack=None):
     return outmap
 
 def smoothmap(mapall, smooth_sigma = 0.2896):
+    """Get smooth map.
+
+        Args:
+            smooth_sigma:
+        Returns:
+            ----------
+            >>> [[signal, background, modelbkg, \\
+            signal_smoothed, background_smoothed, modelbkg_smoothed, \\
+            signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
+            modelmap, alpha]....] \\
+    """
     nside=2**10
     npix=hp.nside2npix(nside)
     pixarea = 4 * np.pi/npix
@@ -166,6 +208,19 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
     return mapall
 
 def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[0,"o"]}):  # sourcery skip: extract-duplicate-method
+    """Draw a healpix map with fitting results.
+
+        Args:
+            sources: use function get_sources() to get the fitting results.
+            cat: catalog to draw. such as {"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}, first in [1,"s"] is about if add a label?
+                "o" is the marker you choose.
+        Returns:
+            ----------
+            >>> [[signal, background, modelbkg, \\
+            signal_smoothed, background_smoothed, modelbkg_smoothed, \\
+            signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
+            modelmap, alpha]....] \\
+    """
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad,
@@ -212,6 +267,12 @@ def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
 def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"):
+    """put in a smooth map and get a sig map.
+
+        Args:
+        Returns:
+            sigmap: healpix
+    """
     if len(mymap) == 1:
         i=0
         imap=mymap[0]
@@ -293,7 +354,12 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
     plt.savefig(f"../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
     return S
 
-def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,pta,exta):
+def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,pta,exta, binc="all"):
+    """write residual map to skymap root file.
+
+        Args:
+            pta=[1,0,1], exta=[0,0]: if you have 3 pt sources and 2 ext sources, and you only want to keep 1st and 3st sources,you do like this.
+    """
     
     # outname = "residual_all"
 
@@ -318,8 +384,10 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
 
     ptid = len(pta)
     extid = len(exta)
+    if binc=="all":
+        binc = WCDA._maptree._analysis_bins
 
-    for bin in WCDA._maptree._analysis_bins:
+    for bin in binc:
         print('processing at nHit0',bin)
         ## outfile
         fout = ROOT.TFile.Open(f"../res/{region_name}/{Modelname}/{outname}.root", 'UPDATE')

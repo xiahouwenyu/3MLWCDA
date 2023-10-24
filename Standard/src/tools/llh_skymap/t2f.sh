@@ -1,0 +1,1 @@
+python3.9 txt2fits.py -n siglist_Virgo.txt -o siglist_Virgo

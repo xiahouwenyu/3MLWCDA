@@ -20,6 +20,8 @@ import astropy.units as u
 from astroquery.simbad import Simbad
 from astropy.coordinates import Angle
 
+from tqdm import tqdm
+
 try:
     tevcat = TeVCat.TeVCat()
 except IOError as e:
@@ -471,3 +473,90 @@ def hpDraw(region_name, Modelname, map, ra, dec, rad=5, radx=5,rady=2.5,contours
             plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh.pdf")
 
     return fig
+
+def Draw_lateral_distribution(map, ra, dec, num, width, ifdraw=False):
+    colat_crab = np.radians(90-float(dec))
+    lon_crab = np.radians(float(ra))
+    vec_crab = hp.ang2vec(colat_crab,lon_crab)
+    n = num#number of rings
+    w = width#width of rings in degrees
+    nside = 1024
+    npix=hp.nside2npix(nside)
+    pixel_areas = 4 * np.pi / npix
+
+ 
+    data_disc = np.zeros(n) #define the excess_disc number in each disc
+    data_ring = np.zeros(n) #define the excess_disc number in each ring
+    bkg_disc = np.zeros(n) #define the excess_disc number in each disc
+    bkg_ring = np.zeros(n) #define the excess_disc number in each ring
+    model_disc = np.zeros(n) #define the excess_disc number in each disc
+    model_ring = np.zeros(n) #define the excess_disc number in each ring
+    excess_ring = np.zeros(n) #define the excess_disc number in each ring
+    res_ring = np.zeros(n) #define the excess_disc number in each ring
+
+    npx_disc = np.zeros(n)   #define the number of pixels in each disc
+    npx_ring = np.zeros(n) #define the number of pixels in each ring
+
+    disc = list(np.zeros(n))
+    for i in tqdm(range(1,n+1), desc="get disc pixnum"):
+        disc[i-1] = hp.query_disc(nside,vec_crab,np.radians(w*i))
+        npx_disc[i-1] = disc[i-1].shape[0]
+        
+    npx_ring[0] = npx_disc[0]
+    for i in tqdm(range(1,n), desc="get ring pixnum"):
+        npx_ring[i] = npx_disc[i]-npx_disc[i-1]
+
+    psi = np.arange(w/2,n*w,w) #horizontal coordinates
+
+    data=map[0]
+    bkg=map[1]
+    model=map[2]
+
+    for i in tqdm(range(n),desc="compute disk"):
+        data_disc[i] = sum(data[disc[i]])
+        bkg_disc[i] = sum(bkg[disc[i]])
+        model_disc[i] = sum(model[disc[i]])
+
+    data_ring[0] = data_disc[0]
+    bkg_ring[0] = bkg_disc[0] 
+    model_ring[0] = model_disc[0]
+    errord = np.zeros(n) #poissonian error    
+    errord[0] = np.sqrt(sum(data[disc[0]]))
+    errorb = np.zeros(n) #poissonian error    
+    errorb[0] = np.sqrt(sum(bkg[disc[0]]))
+    errorm = np.zeros(n) #poissonian error    
+    errorm[0] = np.sqrt(sum(model[disc[0]]))
+    for i in tqdm(range(1,n),desc="compute ring"):
+        data_ring[i] = data_disc[i]-data_disc[i-1]
+        errord[i] = np.sqrt(data_ring[i])
+        bkg_ring[i] = bkg_disc[i]-bkg_disc[i-1]
+        errorb[i] = np.sqrt(bkg_ring[i])
+        model_ring[i] = model_disc[i]-model_disc[i-1]
+        errorm[i] = np.sqrt(model_ring[i])
+    data_ring/=npx_ring
+    bkg_ring/=npx_ring
+    model_ring/=npx_ring
+    excess_ring = data_ring-bkg_ring
+    res_ring = data_ring-model_ring
+    errord/=npx_ring
+    errorb/=npx_ring
+    errorm/=npx_ring
+
+    psfdata = np.array([psi, data_ring, errord,  bkg_ring, errorb, model_ring, errorm, excess_ring, res_ring])
+
+    if ifdraw:
+        fig1 = plt.figure()
+        plt.errorbar(psfdata[0],psfdata[1],psfdata[2],fmt='o', label="data", c="tab:blue")
+        plt.errorbar(psfdata[0],psfdata[5],psfdata[6],fmt='o',label="model", c="tab:red")
+        plt.errorbar(psfdata[0],psfdata[3],psfdata[4],fmt='o',label="bkg", c="black")
+        plt.xlabel(r"$\phi^{\circ}$")
+        plt.ylabel(r"$\frac{excess}{N_{pix}}$")
+        plt.legend()
+        fig2 = plt.figure()
+        plt.errorbar(psfdata[0],psfdata[7],psfdata[2],fmt='o',label="excess", c="black")
+        plt.errorbar(psfdata[0],psfdata[8],psfdata[2],fmt='o',label="residual", c="tab:red")
+        plt.xlabel(r"$\phi^{\circ}$")
+        plt.ylabel(r"$\frac{excess}{N_{pix}}$")
+        plt.legend()
+
+    return psfdata

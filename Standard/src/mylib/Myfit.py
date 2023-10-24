@@ -294,6 +294,12 @@ def set_diffusemodel(name, K = 7.3776826e-13, Kf = False, index =-2.733, indexf 
     return Diffuse
 
 def get_sources(lm,result):
+    """Get info of Sources.
+
+        Args:
+        Returns:
+            Sources info
+    """
     sources = {}
     for name,sc in lm.sources.items():
         source = {}

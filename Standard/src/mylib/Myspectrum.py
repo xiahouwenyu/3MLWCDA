@@ -120,7 +120,7 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2])
     np.savetxt(f'../res/{region_name}/{Modelname}/Spectrum_{label}.txt', Fluxdata, delimiter='\t', fmt='%e')
 
-    npd = Flux_WCDA[:,3]/Flux_WCDA[:,6]>=2
+    npd = Flux_WCDA[:,3]/Flux_WCDA[:,6]>=3
     plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
                 yerr=[1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2],\
             #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\

@@ -1,10 +1,10 @@
 # Standard/res/*
 Standard/src/*.ipynb
 # data/*
-Standard/src/mytools/llh_skymap/*.gz
-Standard/src/mytools/llh_skymap/__pycache__
-Standard/src/mytools/skymap/*.gz
-Standard/src/mytools/skymap/*.pdf
+Standard/src/tools/llh_skymap/*.gz
+Standard/src/tools/llh_skymap/__pycache__
+Standard/src/tools/skymap/*.gz
+Standard/src/tools/skymap/*.pdf
 Standard/src/mylib/__pycache__
 !Standard/src/Justdraw.ipynb
 !Standard/src/3MLnew_J0248_tut.ipynb
