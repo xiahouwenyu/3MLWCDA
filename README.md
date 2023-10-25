@@ -1,4 +1,4 @@
-# 3MLWCDA0.91
+# 3MLWCDA
 
 ### V0.92更新
   横分布函数: Draw_lateral_distribution(map, ra, dec, num, width, ifdraw=False)
