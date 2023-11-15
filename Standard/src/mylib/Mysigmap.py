@@ -15,7 +15,12 @@ import copy
 
 import root_numpy as rn
 
+import matplotlib.colors as mcolors
+
 from scipy.optimize import curve_fit
+
+from Mycoord import *
+
 
 def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 0.22, 0.18, 0.15], 
            save = False, 
@@ -55,7 +60,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
     mask = ((-new_lats + np.pi/2 < -20./180*np.pi) | (-new_lats + np.pi/2 > 80./180*np.pi))
 
     if binc=="all":
-        binc=WCDA._maptree._analysis_bins
+        binc=WCDA._active_planes
 
     for bin in binc:
         smooth_sigma=smoothsigma[int(bin)]
@@ -134,7 +139,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
                     summap[i][j] *= weight
         outmap = [np.ma.sum([bin[i] for bin in summap],axis=0) for i in tqdm(range(11))]
         # outmap[-1] = np.ma.sqrt(np.ma.sum([bin[-1]**2*stack[i] for i,bin in enumerate(amap) if i<6],axis=0))
-        smooth_sigma=smoothsigma[int(list(WCDA._maptree._analysis_bins.keys())[-1])+1]
+        smooth_sigma=smoothsigma[len(WCDA._maptree._analysis_bins)-1] #int(list(WCDA._maptree._analysis_bins.keys())[-1])+1
         for i,pix in enumerate(tqdm(pixid)):
             alpha[pix]=2*smooth_sigma*1.51/60./np.sin(theta)
         alpha=hp.ma(alpha)
@@ -207,13 +212,38 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
 
     return mapall
 
-def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[0,"o"]}):  # sourcery skip: extract-duplicate-method
+
+import math
+def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"):
+    angles_circle = np.arange(0, 2 * np.pi, 0.01)
+    x = []
+    y = []
+    b=a*np.sqrt(1-e**2)
+    for angles in angles_circle:
+        or_x = a * np.cos(angles)
+        or_y = b * np.sin(angles)
+        length_or = np.sqrt(or_x * or_x + or_y * or_y)
+        or_theta = math.atan2(or_y, or_x)
+        new_theta = or_theta + e_angle/180*np.pi
+        new_x = e_x + length_or * np.cos(new_theta) #
+        new_y = e_y + length_or * np.sin(new_theta)
+        dnew_x = new_x-e_x
+        new_x = e_x+dnew_x/np.cos(np.radians(new_y))
+        x.append(new_x)
+        y.append(new_y)
+    if coord=="G":
+        x,y = edm2gal(x,y)
+    plt.plot(x,y, color=color, linestyle=linestyle,alpha=alpha)
+
+def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[0,"o"], "AGN":[0,"P"], "3FHL":[0, "D"]}, color="Fermi"):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
         Args:
             sources: use function get_sources() to get the fitting results.
             cat: catalog to draw. such as {"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}, first in [1,"s"] is about if add a label?
                 "o" is the marker you choose.
+                The catalog you can choose is:
+                     TeVCat/3FHL/4FGL/PSR/SNR/AGN/QSO/Simbad
         Returns:
             ----------
             >>> [[signal, background, modelbkg, \\
@@ -224,9 +254,22 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad,
-            colorlabel="Significance", contours=contours, save=False, cat=cat
+            colorlabel="Significance", contours=contours, save=False, cat=cat, color=color
             )
     ax = plt.gca()
+    # colors=list(mcolors.TABLEAU_COLORS.keys()) #CSS4_COLORS
+    colors=['tab:red',
+            'tab:blue',
+            'tab:green',
+            'tab:purple',
+            'tab:orange',
+            'tab:brown',
+            'tab:pink',
+            'tab:gray',
+            'tab:olive',
+            'tab:cyan']
+    i=0
+    ifasymm=False
     for sc in sources.keys():
         source = sources[sc]
         for par in source.keys():
@@ -237,26 +280,44 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
             elif par in ["lat0","dec"]:
                 y = source[par][2]
                 yeu = source[par][3]
-                yel = source[par][4] 
-            elif par in ["sigma","rdiff0","radius"]:
+                yel = source[par][4]
+            elif par in ["sigma","rdiff0","radius", "a"]:
                 sigma = source[par][2]
                 sigmau = source[par][3]
                 sigmal = source[par][4]
-        if sources[sc]['type'] == 'extended source':
-            plt.errorbar(x, y, yerr=(np.abs([yel]), [yeu]), xerr=(np.abs([xel]), [xeu]), fmt='o',markersize=2,capsize=1,elinewidth=1,color="tab:green", label=sc)
-            error_ellipse = Ellipse((x, y), width=sigma/np.cos(np.radians(y)), height=sigma, edgecolor='tab:green', fill=False,linestyle="-")
+            elif par in ["e", "elongation"]:
+                ifasymm=True
+                e = source[par][2]
+                eu = source[par][3]
+                el = source[par][4]
+            elif par in ["theta", "incl"]:
+                ifasymm=True
+                theta = source[par][2]
+                thetau = source[par][3]
+                thetal = source[par][4]
+
+        if sources[sc]['type'] == 'extended source' and not ifasymm:
+            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=mcolors.TABLEAU_COLORS[colors[i]], label=sc)
+            error_ellipse = Ellipse((x, y), width=sigma/np.cos(np.radians(y)), height=sigma, edgecolor=mcolors.TABLEAU_COLORS[colors[i]], fill=False,linestyle="-")
             ax.add_artist(error_ellipse)
-            error_ellipse = Ellipse((x, y), width=(sigma+sigmau)/np.cos(np.radians(y)), height=sigma+sigmau, edgecolor='tab:green', fill=False,linestyle="--", alpha=0.5)
+            error_ellipse = Ellipse((x, y), width=(sigma+sigmau)/np.cos(np.radians(y)), height=sigma+sigmau, edgecolor=mcolors.TABLEAU_COLORS[colors[i]], fill=False,linestyle="--", alpha=0.5)
             ax.add_artist(error_ellipse)
-            error_ellipse = Ellipse((x, y), width=(sigma-abs(+sigmal))/np.cos(np.radians(y)), height=sigma-abs(sigmal), edgecolor='tab:green', fill=False,linestyle="--", alpha=0.5)
+            error_ellipse = Ellipse((x, y), width=(sigma-abs(+sigmal))/np.cos(np.radians(y)), height=sigma-abs(sigmal), edgecolor=mcolors.TABLEAU_COLORS[colors[i]], fill=False,linestyle="--", alpha=0.5)
             ax.add_artist(error_ellipse)
+        elif ifasymm:
+            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=mcolors.TABLEAU_COLORS[colors[i]], label=sc)
+            print(x,y,sigma,e,theta)
+            Draw_ellipse(x,y,sigma,e,theta,mcolors.TABLEAU_COLORS[colors[i]],"-")
         else:
-            plt.errorbar(x, y, yerr=(np.abs([yel]), [yeu]), xerr=(np.abs([xel]), [xeu]), fmt='o',markersize=2,capsize=1,elinewidth=1,color="tab:green",label=sc)
+            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=mcolors.TABLEAU_COLORS[colors[i]],label=sc)
+        i+=1
+        # if i==1:
+        #     i+=1
     plt.legend()
     if save or savename:
         if savename==None:
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_model.png",dpi=300)
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_model.pdf")
+            plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.pdf")
         else:
             plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.png",dpi=300)
             plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.pdf")
@@ -385,8 +446,8 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
     ptid = len(pta)
     extid = len(exta)
     if binc=="all":
-        binc = WCDA._maptree._analysis_bins
-
+        binc = WCDA._active_planes
+        
     for bin in binc:
         print('processing at nHit0',bin)
         ## outfile

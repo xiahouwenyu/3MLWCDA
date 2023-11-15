@@ -22,6 +22,8 @@ from astropy.coordinates import Angle
 
 from tqdm import tqdm
 
+import pandas as pd
+
 try:
     tevcat = TeVCat.TeVCat()
 except IOError as e:
@@ -279,6 +281,51 @@ def GetAGNcat(xmin,xmax,ymin,ymax):
     sources_tmp.sort(key=lambda source: source[0])
     return sources_tmp
 
+def GetLHAASOcat(xmin,xmax,ymin,ymax):
+    LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
+    xa=[]
+    ya=[]
+    assoca=[]
+    changeWCDA=False
+    for i in range(0,len(LHAASOCat)):
+        ras=LHAASOCat.loc[i][2]
+        decs=LHAASOCat.loc[i][3]
+        det = LHAASOCat.loc[i][1]
+        assoc = LHAASOCat.loc[i][0]
+        ass = str(LHAASOCat.loc[i][13])
+        if ass != " " and ass != "nan":
+            assoc+=ass
+        if changeWCDA:
+            assoc=assoc.replace("LHAASO","WCDA")
+            changeWCDA=False
+
+        # if assoc in assoca:
+        #     continue
+        if "KM2A" in det:
+            if ras==" ":
+                changeWCDA=True
+                continue
+            else:
+                rakm2a=ras
+                deckm2a=decs
+                assockm2a=assoc
+                continue
+        elif "WCDA" in det:
+            if ras==" ":
+                ras=rakm2a
+                decs=deckm2a
+                assoc=assockm2a.replace("LHAASO","KM2A")
+        ras=float(ras)
+        decs=float(decs)
+        if (ras < xmin) or (ras > xmax) or (decs < ymin) or (decs>ymax):
+            continue
+        xa.append(ras)
+        ya.append(decs)			
+        assoca.append(assoc)
+    sources_tmp = list(zip(xa,ya,assoca))
+    # sources_tmp.sort(key=lambda source: source[0])
+    return sources_tmp
+
 def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsize=7, label="Cat",textlabel=False, stype=None, criteria=None):
     """Draw catalog.
 
@@ -310,6 +357,8 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsi
             sources_tmp = GetSimbad(xmin,xmax,ymin,ymax, stype, criteria)
         else: 
             sources_tmp = GetSimbad(xmin,xmax,ymin,ymax, criteria=criteria)
+    elif cat=="LHAASO":
+        sources_tmp = GetLHAASOcat(xmin,xmax,ymin,ymax)
 
     ymid = np.mean([ymin,ymax])
     i=0
@@ -372,26 +421,16 @@ def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     # plt.colorbar()
     return rotimg
 
-def hpDraw(region_name, Modelname, map, ra, dec, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}):
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}):
     """Draw healpixmap.
 
         Args:
             cat: catalog to draw. such as {"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}, first in [1,"s"] is about if add a label?
-                "o" is the marker you choose.
+                "o" is the marker you choose. 
+                the catalog you can choose:  TeVCat/3FHL/4FGL/PSR/SNR/AGN/QSO/Simbad
         Returns:
             fig
     """
-    ra_crab, dec_crab =  83.63,22.02
-    ra_j0248, dec_j0248 = 42.19,60.35
-    # ra,dec = ra_crab,dec_crab
-    # ra,dec = ra_j0248, dec_j0248
-    # fig = plt.figure(figsize=(10, 10))
-    # ax = fig.add_subplot(111, projection='mollweide')
-    # rad = 5
-    # radx = 5
-    # rady = 2.5
-
-
     ymax = dec+rady/2
     ymin = dec-rady/2
     xmin = ra-radx/2
@@ -399,14 +438,14 @@ def hpDraw(region_name, Modelname, map, ra, dec, rad=5, radx=5,rady=2.5,contours
 
     tfig   = plt.figure(num=2)
     rot = (0, 0, 0)
-    coord = 'C'
+    
     xsize = 2048
     # img = hp.cartview(hp_map,fig=2,lonra=[ra-rad,ra+rad],latra=[dec-rad,dec+rad],return_projected_map=True, rot=rot, coord=coord, xsize=xsize)
     img = interpimg(map, xmin,xmax,ymin,ymax,xsize)
     plt.close(tfig)
 
 
-    fig = plt.figure(dpi=200)
+    fig = plt.figure(dpi=300)
     dMin = -5
     dMax = 15
     dMin = np.min(img) if np.min(img) != None else -5
@@ -429,9 +468,9 @@ def hpDraw(region_name, Modelname, map, ra, dec, rad=5, radx=5,rady=2.5,contours
         cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean(img)],[np.max(img)])))
     elif np.max(img)<6:
         cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean(img)],[3],[np.max(img)])))
-    elif np.max(img)<30:
+    elif np.max(img)<20:
         cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean(img)],[3],[5],[np.max(img)])))
-    elif np.max(img)<40:
+    elif np.max(img)<30:
         cbar.set_ticks(np.concatenate(([np.min(img)],[5],[np.max(img)])))
     else:
         cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)])))
@@ -474,7 +513,42 @@ def hpDraw(region_name, Modelname, map, ra, dec, rad=5, radx=5,rady=2.5,contours
 
     return fig
 
-def Draw_lateral_distribution(map, ra, dec, num, width, ifdraw=False):
+def maskdisk(map, ra1, dec1, radius):
+    # 将源的坐标转换为HEALPix像素坐标
+    nside=1024
+    ipix = hp.ang2pix(nside, ra1, dec1, lonlat=True)
+
+    # 使用query_disc来填充掩模，设置ipix为True
+    maskid = hp.query_disc(nside, hp.pix2vec(nside, ipix), radius/180*np.pi)
+    map[maskid]=hp.UNSEEN
+    map = hp.ma(map)
+    map[map==0]=hp.UNSEEN
+    map = hp.ma(map)
+    return(map)
+
+def maskdiskout(map, ra1, dec1, radius):
+    # 将源的坐标转换为HEALPix像素坐标
+    nside=1024
+    ipix = hp.ang2pix(nside, ra1, dec1, lonlat=True)
+
+    # 使用query_disc来填充掩模，设置ipix为True
+    pixIdx = list(np.arange(hp.nside2npix(nside)))
+    maskid = list(hp.query_disc(nside, hp.pix2vec(nside, ipix), radius/180*np.pi))
+    map[np.delete(pixIdx,maskid)]=hp.UNSEEN
+    map = hp.ma(map)
+    # map[map==0]=hp.UNSEEN
+    # map = hp.ma(map)
+    return(map)
+
+def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, ifdraw=False, ifsave=True):
+    """ Draw_lateral_distribution.
+
+        Args:
+            num: num of bins
+            width: width of one bin
+        Returns:
+            >>> np.array([psi, data_ring, errord,  bkg_ring, errorb, model_ring, errorm, excess_ring, res_ring])
+    """
     colat_crab = np.radians(90-float(dec))
     lon_crab = np.radians(float(ra))
     vec_crab = hp.ang2vec(colat_crab,lon_crab)
@@ -552,11 +626,16 @@ def Draw_lateral_distribution(map, ra, dec, num, width, ifdraw=False):
         plt.xlabel(r"$\phi^{\circ}$")
         plt.ylabel(r"$\frac{excess}{N_{pix}}$")
         plt.legend()
+        if ifsave:
+            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.pdf")
         fig2 = plt.figure()
         plt.errorbar(psfdata[0],psfdata[7],psfdata[2],fmt='o',label="excess", c="black")
         plt.errorbar(psfdata[0],psfdata[8],psfdata[2],fmt='o',label="residual", c="tab:red")
         plt.xlabel(r"$\phi^{\circ}$")
         plt.ylabel(r"$\frac{excess}{N_{pix}}$")
         plt.legend()
-
+        if ifsave:
+            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
     return psfdata

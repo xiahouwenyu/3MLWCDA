@@ -19,10 +19,11 @@ import argparse
 #ra_crab, dec_crab = 40.67, -0.013  #crab
 #ra_crab, dec_crab =  83.63,22.02
 # ra_crab, dec_crab =  42.19,60.35
-# ra_crab, dec_crab =  42.38, 60.37
+# ra_crab, dec_crab =  42.38, 60.37    #J0248
 # ra_crab, dec_crab = 194.9529,27.9806 #Coma
 # ra_crab, dec_crab = 49.9507,41.5117    #Perseus
-ra_crab, dec_crab = 186.63,12.72       #Virgo
+# ra_crab, dec_crab = 186.63,12.72       #Virgo
+ra_crab, dec_crab =  279.37, -6.96       #G25
 
 lon_crab = np.radians(ra_crab)
 colat_crab = np.radians(90-dec_crab)

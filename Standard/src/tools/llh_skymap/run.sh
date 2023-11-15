@@ -1,7 +1,8 @@
 # conda init bash
 # conda activate 3ML
+source activate 3ML
 # dir=/home/lhaaso/caowy/0_Tools/sig_3ml
-exe=./pixfitting_spec.py
+exe=/data/home/cwy/Science/3MLWCDA0.91/Standard/src/tools/llh_skymap/pixfitting_spec.py
 
 # map=../../data/residual_all.root
 # map=../../data/J0248.root
@@ -12,11 +13,12 @@ exe=./pixfitting_spec.py
 
 # response=/home/lhaaso/caowy/6_Source/data/WCDA_DR_psf.root
 
-map=/data/home/cwy/Science/0_Source/data/20210305_20230731_ihep_goodlist.root
+map=/data/home/cwy/Science/3MLWCDA0.91/data/20210305_20230731_ihep_goodlist.root
+# map=/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/test/J0248res_J0248.root
 # map=/data/home/cwy/Science/0_Source/Standard/res/J0248/gaus+2pt+fixDGE/J0248resall_DGE_cdiff.root
-response=/data/home/cwy/Science/0_Source/data/DR_ihep_mk_MC2.root
+response=/data/home/cwy/Science/3MLWCDA0.91/data/DR_ihep_MK2_newpsf.root
 
-name=Virgo
+name=G25_roi6
 rm -rf *${name}*
 
 python3.9 ${exe} -m ${map} -r ${response} --actBin 0 --name ${name}

@@ -34,7 +34,8 @@ def go(args):
     # ra_crab, dec_crab =  42.38, 60.37 #J0248
     # ra_crab, dec_crab = 194.9529,27.9806 #Coma
     # ra_crab, dec_crab = 49.9507,41.5117    #Perseus
-    ra_crab, dec_crab = 186.63,12.72       #Virgo
+    # ra_crab, dec_crab = 186.63,12.72       #Virgo
+    ra_crab, dec_crab =  279.37, -6.96       #G25
 
 
     colat_crab = np.radians(90-dec_crab)
@@ -117,7 +118,7 @@ def go(args):
                 sig=0
           #  sig_list.append(sig)
         
-        with open("siglist_%s.txt"%name,"a+") as fs:
+        with open("/data/home/cwy/Science/3MLWCDA0.91/Standard/src/tools/llh_skymap/siglist_%s.txt"%name,"a+") as fs:
             fs.write(str(sig)+"\n")
         
 #    np.savetxt(r'siglist_%s.txt'%name,sig_list)
