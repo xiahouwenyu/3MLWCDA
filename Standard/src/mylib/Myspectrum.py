@@ -40,10 +40,10 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 if (".K" not in pa):
                     lm2.sources[ss].parameters[newpa].value = par[pa].value
                     lm2.sources[ss].parameters[newpa].fix = True
-                elif (ss != source):
+                elif (ss != source and "SpatialTemplate" not in pa):
                     lm2.sources[ss].parameters[newpa].value = par[pa].value
                     lm2.sources[ss].parameters[newpa].fix = True
-                else:
+                elif ("SpatialTemplate" not in pa):
                     kparname=newpa
                     # print("change bounds!!!!")
                     lm2.sources[ss].parameters[newpa].bounds=(-1e-11,1e-11)*fluxUnit
