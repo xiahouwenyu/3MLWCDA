@@ -235,7 +235,7 @@ def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"
         x,y = edm2gal(x,y)
     plt.plot(x,y, color=color, linestyle=linestyle,alpha=alpha)
 
-def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[0,"o"], "AGN":[0,"P"], "3FHL":[0, "D"]}, color="Fermi"):  # sourcery skip: extract-duplicate-method
+def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[0,"o"], "AGN":[0,"P"], "3FHL":[0, "D"]}, color="Fermi", colorlabel="", legend=True):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
         Args:
@@ -254,7 +254,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad,
-            colorlabel="Significance", contours=contours, save=False, cat=cat, color=color
+            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color
             )
     ax = plt.gca()
     # colors=list(mcolors.TABLEAU_COLORS.keys()) #CSS4_COLORS
@@ -313,7 +313,8 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
         i+=1
         # if i==1:
         #     i+=1
-    plt.legend()
+    if legend:
+        plt.legend()
     if save or savename:
         if savename==None:
             plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.png",dpi=300)

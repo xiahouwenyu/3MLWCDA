@@ -421,7 +421,7 @@ def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     # plt.colorbar()
     return rotimg
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}):
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}, ifDrawgascontour=False):
     """Draw healpixmap.
 
         Args:
@@ -495,7 +495,8 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady
 
     plt.xlim(ra+radx/2,ra-radx/2)
     plt.ylim(dec-rady/2,dec+rady/2)
-    Drawgascontour()
+    if ifDrawgascontour:
+        Drawgascontour()
 
     plt.gca().set_aspect(1./np.cos((ymax+ymin)/2*np.pi/180))
     # plt.scatter(ra, dec, s=20**2,marker="+", facecolor="#000000", color="#000000")

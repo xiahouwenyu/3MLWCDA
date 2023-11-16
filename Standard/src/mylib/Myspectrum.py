@@ -30,17 +30,20 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
         oldscs = copy.deepcopy(lm2.sources)
         for ss in sources:
             par = copy.deepcopy(lm2.sources[ss].parameters)
-            lm2.remove_source(ss)
-            if str(oldscs[ss].source_type) == "point source":
-                lm2.add_source(PointSource(ss, 0, 0, spectral_shape=PowerlawM()))
-            elif str(oldscs[ss].source_type) == "extended source":
-                lm2.add_source(ExtendedSource(ss, spatial_shape=oldscs[ss].spatial_shape, spectral_shape=PowerlawM()))
+            if ss==source:
+                lm2.remove_source(ss)
+                if str(oldscs[ss].source_type) == "point source":
+                    lm2.add_source(PointSource(ss, 0, 0, spectral_shape=PowerlawM()))
+                elif str(oldscs[ss].source_type) == "extended source":
+                    lm2.add_source(ExtendedSource(ss, spatial_shape=oldscs[ss].spatial_shape, spectral_shape=PowerlawM()))
             for pa in par.keys():
-                newpa = pa.replace("Powerlaw","PowerlawM")
+                newpa=pa
+                if ss==source:
+                    newpa = pa.replace("Powerlaw","PowerlawM")
                 if (".K" not in pa):
                     lm2.sources[ss].parameters[newpa].value = par[pa].value
                     lm2.sources[ss].parameters[newpa].fix = True
-                elif (ss != source and "SpatialTemplate" not in pa):
+                elif (ss != source and ("SpatialTemplate" not in pa)):
                     lm2.sources[ss].parameters[newpa].value = par[pa].value
                     lm2.sources[ss].parameters[newpa].fix = True
                 elif ("SpatialTemplate" not in pa):
