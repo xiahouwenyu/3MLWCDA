@@ -33,7 +33,7 @@ except ImportError as e:
 
 # Try importing TeVCat
 try:
-    import tevcat as TeVCat
+    import tevcat_all as TeVCat
     haveTeVCat = True
 except ImportError as e:
     haveTeVCat = False
@@ -218,6 +218,8 @@ def main():
                    help="Exits after returning min, max and value at center. "
                    "If map is called 'flux', it will give the error if there "
                    "is a map called 'flux_error'")
+    p.add_argument("--contourfile",default=None,
+                   help="contour file name")
 
     # Mutually exclusive option to specify plot xy range OR center + WxH
     argRange = p.add_mutually_exclusive_group(required=False)
@@ -363,12 +365,12 @@ def main():
     # Move to range expected by healpy
     while xmin < -180:
         xmin += 360
-    while xmin > 180:
-        xmin -= 360
+#    while xmin > 180:
+#        xmin -= 360
     while xmax < -180:
         xmax += 360
-    while xmax > 180:
-        xmax -= 360
+#    while xmax > 180:
+#        xmax -= 360
 
     if xmax < xmin:
         tmax = xmax
@@ -696,7 +698,7 @@ def main():
                 phi   = np.linspace(np.deg2rad(xmin)+2.*np.pi,np.deg2rad(xmax), args.xsize)
                 phi[(phi>2.*np.pi)] -= 2.*np.pi
             theta = 0.5*np.pi - np.linspace(np.deg2rad(ymin), np.deg2rad(ymax),
-                                            int(args.xsize/faspect))
+                                            args.xsize/faspect)
             Phi, Theta = np.meshgrid(phi, theta)
             rTheta,rPhi = cRot.I(Theta.reshape(phi.size*theta.size),\
                                 Phi.reshape(phi.size*theta.size))
@@ -731,7 +733,7 @@ def main():
 
         ccolor = args.contourscolor or 'g'
         cstyle = args.contoursstyle or '-'
-        cwidth = args.contourswidth or 2.
+        cwidth = args.contourswidth or 1.
         print ('Contours style: ',ccolor, cstyle, cwidth)
 
         contp = ax.contour(frotimg,
@@ -743,26 +745,28 @@ def main():
                             extent=[cxmax, cxmin, ymax, ymin])
         
         ##Extracting Contours
-#        print("hello")
-#        contparray = np.asarray(contp.allsegs)
-#        print(contparray)
-#        for n, level in enumerate(contp.allsegs):
-#            print(n)
-#            with open("/Users/Chang/Desktop/ss433_residual_contour_%d_hawc.csv" % n, 'wb') as resultFile:
-#                wr = csv.writer(resultFile)
-#                wr.writerow(["# %i sigma" % contp.levels[n]])
-#                wr.writerow(["# Contour No.", "ra", "dec"])
-#                for m, poly in enumerate(level):
-#                    for xy in poly:
-#                        rowout = xy.tolist()
-#                        rowout.insert(0, m)
-#                        rowout[1] += 360
-#                        wr.writerow(rowout)
-#
-#        print(contparray[0].max(axis=1))
-#        print(contparray[0].min(axis=1))
+        if args.contourfile:
+            print("hello")
+            contparray = np.asarray(contp.allsegs)
+            print(contparray)
+            for n, level in enumerate(contp.allsegs):
+                print(n)
+                with open(str(args.contourfile+"%i.csv") % n,"w") as resultFile:		
+#            with open("/eos/user/t/tangruiyi/sig/sig/4/wcda_cocoon_residual%i_G_Fermi.csv" % n, 'w') as resultFile:
+                    wr = csv.writer(resultFile)
+                    wr.writerow(["# %i sigma" % contp.levels[n]])
+                    wr.writerow(["# Contour No.", "ra", "dec"])
+                    for m, poly in enumerate(level):
+                        for xy in poly:
+                            rowout = xy.tolist()
+                            rowout.insert(0, m)
+                            rowout[1] += 0 # 360
+                            wr.writerow(rowout)
 
-#        print(contp.allsegs)
+     #   print(contparray[0].max(axis=1))
+     #   print(contparray[0].min(axis=1))
+
+        print(contp.allsegs)
 
         #contour labels
         

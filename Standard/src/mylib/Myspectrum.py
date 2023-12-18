@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from Myspec import *
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -58,14 +58,22 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                     lm2.sources[ss].free_parameters[fp].fix = True
                 elif (ss == source and ".K" in fp and lm.sources[ss].components['main'].shape.name=="PowerlawM"):
                     lm2.sources[ss].free_parameters[fp].bounds=(-1e-11,1e-11)
+                else:
+                    kparname=fp
 
     result2 = fit("nothing","nothing", WCDA_1,lm2,int(i),int(i),mini=mini,savefit=False, ifgeterror=ifgeterror)
 
     
     TSflux=result2[0].compute_TS(source,result2[1][1]).values[0][2]
+    
     if ifpowerlawM:
+        lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)
+        result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
         if result2[1][0].loc[kparname,"value"]<0:
             TSflux=-TSflux
+    else:
+        lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace("PowerlawM","Powerlaw")], cl=2*CL-1)
+        result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
     return result2, TSflux
 
 def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
@@ -116,6 +124,48 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_lo,y_lo)
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi
+
+def getexposure(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
+    piv=3
+    par = lm.sources[source].parameters.keys()
+    for pp in par:
+        if ".K" in pp:
+            K = lm.sources[source].parameters[pp].value
+        if ".index" in pp:
+            func = fun_Powerlaw
+            index = lm.sources[source].parameters[pp].value
+        if ".alpha" in pp:
+            func = fun_Logparabola
+            alpha = lm.sources[source].parameters[pp].value
+        if ".beta" in pp:
+            func = fun_Logparabola
+            beta = lm.sources[source].parameters[pp].value
+        if ("lat0"in pp) or ("dec" in pp):
+            dec = lm.sources[source].parameters[pp].value
+    try:
+        resp = WCDA._response.get_response_dec_bin(dec) #resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
+    except:
+        resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
+    sbl=resp[str(i)]
+    binlow = sbl.sim_energy_bin_low[0]
+    nbins = len(sbl.sim_signal_events_per_bin)
+    binhigh = sbl.sim_energy_bin_hi[nbins-1]
+    th1=ROOT.TH1D("","",nbins,np.log10(binlow),np.log10(binhigh))
+    for j in range(nbins):
+        signal = sbl.sim_signal_events_per_bin[j]
+        binl = sbl.sim_energy_bin_low[j]
+        binu = sbl.sim_energy_bin_hi[j]
+        simflux = sbl.sim_differential_photon_fluxes[j]*(binu-binl)
+        if func == fun_Logparabola:
+            fitflux = sp.integrate.quad(func,binl,binu,args=(K*1e9,alpha,beta,piv))[0]
+        elif func == fun_Powerlaw:
+            fitflux = sp.integrate.quad(func,binl,binu,args=(K*1e9,index,piv))[0]
+        _flux = signal*fitflux/simflux
+        th1.SetBinContent(j+1,_flux)
+    def xfunc(x,K,index,piv):
+        return x*func(x, K,index,piv)
+    # return th1.GetSum()
+    return th1.Integral(1,nbins-1)/sp.integrate.quad(xfunc,0.1,20,args=(K*1e9,index,piv))[0]
 
 def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     piv=3
@@ -169,8 +219,8 @@ def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(WCDA, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False):
-    Flux_WCDA=np.zeros((len(WCDA._active_planes),8), dtype=np.double())
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95):
+    Flux_WCDA=np.zeros((len(Detector._active_planes),8), dtype=np.double())
     # piv = result[1][0].values[3][0]/1e9
     piv = 3
     par = lm.sources[source].parameters.keys()
@@ -188,11 +238,11 @@ def getdatapoint(WCDA, lm, maptree,response,roi, source="J0248", ifgeterror=Fals
             beta = lm.sources[source].parameters[pp].value
     imin=100
     jls = []
-    for i in WCDA._active_planes:
+    for i in Detector._active_planes:
         if int(i) <= imin:
             imin = int(i)
-        xx = reweightx(lm,WCDA, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM)
+        xx = reweightx(lm,Detector, i,source=source,func=func)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL)
         jls.append(result2[0])
         flux1 = result2[1][0].values[0][0]
         errorl = abs(result2[1][0].values[0][1])
@@ -248,3 +298,87 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
                         markeredgecolor=color, markerfacecolor=color,
                         linewidth=2.5, linestyle="None", alpha=1)
         plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+
+def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1):
+    data = np.loadtxt(file)
+    data[1][data[1]<0]=0
+    data[1][data[5]<=0]=0
+
+    if ifsimpleTS:
+        try: 
+            npd = data[1]/data[4]>=threshold
+        except:
+            npd = data[1]/data[2]>=threshold
+    else:
+        try: 
+            npd = data[5]>=threshold
+        except:
+            npd = data[1]/data[2]>=threshold
+
+    if aserror:
+        plt.errorbar(data[0][npd],data[1][npd],
+            yerr=[data[2][npd],data[3][npd]],\
+        #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+        fmt='go',label=label,c=color, alpha=alpha)
+        
+        plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
+                        yerr=[data[2][~npd],data[3][~npd]],
+                        uplims=True,
+                        marker="None", color=color,
+                        markeredgecolor=color, markerfacecolor=color,
+                        linewidth=2.5, linestyle="None", alpha=alpha)
+        plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+    else:
+        try: 
+            plt.errorbar(data[0][npd],data[1][npd],data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
+        except:
+            plt.errorbar(data[0][npd],data[1][npd],data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
+        
+        try: 
+            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[4][~npd],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=alpha)
+        except:
+            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[2][~npd],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=alpha)
+            
+        plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+    plt.xscale("log")
+    plt.yscale("log")
+
+def plotDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
+    data2 = pd.read_csv(file,sep=',',header=None)
+    x2 = fixx*data2.iloc[:,0].values
+    y2 = fixy*data2.iloc[:,1].values
+    id2 = data2.iloc[:,2].values
+    x2=x2.reshape([int(len(id2)/size),size])
+    y2=y2.reshape([int(len(id2)/size),size])
+    cut = (y2[:,1]-y2[:,0])/y2[:,0]<0.1
+    plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt="o", color=color, uplims=True, label=label) #,xerr=x2[:,4]-x2[:,0]
+    plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut],fmt="o", color=color)
+    plt.yscale("log")
+    plt.xscale("log")
+
+def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14):
+    Energy = np.array(Energy)
+    Flux = np.array(Flux)
+    Ferr = np.array(Ferr)
+    color = np.array([1,     1,     1,   1,     1,     1,     0,     0,     0,     0,     0,     0,     0,     0,     0,  0])
+    color = color[:len(Energy)]
+    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color="tab:blue", label="WCDA J0248 data")
+    plt.errorbar(Energy[Ferr==0][color[Ferr==0]==1],np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,marker=".",linestyle="none",color="tab:blue", uplims=True)
+
+    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color="cornflowerblue", label="Km2a J0248 data")
+    plt.errorbar(Energy[Ferr==0][color[Ferr==0]==0],np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,marker=".",linestyle="none",color="cornflowerblue", uplims=True)
+
+    plt.xlabel(r"$E (TeV)$")
+    plt.ylabel(r"$TeV cm^{-2}s^{-1}$")
+    plt.xscale("log")
+    plt.yscale("log")
+    # plt.ylim(1e-17,5e-10)
+    plt.legend()

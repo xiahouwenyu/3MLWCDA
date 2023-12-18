@@ -1,0 +1,5 @@
+强烈推荐大家用我的script，/eos/user/h/haozhou/wcda/sig，我分成了四步：
+1. 转换root file到fits map并做平滑，e.g.， python3 convert_root2fits.py -i skymap_v18.12_pinc0.95_zen50.root 0.25
+2. 加权合并天图（如果不分bin可省略这部）python3 stack.py -i "skymap_v18.12_pinc1.0_zen60_nHit008.fits.gz skymap_v18.12_pinc1.0_zen60_nHit009.fits.gz" -o skymap_v18.12_pinc1.0_zen60_nHit1029_3200.fits.gz -w "1. 1."
+3. 计算显著性天图，其中 -s 是计算显著性公式，lima5，9，17三个选择，其它则用sqrt(bkg) python3 signif.py -i skymap_v18.12_pinc0.95_zen50_nHit010.fits.gz -o 200_lima17 -s 17
+4. 画图 最简单的就可以 python3 plotMercator.py signif_200_lima17.fits.gz --xyrange 10 60 -5 5 -o signif_200_lima17.pdf，当然你可以有很多选项 比如python3 plotMercator.py signif_200.fits.gz --xyrange 10 60 -5 5 --interpolation --milagro -c G -o signif_200_m.pdf -m -2 -M 15 --dpar 2 --dmer 5 --squareaspect -L Significance -l 3 --tevcat-labels

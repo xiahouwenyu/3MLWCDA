@@ -1,0 +1,1 @@
+python3.9 stack.py -i `ls ./signif_KM2A_all_final_nHit*` -o signif_KM2A_all_final_nHitall_0.39.fits.gz.fits.gz -w 

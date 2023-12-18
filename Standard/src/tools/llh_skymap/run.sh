@@ -18,7 +18,7 @@ map=/data/home/cwy/Science/3MLWCDA0.91/data/20210305_20230731_ihep_goodlist.root
 # map=/data/home/cwy/Science/0_Source/Standard/res/J0248/gaus+2pt+fixDGE/J0248resall_DGE_cdiff.root
 response=/data/home/cwy/Science/3MLWCDA0.91/data/DR_ihep_MK2_newpsf.root
 
-name=G25_roi6
+name=J0057
 rm -rf *${name}*
 
 python3.9 ${exe} -m ${map} -r ${response} --actBin 0 --name ${name}

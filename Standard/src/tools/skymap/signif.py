@@ -25,13 +25,20 @@ signif=args.signif
 psf=args.psf
 
 evt = hp.read_map(inmap, field=0)
+evt=np.ma.abs(evt)
 bkg = hp.read_map(inmap, field=1)
+bkg=np.ma.abs(bkg)
 evt_smoothed = hp.read_map(inmap, field=2)
+evt_smoothed=np.ma.abs(evt_smoothed)
 bkg_smoothed = hp.read_map(inmap, field=3)
+bkg_smoothed=np.ma.abs(bkg_smoothed)
 evt_smoothed2 = hp.read_map(inmap, field=4)
+evt_smoothed2=np.ma.abs(evt_smoothed2)
 bkg_smoothed2 = hp.read_map(inmap, field=5)
+bkg_smoothed2=np.ma.abs(bkg_smoothed2)
 print("readover")
-
+bkg_smoothed2[bkg_smoothed2==0]=0.01
+evt_smoothed2[evt_smoothed2==0]=0.01
 scale=(evt_smoothed+bkg_smoothed)/(bkg_smoothed2+evt_smoothed2)
 scale_evt=(evt_smoothed)/(evt_smoothed2)
 scale_bkg=(bkg_smoothed)/(bkg_smoothed2)
@@ -39,6 +46,8 @@ scale_evt = scale
 scale_bkg = scale
 ON=evt_smoothed*scale_evt
 BK=bkg_smoothed*scale_bkg
+ON[ON==0]=0.01
+BK[BK==0]=0.01
 
 nside=2**10
 npix=hp.nside2npix(nside)
@@ -60,6 +69,9 @@ if signif==5:
 elif signif==9:
     S=(ON-BK)/np.sqrt(ON*alpha+BK)
 elif signif==17:
+    # if ON*np.log((1.+alpha)/alpha*ON/(ON+BK/alpha))+BK/alpha*np.log((1.+alpha)*BK/alpha/(ON+BK/alpha))<0:
+    #      S=0
+    # else:
     S=np.sqrt(2.)*np.sqrt(ON*np.log((1.+alpha)/alpha*ON/(ON+BK/alpha))+BK/alpha*np.log((1.+alpha)*BK/alpha/(ON+BK/alpha)))
     S[ON<BK] *= -1
 else:

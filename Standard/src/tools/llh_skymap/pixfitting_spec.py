@@ -35,14 +35,15 @@ def go(args):
     # ra_crab, dec_crab = 194.9529,27.9806 #Coma
     # ra_crab, dec_crab = 49.9507,41.5117    #Perseus
     # ra_crab, dec_crab = 186.63,12.72       #Virgo
-    ra_crab, dec_crab =  279.37, -6.96       #G25
+    # ra_crab, dec_crab =  279.37, -6.96       #G25
+    ra_crab, dec_crab =  14,63.5             #J0057
 
 
     colat_crab = np.radians(90-dec_crab)
     lon_crab = np.radians(ra_crab)
     vec_crab = hp.ang2vec(colat_crab,lon_crab)
-    data_radius = 6.0  # in degree 
-    model_radius = 8.0
+    data_radius = 3.0  # in degree 
+    model_radius = 5.0
     roi = HealpixConeROI(data_radius=data_radius, model_radius=model_radius, ra=ra_crab, dec=dec_crab)
     name=args.name
     #roi=HealpixMapROI(ra=ra_Cocoon,dec=dec_Cocoon,data_radius=data_radius,model_radius=model_radius, roifile='/home/lhaaso/tangruiyi/analysis/cocoonstuff/roi.fits')
@@ -73,7 +74,7 @@ def go(args):
     spectrum.K.bounds=(-1e-12*fluxUnit, 1e-12*fluxUnit)
     spectrum.piv= 3.*u.TeV
     spectrum.piv.fix=True
-    spectrum.index=-2.6
+    spectrum.index=-2.4
     spectrum.index.fix=True
     WCDA.psf_integration_method="fast"
     model=Model(source)

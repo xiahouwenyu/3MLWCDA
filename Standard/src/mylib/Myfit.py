@@ -185,10 +185,10 @@ if parb != None:
 
 
 
-def fit(regionname, modelname, WCDA,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
+def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
     activate_progress_bars()
-    WCDA.set_active_measurements(s,e)
-    datalist = DataList(WCDA)
+    Detector.set_active_measurements(s,e)
+    datalist = DataList(Detector)
     jl = JointLikelihood(Model, datalist, verbose=verbose)
     if mini == "grid":
         # Create an instance of the GRID minimizer
@@ -235,10 +235,11 @@ def fit(regionname, modelname, WCDA,Model,s,e,mini = "minuit",verbose=False, sav
             os.system(f'mkdir ../res/{regionname}/')
         if not os.path.exists(f'../res/{regionname}/{modelname}/'):
             os.system(f'mkdir ../res/{regionname}/{modelname}/')
-        fig = WCDA.display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True)
+        fig = Detector.display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True)
         fig.savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
         Model.save(f"../res/{regionname}/{modelname}/Model.yml", overwrite=True)
         jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
+        jl.results.optimized_model.save(f"../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
         with open(f"../res/{regionname}/{modelname}/Results.txt", "w") as f:
             f.write("\nFree parameters:\n")
             for l in freepars:
@@ -253,6 +254,77 @@ def fit(regionname, modelname, WCDA,Model,s,e,mini = "minuit",verbose=False, sav
 
     return [jl,result]
 
+def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
+    activate_progress_bars()
+    for i in range(len(Detector)):
+        Detector[i].set_active_measurements(s[i],e[i])
+    datalist = DataList(*Detector)
+    jl = JointLikelihood(Model, datalist, verbose=verbose)
+    if mini == "grid":
+        # Create an instance of the GRID minimizer
+        grid_minimizer = GlobalMinimization("grid")
+
+        # Create an instance of a local minimizer, which will be used by GRID
+        local_minimizer = LocalMinimization("minuit")
+
+        # Define a grid for mu as 10 steps between 2 and 80
+        my_grid = {Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
+
+        # Setup the global minimization
+        # NOTE: the "callbacks" option is useless in a normal 3ML analysis, it is
+        # here only to keep track of the evolution for the plot
+        grid_minimizer.setup(
+            second_minimization=local_minimizer, grid=my_grid #, callbacks=[get_callback(jl)]
+        )
+
+        # Set the minimizer for the JointLikelihood object
+        jl.set_minimizer(grid_minimizer)
+    elif mini == "PAGMO":
+        _extracted_from_fit_30(jl)
+    else:
+        jl.set_minimizer(mini)
+
+    result = jl.fit()
+
+    freepars = []
+    fixedpars = []
+    for p in Model.parameters:
+        par = Model.parameters[p]
+        if par.free:
+            freepars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+        else:
+            fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+
+    if ifgeterror:
+        result = list(result)
+        result[0] = jl.get_errors()
+
+    if savefit:
+        time1 = strftime("%m-%d-%H", localtime())
+        if not os.path.exists(f'../res/{regionname}/'):
+            os.system(f'mkdir ../res/{regionname}/')
+        if not os.path.exists(f'../res/{regionname}/{modelname}/'):
+            os.system(f'mkdir ../res/{regionname}/{modelname}/')
+        fig=[]
+        for i in range(len(Detector)):
+            fig.append(Detector[i].display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True))
+            fig[i].savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+        Model.save(f"../res/{regionname}/{modelname}/Model.yml", overwrite=True)
+        jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
+        jl.results.optimized_model.save(f"../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
+        with open(f"../res/{regionname}/{modelname}/Results.txt", "w") as f:
+            f.write("\nFree parameters:\n")
+            for l in freepars:
+                f.write("%s\n" % l)
+            f.write("\nFixed parameters:\n")
+            for l in fixedpars:
+                f.write("%s\n" % l)
+        result[0].to_html(f"../res/{regionname}/{modelname}/Results_detail.html")
+        result[0].to_csv(f"../res/{regionname}/{modelname}/Results_detail.csv")
+        # new_model_reloaded = load_model("./%s/Model.yml"%(time1))
+        # results_reloaded = load_analysis_results("./%s/Results.fits"%(time1))
+
+    return [jl,result]
 
 # TODO Rename this here and in `fit`
 def _extracted_from_fit_30(jl):
@@ -291,7 +363,7 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
     TSresults
     return TS, TSresults
 
-def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDGE=1,fDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None):
+def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None):
     source=[]
     pts=[]
     exts=[]
@@ -308,8 +380,10 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
     
     tDGE=""
 
+
+
     if ifDGE:
-        if fDGE:
+        if freeDGE:
             tDGE="_DGE_free"
             Diffuse = set_diffusebkg(
                             K = DGEk,
@@ -324,6 +398,14 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
                             )
         lm.add_source(Diffuse)
         exts.append(Diffuse)
+
+    if startfrom != None:
+        lm = load_model(startfrom)
+        exts=[]
+        next = lm.get_number_of_extended_sources()
+        if 'Diffuse' in lm.sources.keys():
+            next-=1
+        npt=lm.get_number_of_point_sources()
 
     for N_src in range(100):
         data=np.zeros(1024*1024*12)

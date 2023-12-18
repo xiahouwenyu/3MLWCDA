@@ -24,6 +24,8 @@ from tqdm import tqdm
 
 import pandas as pd
 
+from Mycoord import *
+
 try:
     tevcat = TeVCat.TeVCat()
 except IOError as e:
@@ -326,7 +328,7 @@ def GetLHAASOcat(xmin,xmax,ymin,ymax):
     # sources_tmp.sort(key=lambda source: source[0])
     return sources_tmp
 
-def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsize=7, label="Cat",textlabel=False, stype=None, criteria=None):
+def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsize=7, label="Cat",textlabel=False, stype=None, criteria=None, iflabel=1, size=1):
     """Draw catalog.
 
         Args:
@@ -367,7 +369,6 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsi
     pre_rt1=0
     pre_rt2=0
     dr=(xmax-xmin)/2/(len(sources_tmp)/2.+1)/2
-    iflabel=1
     counts=1
     for r, d, s in sources_tmp:
             print(cat+": ",counts,r, d, s)
@@ -404,10 +405,10 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsi
                 plt.plot([r,rt],[d,dt],'k--',c=c)
             if iflabel==1:
                 plt.scatter(r,d, color=c, facecolors="none", 
-                marker=mark,label=label)
+                marker=mark,label=label, s=size)
             else:
                 plt.scatter(r,d, color=c, facecolors="none", 
-                marker=mark)
+                marker=mark, s=size)
             iflabel+=1
 
 def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
@@ -421,7 +422,40 @@ def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     # plt.colorbar()
     return rotimg
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"]}, ifDrawgascontour=False):
+def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-4, ifimg=False, ifGAL=False, iflog=False, ifcolorbar=False):
+    import ROOT
+    import root_numpy as rt
+    from matplotlib.colors import Normalize
+    root_file=ROOT.TFile.Open(("../../data/gll_dust.root"),"read")
+    root_th2d=root_file.Get("gll_region")
+    X_nbins=root_th2d.GetNbinsX()
+    Y_nbins=root_th2d.GetNbinsY()
+    X_min=root_th2d.GetXaxis().GetXmin()
+    X_max=root_th2d.GetXaxis().GetXmax()
+    Y_min=root_th2d.GetYaxis().GetXmin()
+    Y_max=root_th2d.GetYaxis().GetXmax()
+    X_size=(X_max-X_min)/X_nbins
+    Y_size=(Y_max-Y_min)/Y_nbins
+    # print(X_min,X_max,X_nbins, X_size)
+    # print(Y_min,Y_max,Y_nbins, Y_size)
+    data = rt.hist2array(root_th2d).T
+    if iflog:
+        data=np.log(data)
+        levels=np.log(levels)
+    ra = np.linspace(X_min,X_max,X_nbins)
+    dec = np.linspace(Y_min,Y_max,Y_nbins)
+    RA, DEC = np.meshgrid(ra, dec)
+    if not ifGAL:
+        RA, DEC = gal2edm(RA, DEC)
+    if ifimg:
+        # plt.imshow(np.log(data),aspect="auto",extent=[X_min,X_max,Y_min,Y_max],origin='lower', alpha=0.7)
+        plt.contourf(RA,DEC,data, alpha=0.3)
+    plt.contour(RA,DEC,data,num,cmap="Greys",alpha=0.7, linestyles=[':', ':', '-.', '-.', '--', '-', '-', '-', '-'],
+                    linewidths=[0.1, 0.2, 0.5, 0.7, 1, 1.2, 1.4, 1.6, 1.8], levels=levels) #levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22,norm=Normalize(vmin=0.2e22,vmax=1e22)
+    if ifcolorbar:
+        plt.colorbar()
+
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "color": "black"}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename=""):
     """Draw healpixmap.
 
         Args:
@@ -431,30 +465,48 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady
         Returns:
             fig
     """
-    ymax = dec+rady/2
-    ymin = dec-rady/2
-    xmin = ra-radx/2
-    xmax = ra+radx/2
+    if skyrange==None:
+        ymax = dec+rady/2
+        ymin = dec-rady/2
+        xmin = ra-radx/2
+        xmax = ra+radx/2
+    else:
+        xmin, xmax, ymin, ymax = skyrange
+        print(xmin, xmax, ymin, ymax)
 
     tfig   = plt.figure(num=2)
     rot = (0, 0, 0)
     
-    xsize = 2048
     # img = hp.cartview(hp_map,fig=2,lonra=[ra-rad,ra+rad],latra=[dec-rad,dec+rad],return_projected_map=True, rot=rot, coord=coord, xsize=xsize)
     img = interpimg(map, xmin,xmax,ymin,ymax,xsize)
+    # img.fillna(1.0,inplace=True)
+    img = np.nan_to_num(img)
     plt.close(tfig)
 
-
-    fig = plt.figure(dpi=300)
+    faspect = abs(xmax - xmin)/abs(ymax-ymin)
+    fysize = 4
+    figsize = (fysize*faspect+2, fysize+2.75)
     dMin = -5
     dMax = 15
     dMin = np.min(img) if np.min(img) != None else -5
     dMax = np.max(img) if np.max(img) != None else 15
+    if zmax !=None:
+        dMax=zmax
+    if zmin !=None:
+        dMin=zmin
     if color == "Milagro":
         textcolor, colormap = MapPalette.setupMilagroColormap(dMin-1, dMax+1, 3, 1000)
     elif color == "Fermi":
         textcolor, colormap = MapPalette.setupGammaColormap(10000)
-    plt.imshow(img, origin="lower",extent=[xmin,xmax,ymin,ymax], cmap=colormap) #
+
+    if plotmol:
+        plt.figure(dpi=300)
+        hp.mollview(map, cmap=colormap, min=dMin, max=dMax, title="LHAASO full sky", xsize=2048)
+        hp.graticule()
+        plt.savefig(f"fullskymol+{savename}.pdf", dpi=300)\
+        
+    fig = plt.figure(dpi=300, figsize=figsize)
+    plt.imshow(img, origin="lower",extent=[xmin,xmax,ymin,ymax],vmin=dMin,vmax=dMax, cmap=colormap) #
 
 
     plt.grid(linestyle="--")
@@ -465,15 +517,23 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady
 
     cbar.set_label(colorlabel)
     if np.max(img)<4:
-        cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean(img)],[np.max(img)])))
+        tiks = np.concatenate(([np.min(img)],[np.mean(img)],[np.max(img)]))
+        
     elif np.max(img)<6:
-        cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean(img)],[3],[np.max(img)])))
+        tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[np.max(img)]))
     elif np.max(img)<20:
-        cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean(img)],[3],[5],[np.max(img)])))
+        tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[5],[np.max(img)]))
     elif np.max(img)<30:
-        cbar.set_ticks(np.concatenate(([np.min(img)],[5],[np.max(img)])))
+        tiks = np.concatenate(([np.min(img)],[5],[np.max(img)]))
     else:
-        cbar.set_ticks(np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)])))
+        tiks = np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)]))
+    if zmax !=None:
+        tiks[tiks>=zmax]=zmax
+    if zmin !=None:
+        tiks[tiks<=zmin]=zmin
+
+    cbar.set_ticks(tiks)
+
     #,cbar.get_ticks()
 
     contp = plt.contour(img,levels=np.sort(contours),colors='g',linestyles = '-',linewidths = 2,origin='upper',extent=[xmin, xmax, ymax, ymin])
@@ -493,16 +553,26 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', rad=5, radx=5,rady
     plt.xlabel(r"$\alpha$ [$^\circ$]")
     plt.ylabel(r"$\delta$ [$^\circ$]")
 
-    plt.xlim(ra+radx/2,ra-radx/2)
-    plt.ylim(dec-rady/2,dec+rady/2)
+    plt.xlim(xmin,xmax)
+    plt.ylim(ymin,ymax)
     if ifDrawgascontour:
         Drawgascontour()
+    if Drawdiff:
+        Draw_diffuse()
+    
 
     plt.gca().set_aspect(1./np.cos((ymax+ymin)/2*np.pi/180))
+    plt.gca().invert_xaxis()
     # plt.scatter(ra, dec, s=20**2,marker="+", facecolor="#000000", color="#000000")
     markerlist=["s","*","o","P","D","v","p","^"]
-    for i,catname in enumerate(cat.keys()):
-        Drawcat(xmin,xmax,ymin,ymax,catname,cat[catname][1],"black",60,label=catname,textlabel=cat[catname][0])
+    if cat != {}:
+        if "color" not in cat.keys():
+            cat["color"]="black"
+        if "size" not in cat.keys():
+            cat["size"]=20
+        for i,catname in enumerate(cat.keys()):
+            if (catname != "size") and (catname != "color"):
+                Drawcat(xmin,xmax,ymin,ymax,catname,cat[catname][1],cat["color"],60,label=catname,textlabel=cat[catname][0], size=cat["size"])
 
     if save:
         if plotres:
