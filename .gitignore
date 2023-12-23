@@ -3,6 +3,7 @@
 # data/*
 Standard/src/tools/llh_skymap/skytxt/*.fits
 Standard/src/tools/llh_skymap/skytxt/*.pdf
+Standard/src/tools/llh_skymap/skytxt/*.txt
 Standard/src/tools/llh_skymap/output
 Standard/src/tools/llh_skymap/*.gz
 Standard/src/tools/llh_skymap/__pycache__
