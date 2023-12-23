@@ -56,7 +56,7 @@ def go(args):
        # source.position.ra.fix=True
         #source.position.dec=dec_pix
       #  source.position.dec.fix=True 
-    spectrum.K=0 *fluxUnit
+    spectrum.K=1e-15*fluxUnit
     spectrum.K.fix=False
     spectrum.K.bounds=(-1e-13*fluxUnit, 1e-13*fluxUnit)
     spectrum.piv= 50.*u.TeV
@@ -74,7 +74,7 @@ def go(args):
         ra_pix , dec_pix = hp.pix2ang(1024,pid,lonlat=True)
         if(dec_pix<-20. or dec_pix>80.):
             sig=hp.UNSEEN
-            with open("/data/home/cwy/Science/3MLWCDA0.91/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
                 fs.write(str(pid)+" "+str(sig)+"\n")
             continue
         source.position.ra=ra_pix
@@ -85,13 +85,13 @@ def go(args):
         WCDA.set_active_measurements(2,7)
         data = DataList(WCDA)
         jl = JointLikelihood(model, data, verbose=False)
-        jl.set_minimizer("MINUIT")
+        jl.set_minimizer("ROOT")
         try:
             param_df, like_df = jl.fit()
         except (threeML.minimizer.minimization.CannotComputeCovariance,OverflowError,FitFailed,RuntimeError):
             sig=hp.UNSEEN
             errid=pid
-            with open("/data/home/cwy/Science/3MLWCDA0.91/Standard/src/tools/llh_skymap/skytxt/erridlist_%s.txt"%name,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/erridlist_%s.txt"%name,"a+") as fs:
                 fs.write(str(errid)+"\n")
         else:
             results = jl.results
@@ -109,7 +109,7 @@ def go(args):
             else:
                 sig=0
           #  sig_list.append(sig)
-        with open("/data/home/cwy/Science/3MLWCDA0.91/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
+        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
             fs.write(str(pid)+" "+str(sig)+"\n")
         
 #    np.savetxt(r'siglist_%s.txt'%name,sig_list)

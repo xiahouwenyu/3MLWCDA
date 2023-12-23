@@ -81,3 +81,17 @@ def change_coord(m, coord):
     new_pix = hp.ang2pix(nside, *new_ang)
 
     return m[..., new_pix]
+
+def icrs2j200(RA, DEC):
+    from astropy.coordinates import SkyCoord
+    import astropy.units as u
+
+    # 定义ICRS坐标
+    icrs_coord = SkyCoord(ra=RA*u.deg, dec=DEC*u.deg, frame='icrs')
+
+    # 将ICRS坐标转换为J2000
+    j2000_coord = icrs_coord.transform_to('fk5')  # 'fk5' 是J2000的默认坐标系
+
+    ra = j2000_coord.ra.value
+    dec = j2000_coord.dec.value
+    return ra,dec

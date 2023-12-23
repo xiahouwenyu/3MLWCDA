@@ -352,29 +352,32 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     plt.yscale("log")
 
 def plotDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
+    # print(file)
     data2 = pd.read_csv(file,sep=',',header=None)
     x2 = fixx*data2.iloc[:,0].values
     y2 = fixy*data2.iloc[:,1].values
     id2 = data2.iloc[:,2].values
     x2=x2.reshape([int(len(id2)/size),size])
     y2=y2.reshape([int(len(id2)/size),size])
-    cut = (y2[:,1]-y2[:,0])/y2[:,0]<0.1
-    plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt="o", color=color, uplims=True, label=label) #,xerr=x2[:,4]-x2[:,0]
-    plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut],fmt="o", color=color)
+    cut = np.abs(y2[:,1]-y2[:,0])/y2[:,0]<0.1
+    # print(cut)
+    plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt=".", xerr=np.array([x2[:,0][cut]-x2[:,3][cut], x2[:,4][cut]-x2[:,0][cut]]), color=color, uplims=True, label=label, capsize=3,) #
+    plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut], xerr=np.array([x2[:,0][~cut]-x2[:,3][~cut], x2[:,4][~cut]-x2[:,0][~cut]]), fmt="o", color=color, capsize=3,)
     plt.yscale("log")
     plt.xscale("log")
 
-def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14):
+def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
     Energy = np.array(Energy)
     Flux = np.array(Flux)
     Ferr = np.array(Ferr)
     color = np.array([1,     1,     1,   1,     1,     1,     0,     0,     0,     0,     0,     0,     0,     0,     0,  0])
     color = color[:len(Energy)]
-    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color="tab:blue", label="WCDA J0248 data")
+    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color="tab:blue", label=f"WCDA {label} data")
     plt.errorbar(Energy[Ferr==0][color[Ferr==0]==1],np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,marker=".",linestyle="none",color="tab:blue", uplims=True)
 
-    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color="cornflowerblue", label="Km2a J0248 data")
-    plt.errorbar(Energy[Ferr==0][color[Ferr==0]==0],np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,marker=".",linestyle="none",color="cornflowerblue", uplims=True)
+    if len(Energy)>6:
+        plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color="cornflowerblue", label="Km2a J0248 data")
+        plt.errorbar(Energy[Ferr==0][color[Ferr==0]==0],np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,marker=".",linestyle="none",color="cornflowerblue", uplims=True)
 
     plt.xlabel(r"$E (TeV)$")
     plt.ylabel(r"$TeV cm^{-2}s^{-1}$")

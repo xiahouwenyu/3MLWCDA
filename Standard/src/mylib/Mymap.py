@@ -92,7 +92,7 @@ def GetFermicat(xmin,xmax,ymin,ymax,cat="3FHL"):
     header = []
     data = []
     if cat == "4FGL":
-        file = '../../data/gll_psc_v32.fit'
+        file = '../../data/gll_psc_v33.fit'
     elif cat == "3FHL":
         file = '../../data/gll_psch_v13.fit'
     with fits.open(file) as hdul:
