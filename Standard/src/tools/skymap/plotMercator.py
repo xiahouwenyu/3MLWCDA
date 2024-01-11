@@ -1026,8 +1026,8 @@ def main():
             i=0
             dt=0
             rt=0
-            pre_rt1=0;
-            pre_rt2=0;
+            pre_rt1=0
+            pre_rt2=0
             ymid=(ymax+ymin)/2.
             dr=(xmax-xmin)/(len(sources_tmp)/2.+1)/2
             for r, d, s in sources_tmp:

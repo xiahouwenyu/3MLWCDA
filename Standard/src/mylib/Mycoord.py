@@ -1,9 +1,5 @@
-from astropy.io import fits
-from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from astropy import units as u
-from astropy.visualization import astropy_mpl_style, imshow_norm
-from astropy.coordinates import Angle
 
 from astropy.coordinates import EarthLocation, AltAz, SkyCoord
 from astropy.time import Time
@@ -95,3 +91,29 @@ def icrs2j200(RA, DEC):
     ra = j2000_coord.ra.value
     dec = j2000_coord.dec.value
     return ra,dec
+
+def distance(ra1, dec1, ra2, dec2):
+    # 将角度转换为弧度
+    ra1_rad = np.radians(ra1)
+    dec1_rad = np.radians(dec1)
+    ra2_rad = np.radians(ra2)
+    dec2_rad = np.radians(dec2)
+
+    # 计算角距离
+    cos_theta = np.sin(dec1_rad) * np.sin(dec2_rad) + np.cos(dec1_rad) * np.cos(dec2_rad) * np.cos(ra1_rad - ra2_rad)
+    
+    # 通过反余弦函数获取角距离（弧度）
+    theta_rad = np.arccos(cos_theta)
+    
+    # 将弧度转换为度
+    theta_deg = np.degrees(theta_rad)
+    
+    return theta_deg
+
+def skyangle(ra1,dec1,ra2,dec2):
+    ra1 = np.radians(ra1)
+    dec1 = np.radians(dec1)
+    ra2 = np.radians(ra2)
+    dec2 = np.radians(dec2)
+    angle= np.arccos(np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(ra1 - ra2))*180./np.pi
+    return angle

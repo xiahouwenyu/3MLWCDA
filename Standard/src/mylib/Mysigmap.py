@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib, sys
 # sys.path.append(__file__[:-12])
 import matplotlib.pyplot as plt
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 
 import Mymap as mt
 
@@ -235,7 +235,164 @@ def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"
         x,y = edm2gal(x,y)
     plt.plot(x,y, color=color, linestyle=linestyle,alpha=alpha)
 
-def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[0,"o"], "AGN":[0,"P"], "3FHL":[0, "D"]}, color="Fermi", colorlabel="", legend=True, Drawdiff=False,     
+
+def high_pass_filter(image, cutoff_freq):
+    # 进行二维傅里叶变换
+    f_transform = np.fft.fft2(image)
+    
+    # 将零频率分量移到中心
+    f_transform_shifted = np.fft.fftshift(f_transform)
+    
+    # 获取图像大小
+    rows, cols = image.shape
+    
+    # 创建一个高通滤波器
+    high_pass_filter = np.ones((rows, cols))
+    center_row, center_col = rows // 2, cols // 2
+    high_pass_filter[center_row - cutoff_freq:center_row + cutoff_freq, 
+                     center_col - cutoff_freq:center_col + cutoff_freq] = 0
+    
+    # 进行傅里叶逆变换
+    filtered_transform_shifted = f_transform_shifted * high_pass_filter
+    filtered_transform = np.fft.ifftshift(filtered_transform_shifted)
+    filtered_image = np.abs(np.fft.ifft2(filtered_transform))
+    
+    return filtered_image
+
+
+def drawfits(fig=None, fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits', vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alpha=1):
+# fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits'; vmin=-15; vmax=30
+    # 打开 FITS 文件
+    hdul = fits.open(fits_file_path)
+    print(hdul.info())
+
+    # 获取数据和坐标信息
+    data = hdul[0].data
+    wcs = WCS(hdul[0].header)
+
+    shape = wcs.array_shape
+    a = wcs.pixel_to_world(0, 0)
+    b = wcs.pixel_to_world(shape[1], shape[0])
+    print(wcs, shape, a,b)
+
+    # 关闭 FITS 文件
+    hdul.close()
+
+    # 检测坐标系类型
+    if "RA" in wcs.wcs.ctype[0] and "DEC" in wcs.wcs.ctype[1]:
+        # 如果包含 "RA" 和 "DEC"，则是赤道坐标
+        xlabel = 'RA (J2000)'
+        ylabel = 'Dec (J2000)'
+    elif "GLON" in wcs.wcs.ctype[0] and "GLAT" in wcs.wcs.ctype[1]:
+        # 如果包含 "GLON" 和 "GLAT"，则是银道坐标
+        xlabel = 'Galactic Longitude'
+        ylabel = 'Galactic Latitude'
+    else:
+        # 如果无法判断，默认使用 "X-axis" 和 "Y-axis"
+        xlabel = 'X-axis'
+        ylabel = 'Y-axis'
+
+    data[np.isnan(data)]=0
+    # 绘制图像
+
+    if (not vmin) or (not vmax):
+        vmin = data.min()
+        vmax = data.max()
+    if fig:
+        ax = fig.gca()
+        if not drawalpha:
+            from matplotlib.colors import Normalize
+
+            alphas = Normalize(vmin, vmax, clip=True)(data)
+            alphas = np.clip(alphas, cutl, cutu)
+            alphas[alphas<=cutl]=0
+            if iffilter:
+                alphas = high_pass_filter(alphas, filter)
+                alphas = Normalize(vmin, vmax, clip=True)(alphas)
+                alphas = np.clip(alphas, cutl, cutu)
+            alphas[alphas<=cutl]=0
+
+            colors = Normalize(vmin, vmax)(data)
+            colors = cmap(colors)
+
+            colors[..., -1] = alphas
+
+            im = ax.imshow(colors, origin='lower', extent=[a.ra.value, b.ra.value, a.dec.value, b.dec.value], vmin=0, vmax=(cutl+cutu)/2, interpolation='bicubic', alpha=alpha)
+            return fig
+        else:
+            im = ax.imshow(data, cmap=cmap, origin='lower', extent=[a.ra.value, b.ra.value, a.dec.value, b.dec.value], vmin=vmin, vmax=vmax, interpolation='bicubic', alpha=alpha)
+            return fig
+    else:
+        fig, ax = plt.subplots(subplot_kw={'projection': wcs})
+        im = ax.imshow(data, cmap=cmap, origin='lower', vmin=vmin, vmax=vmax, interpolation='bicubic')
+        # 添加坐标轴标签
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        # 添加坐标网格
+        ax.coords.grid()
+
+        # 显示坐标轴的度标尺
+        ax.coords[0].set_format_unit('degree')
+        ax.coords[1].set_format_unit('degree')
+
+        # 添加色标
+        cbar = plt.colorbar(im, ax=ax, label='Intensity')
+        plt.show()
+        return fig, data
+    
+def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1):
+    # 将RA和DEC范围转换为SkyCoord对象
+    ra=np.arange(ra_min, ra_max, xsize); dec=np.arange(dec_min, dec_max, ysize)
+    X,Y = np.meshgrid(ra, dec)
+    coords = SkyCoord(ra=X, dec=Y, unit="deg", frame="icrs")
+    # 使用SkyCoord对象获取对应的HEALPix像素索引
+    npix=hp.nside2npix(nside)
+    pixarea = 4*np.pi/npix
+    pix_indices = hp.ang2pix(nside, coords.ra.degree, coords.dec.degree, lonlat=True)
+    if ifplot:
+        plt.figure()
+        plt.imshow(map[pix_indices], extent=[ra_min, ra_max, dec_min, dec_max], origin="lower")
+        plt.gca().invert_xaxis()
+
+    # 创建一个新的FITS文件，其中包含指定方形区域的数据
+    header = fits.Header()
+    header["NAXIS"] = 2
+    header["NAXIS1"] = int(len(ra))
+    header["NAXIS2"] = int(len(dec))
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CRVAL1"] = ra.mean()
+    header["CRVAL2"] = dec.mean()
+    header["CRPIX1"] = header["NAXIS1"] / 2
+    header["CRPIX2"] = header["NAXIS2"] / 2
+    header["CD1_1"] = xsize
+    header["CD2_2"] = ysize
+
+    wcs = WCS(header)
+
+    # 创建一个空的二维数组，用于存储提取的数据
+    extracted_data = np.zeros((header["NAXIS2"], header["NAXIS1"]))
+    
+    # 将HEALPix数据的指定区域复制到新数组中
+    extracted_data = map[pix_indices]
+
+    if ifnorm:
+        extracted_data = extracted_data-extracted_data.min()
+        extracted_data = extracted_data**alpha
+        area = np.radians(xsize)*np.radians(ysize)*np.ones((len(dec), len(ra)))*np.cos(np.radians(Y))
+        integral = extracted_data*area #/pixarea*area
+        extracted_data = extracted_data/integral.sum()
+
+    if check:
+        plt.figure()
+        plt.imshow(area, extent=[ra_min, ra_max, dec_min, dec_max], origin="lower")
+        plt.gca().invert_xaxis()
+
+    # 将提取的数据保存到FITS文件
+    fits.writeto(name, np.array(extracted_data.data), header, overwrite=True)
+
+def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "color": "grey", "angle": 60, "catext": 0}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
     colors=['tab:red',
             'tab:blue',
             'tab:green',
@@ -324,6 +481,13 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
         i+=1
         # if i==1:
         #     i+=1
+
+    if ifdrawfits:
+        if fitsfile:
+            drawfits(fig, fits_file_path=fitsfile, vmin=vmin, vmax=vmax, drawalpha=drawalpha, iffilter=iffilter, cmap=cmap, cutl=cutl, cutu=cutu, filter=filter, alpha=alphaf)
+        else:
+            drawfits(fig, vmin=vmin, vmax=vmax, drawalpha=drawalpha, iffilter=iffilter, cmap=cmap, cutl=cutl, cutu=cutu, filter=filter, alpha=alphaf)
+
     if legend:
         plt.legend()
     if save or savename:

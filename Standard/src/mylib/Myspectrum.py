@@ -351,7 +351,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     plt.xscale("log")
     plt.yscale("log")
 
-def plotDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
+def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
     # print(file)
     data2 = pd.read_csv(file,sep=',',header=None)
     x2 = fixx*data2.iloc[:,0].values
@@ -372,11 +372,11 @@ def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
     Ferr = np.array(Ferr)
     color = np.array([1,     1,     1,   1,     1,     1,     0,     0,     0,     0,     0,     0,     0,     0,     0,  0])
     color = color[:len(Energy)]
-    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color="tab:blue", label=f"WCDA {label} data")
+    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color="tab:blue", label=label+" WCDA")
     plt.errorbar(Energy[Ferr==0][color[Ferr==0]==1],np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,marker=".",linestyle="none",color="tab:blue", uplims=True)
 
     if len(Energy)>6:
-        plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color="cornflowerblue", label="Km2a J0248 data")
+        plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color="cornflowerblue", label=label+" KM2A")
         plt.errorbar(Energy[Ferr==0][color[Ferr==0]==0],np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,marker=".",linestyle="none",color="cornflowerblue", uplims=True)
 
     plt.xlabel(r"$E (TeV)$")

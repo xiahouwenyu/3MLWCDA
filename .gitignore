@@ -1,6 +1,4 @@
-# Standard/res/*
-# Standard/src/*.ipynb
-# data/*
+Standard/src/*.ipynb
 Standard/src/tools/llh_skymap/skytxt/*.fits
 Standard/src/tools/llh_skymap/skytxt/*.pdf
 Standard/src/tools/llh_skymap/skytxt/*.txt
@@ -12,5 +10,6 @@ Standard/src/tools/skymap/*.pdf
 Standard/src/mylib/__pycache__
 Standard/src/.ipynb_checkpoints
 !Standard/src/Justdraw.ipynb
-!Standard/src/3MLnew_J0248_tut.ipynb
+# !Standard/src/3MLnew_J0248_tut.ipynb
 !Standard/src/3MLnew_Crab.ipynb
+!Standard/src/3MLnew_Crab_jfit.ipynb

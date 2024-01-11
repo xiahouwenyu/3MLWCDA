@@ -12,7 +12,13 @@ import copy
 
 from tqdm import tqdm
 
+import root_numpy as rt
+
 from Mysigmap import *
+
+from Mycoord import *
+
+from Mycatalog import LHAASOCat
 
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
@@ -182,7 +188,55 @@ if parb != None:
 
     return source
 
-
+def getcatModel(ra1, dec1, data_radius, model_radius):
+    lm = Model()
+    for i in range(len(LHAASOCat)):
+        cc = LHAASOCat.iloc[i][" components"]
+        if "KM2A" in cc: continue
+        name = LHAASOCat.iloc[i]["Source name"]
+        ras = float(LHAASOCat.iloc[i][" Ra"])
+        decs = float(LHAASOCat.iloc[i][" Dec"])
+        pe = float(LHAASOCat.iloc[i][" positional error"])
+        sigma = float(LHAASOCat.iloc[i][" r39"])
+        sigmae = float(LHAASOCat.iloc[i][" r39 error"])
+        flux = float(LHAASOCat.iloc[i][" N0"])
+        fluxe = float(LHAASOCat.iloc[i][" N0 error"])
+        index = float(LHAASOCat.iloc[i][" index"])
+        indexe = float(LHAASOCat.iloc[i][" index error"])
+        name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace(" ","")
+        if distance(ra1,dec1, ras, decs)<=data_radius:
+            print(f"{name} in data_radius: {data_radius}")
+            if sigma == 0:
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-5*sigmae if sigma-5*sigmae>0 else 0},{sigma+5*sigmae}),
+                k={flux*1e-13}, kb=({(flux-5*fluxe)*1e-13 if (flux-5*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-5*indexe},{-index+5*indexe}), fitrange={5*pe})
+lm.add_source({name})
+            """
+                exec(prompt)
+            else:
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs},
+                k={flux*1e-13}, kb=({(flux-5*fluxe)*1e-13 if (flux-5*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-5*indexe},{-index+5*indexe}), fitrange={5*pe})
+lm.add_source({name})
+            """
+                exec(prompt)
+        elif distance(ra1,dec1, ras, decs)<=model_radius:
+            print(f"{name} in model_radius: {model_radius} have been fixed!!")
+            if sigma == 0:
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,
+                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+lm.add_source({name})
+            """
+                exec(prompt)
+            else:
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,
+                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+lm.add_source({name})
+            """
+                exec(prompt)
+    return lm
 
 
 def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
@@ -221,7 +275,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
     for p in Model.parameters:
         par = Model.parameters[p]
         if par.free:
-            freepars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+            freepars.append("%-45s %35.6g ± %2.6g %s" % (p, par.value, result[0]["error"][p], par._unit))
         else:
             fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
 
@@ -363,7 +417,7 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
     TSresults
     return TS, TSresults
 
-def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None):
+def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}):
     source=[]
     pts=[]
     exts=[]
@@ -386,14 +440,13 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
         if freeDGE:
             tDGE="_DGE_free"
             Diffuse = set_diffusebkg(
-                            K = DGEk,
-                            file=DGEfile,
+                            ra1, dec1,
                             Kf=False, indexf=False
                             )
         else:
             tDGE="_DGE_fix"
             Diffuse = set_diffusebkg(
-                            K = DGEk,
+                            ra1, dec1,
                             file=DGEfile
                             )
         lm.add_source(Diffuse)
@@ -429,7 +482,10 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
         data=hp.ma(data)
         bkg=hp.ma(bkg)
         model=hp.ma(model)
-        resu=data-bkg-model
+        # resu=data-bkg-model
+        on = data
+        off = bkg+model
+        resu = (on-off)/np.sqrt(on+off)
         resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(smooth_sigma))
 
         new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
@@ -462,9 +518,9 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
 
             sources = get_sources(lm,result)
             sources.pop("Diffuse")
-            map2, skymapHeader = hp.read_map("../../data/signif_20210305_20230731_ihep_goodlist_nHit006_0.29.fits.gz.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
             map2 = hp.ma(map2)
-            fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat={ "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"]}, color="Fermi")
+            fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
             plt.show()
 
         if not ifnopt:
@@ -489,9 +545,9 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
 
         sources = get_sources(lm,result)
         sources.pop("Diffuse")
-        map2, skymapHeader = hp.read_map("../../data/signif_20210305_20230731_ihep_goodlist_nHit006_0.29.fits.gz.fits.gz",h=True)
+        map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
         map2 = hp.ma(map2)
-        fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat={ "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"]}, color="Fermi")
+        fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
         plt.show()
 
         if not ifnopt:
@@ -546,8 +602,92 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file="../../data/J0248_dust_bkg_template.fits", piv=3):
+def set_diffusebkg(ra1, dec1, lr=10, br=10, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3):
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    if file == None:
+        from astropy.wcs import WCS
+        from astropy.io import fits
+        name="Cache"
+        root_file=ROOT.TFile.Open(("../../data/gll_dust.root"),"read")
+        root_th2d=root_file.Get("gll_region")
+        X_nbins=root_th2d.GetNbinsX()
+        Y_nbins=root_th2d.GetNbinsY()
+        X_min=root_th2d.GetXaxis().GetXmin()
+        X_max=root_th2d.GetXaxis().GetXmax()
+        Y_min=root_th2d.GetYaxis().GetXmin()
+        Y_max=root_th2d.GetYaxis().GetXmax()
+        X_size=(X_max-X_min)/X_nbins
+        Y_size=(Y_max-Y_min)/Y_nbins
+        # print(X_min,X_max,X_nbins, X_size)
+        # print(Y_min,Y_max,Y_nbins, Y_size)
+        data = rt.hist2array(root_th2d).T
+        lranges = lr
+        branges = br
+        l,b = edm2gal(ra1,dec1)
+        l=int(l); b=int(b)
+        ll = np.arange(l-lranges,l+lranges,X_size)
+        bb =  np.arange(-branges,branges,Y_size)
+        # L,B = np.meshgrid(ll,bb)
+        # RA, DEC = gal2edm(L,B)
+
+        lrange=[l-lranges,l+lranges]
+        brange=[-branges,branges]
+        dataneed = data[int((brange[0]-Y_min)/Y_size):int((brange[1]-Y_min)/Y_size),int((lrange[0]-X_min)/X_size):int((lrange[1]-X_min)/X_size)]
+
+        s = dataneed.copy()
+        for idec,decd in  enumerate(dataneed):
+            ddd = brange[0]+idec*Y_size
+            for ira,counts in enumerate(decd):
+                lll = lrange[0]+ira*X_size
+                s[idec,ira] = (np.radians(X_size)*np.radians(Y_size)*np.cos(np.radians(ddd)))
+
+        A = np.multiply(dataneed,s)
+        ss = np.sum(s)
+        sa = np.sum(A)
+
+        # fi*si ours
+        zsa = 1.3505059134209275e-05
+        # si ours
+        zss = 0.41946493776343513
+
+        # fi*si hsc
+        hsa = 1.33582226223935e-05
+        # si hsc
+        hss = 0.18184396950291062
+
+        F0=10.394e-12/(u.TeV*u.cm**2*u.s*u.sr)
+        # K=F0*(sa*u.sr)/(ss*u.sr)/((hsa*u.sr)/(hss*u.sr))
+        K = F0*hss*(sa/hsa)
+        Kz = F0*hss*(zsa/hsa)
+        K = K.value
+
+        # 定义图像大小
+        naxis1 = len(ll)  # 银经
+        naxis2 = len(bb)  # 银纬
+
+        # 定义银道坐标范围
+        lon_range = lrange  # 银经
+        lat_range = brange  # 银纬
+
+        # 创建 WCS 对象
+        wcs = WCS(naxis=2)
+        wcs.wcs.crpix = [naxis1 / 2, naxis2 / 2]  # 中心像素坐标
+        wcs.wcs.cdelt = np.array([0.1, 0.1])  # 每个像素的尺寸，单位为度
+        wcs.wcs.crval = [l, b]  # 图像中心的银道坐标，单位为度
+        wcs.wcs.ctype = ['GLON-CAR', 'GLAT-CAR']  # 坐标系类型
+        # 创建头文件
+        header = fits.Header()
+        header.update(wcs.to_header())
+        header['OBJECT'] = 'Test Image'
+        header['BUNIT'] = 'Jy/beam'
+
+        # 创建 HDU
+        hdu = fits.PrimaryHDU(data=dataneed/sa, header=header)
+
+        # 保存为 FITS 文件
+        file = f'/data/home/cwy/Science/3MLWCDA/data/{name}_dust_bkg_template.fits'
+        hdu.writeto(file, overwrite=True)
+        
     Diffuseshape = SpatialTemplate_2D(fits_file=file)
     Diffusespec = Powerlaw()
     Diffuse = ExtendedSource("Diffuse",spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
@@ -556,7 +696,7 @@ def set_diffusebkg(K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf 
     if Kb:
         Diffusespec.K.bounds=Kb * fluxUnit
     else:
-        Diffusespec.K.bounds=(0.2*K,5*K) * fluxUnit
+        Diffusespec.K.bounds=(0.001*K,1000*K) * fluxUnit
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
@@ -567,9 +707,9 @@ def set_diffusebkg(K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf 
     Diffuseshape.K = 1/u.deg**2
     return Diffuse
 
-def set_diffusemodel(name, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3):
+def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3):
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
-    Diffuseshape = SpatialTemplate_2D(fits_file='../../data/j0248_diff_template.fits')
+    Diffuseshape = SpatialTemplate_2D(fits_file=fits_file)
     Diffusespec = Powerlaw()
     Diffuse = ExtendedSource(name, spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
     Diffusespec.K = K * fluxUnit
@@ -578,7 +718,7 @@ def set_diffusemodel(name, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733
     if Kb:
         Diffusespec.K.bounds=Kb * fluxUnit
     else:
-        Diffusespec.K.bounds=(0.2*K,5*K) * fluxUnit
+        Diffusespec.K.bounds=(0.001*K,1000*K) * fluxUnit
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
