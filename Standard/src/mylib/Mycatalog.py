@@ -11,16 +11,16 @@ import astropy.units as u
 
 from tqdm import tqdm
 
-LHAASOCat = pd.read_csv("/data/home/cwy/Science/3MLWCDA/data/LHAASO_Catalog_Table1.csv")
+LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
 LHAASOCat=LHAASOCat[LHAASOCat[" Ra"]!=' ']
 
-data = np.recfromtxt("/data/home/cwy/Science/3MLWCDA/data/RRL_table3.txt")
+data = np.recfromtxt("../../data/RRL_table3.txt")
 data = np.array(data, dtype='U13')
 FASTHIIcat = pd.DataFrame(data[1:], columns=data[0])
 
 from astropy.io import fits
 # A large catalogue of molecular clouds with accurate distances within 4 kpc of the Galactic disc
-fits_file = "/data/home/cwy/Science/J_MNRAS_493_351_table1.dat.fits"
+fits_file = "../../data/J_MNRAS_493_351_table1.dat.fits"
 hdul = fits.open(fits_file)
 MCcat = pd.DataFrame(hdul[1].data) 
 
@@ -486,7 +486,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsi
                     ax.add_artist(error_ellipse)
             iflabel+=1
 
-def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=500, sizelhaaso=200, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, bkgmap="/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=True, zmax=30, catname=None, yrange=None):
+def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=500, sizelhaaso=200, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=True, zmax=30, catname=None, yrange=None):
     #load LHAASO
     LHAASOCat=LHAASOCat[LHAASOCat[" Ra"].values!=' ']
     lhra = LHAASOCat[" Ra"].values; lhra=lhra[lhra!=' ']; lhra=lhra.astype(np.float)
