@@ -67,4 +67,4 @@ from Myspectrum import *
 progress_bar.update(1); progress_bar.set_description("Load sub from Mycatalog")
 from Mycatalog import *
 
-print("Yourlib init successful!!!")
+print("Yourlib init successfully!!!")
