@@ -25,7 +25,7 @@ astromodels: https://astromodels.readthedocs.io/en/latest/
 * Myfit 更新
   * jointfit() 联合拟合多个探测器
   * getcatModel() 获取本区域LHAASO catalog模型
-* KM2A 最新天图及相应!
+* KM2A 最新天图及响应!
 
 ### V1.0更新 2024.1.1
 * Mycatalog 更新
