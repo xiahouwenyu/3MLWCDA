@@ -414,10 +414,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
                      TeVCat/3FHL/4FGL/PSR/SNR/AGN/QSO/Simbad
         Returns:
             ----------
-            >>> [[signal, background, modelbkg, \\
-            signal_smoothed, background_smoothed, modelbkg_smoothed, \\
-            signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
-            modelmap, alpha]....] \\
+            >>> fig
     """
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
