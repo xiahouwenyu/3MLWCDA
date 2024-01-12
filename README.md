@@ -3,9 +3,10 @@
 
 ## 如何使用
 ### 配置
-拉取github的内容并安装3ML等相应环境:
+1. 拉取github的内容并安装3ML等相应环境:
 `conda env create -f environment.yaml`
-将Env中的文件夹拷贝到对应环境的site-packages中
+
+2. 将Env中的文件夹拷贝到对应环境的site-packages中
 
 ### 学习
 3ML: https://threeml.readthedocs.io/ (重点看HAWC的插件)
