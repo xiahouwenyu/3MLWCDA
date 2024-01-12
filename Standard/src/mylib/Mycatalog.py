@@ -456,7 +456,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsi
                     rt=r
                 pre_rt2=rt	
                 dt=(ymid+ymin)/2.
-                Rotation=angle
+                Rotation=360-angle
                 Va='top'
             i+=1
             if textlabel:
