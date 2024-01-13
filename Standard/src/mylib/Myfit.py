@@ -18,7 +18,10 @@ from Mysigmap import *
 
 from Mycoord import *
 
-from Mycatalog import LHAASOCat
+try:
+    from Mycatalog import LHAASOCat
+except:
+    pass
 
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
@@ -696,7 +699,7 @@ def set_diffusebkg(ra1, dec1, lr=10, br=10, K = 7.3776826e-13, Kf = True, Kb=Non
     if Kb:
         Diffusespec.K.bounds=Kb * fluxUnit
     else:
-        Diffusespec.K.bounds=(0.001*K,1000*K) * fluxUnit
+        Diffusespec.K.bounds=(0.0001*K,10000*K) * fluxUnit
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True

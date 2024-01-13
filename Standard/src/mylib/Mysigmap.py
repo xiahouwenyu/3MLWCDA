@@ -28,7 +28,8 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
            stack=[],
            modelindex=None,
            pta=[], exta=[],
-           smooth=False
+           smooth=False,
+            stack_sigma=None
            ):  # sourcery skip: default-mutable-arg, low-code-quality# sourcery skip: default-mutable-arg
     """Get counts map.
 
@@ -132,14 +133,20 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
                      modelmap, alpha])
     if stack != []:
         summap = copy.deepcopy(amap)
-        for i, weight in enumerate(stack):
+        for i, bin in enumerate(binc):
+        # for i, weight in enumerate(stack):
+            weight=stack[int(bin)]
             for j in range(10):
                 summap[i][j] *= weight
                 if j in [6, 7, 8]:
                     summap[i][j] *= weight
         outmap = [np.ma.sum([bin[i] for bin in summap],axis=0) for i in tqdm(range(11))]
         # outmap[-1] = np.ma.sqrt(np.ma.sum([bin[-1]**2*stack[i] for i,bin in enumerate(amap) if i<6],axis=0))
-        smooth_sigma=smoothsigma[len(WCDA._maptree._analysis_bins)-1] #int(list(WCDA._maptree._analysis_bins.keys())[-1])+1
+        if stack_sigma:
+            smooth_sigma=stack_sigma
+        else:
+            print("Set stack_sigma automatelly!!!")
+            smooth_sigma=smoothsigma[len(WCDA._maptree._analysis_bins)] #int(list(WCDA._maptree._analysis_bins.keys())[-1])+1
         for i,pix in enumerate(tqdm(pixid)):
             alpha[pix]=2*smooth_sigma*1.51/60./np.sin(theta)
         alpha=hp.ma(alpha)
