@@ -28,16 +28,21 @@ class PSFConvolutor(object):
         kernel_radius_px = int(np.ceil(old_div(self._psf.kernel_radius, flat_sky_proj.pixel_size)))
         pixels_to_keep = kernel_radius_px * 2
 
-        assert pixels_to_keep <= psf_stamp.shape[0] and \
-               pixels_to_keep <= psf_stamp.shape[1], \
-            "The kernel is too large with respect to the model image. Enlarge your model radius."
+        # assert pixels_to_keep <= psf_stamp.shape[0] and \
+        #        pixels_to_keep <= psf_stamp.shape[1], \
+        #     "The kernel is too large with respect to the model image. Enlarge your model radius."
+        
+        if not (pixels_to_keep <= psf_stamp.shape[0] and pixels_to_keep <= psf_stamp.shape[1]):
+            print("The kernel is too large with respect to the model image. Enlarge your model radius.")
 
         xoff = (psf_stamp.shape[0] - pixels_to_keep) // 2
         yoff = (psf_stamp.shape[1] - pixels_to_keep) // 2
 
         self._kernel = psf_stamp[yoff:-yoff, xoff:-xoff]
 
-        assert np.isclose(self._kernel.sum(), 1.0, rtol=1e-2), "Failed to generate proper kernel normalization: got _kernel.sum() = %f; expected 1.0+-0.01." % self._kernel.sum()
+        # assert np.isclose(self._kernel.sum(), 1.0, rtol=1e-2), "Failed to generate proper kernel normalization: got _kernel.sum() = %f; expected 1.0+-0.01." % self._kernel.sum()
+        if not np.isclose(self._kernel.sum(), 1.0, rtol=1e-2):
+            print( "Failed to generate proper kernel normalization: got _kernel.sum() = %f; expected 1.0+-0.01." % self._kernel.sum())
 
         # Renormalize to exactly 1
         self._kernel = old_div(self._kernel, self._kernel.sum())

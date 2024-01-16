@@ -21,6 +21,8 @@ from scipy.optimize import curve_fit
 
 from Mycoord import *
 
+from Myspeedup import libdir, runllhskymap
+
 
 def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 0.22, 0.18, 0.15], 
            save = False, 
@@ -28,7 +30,8 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
            stack=[],
            modelindex=None,
            pta=[], exta=[],
-           smooth=False
+           smooth=False,
+            stack_sigma=None
            ):  # sourcery skip: default-mutable-arg, low-code-quality# sourcery skip: default-mutable-arg
     """Get counts map.
 
@@ -41,6 +44,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
             signal_smoothed2, background_smoothed2, modelbkg_smoothed2, \\
             modelmap, alpha]....] \\
     """
+    
     #Initialize
     amap = []
     nside=2**10
@@ -90,6 +94,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
             modelmap[pix]=model[i]
             modelbkg[pix]=model[i]+bkg_raw[i]
             theta, phi = hp.pix2ang(nside, pix)
+            theta = np.pi/2 - theta
             alpha[pix]=2*smooth_sigma*1.51/60./np.sin(theta) #
 
         print("Mask all")
@@ -132,16 +137,24 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
                      modelmap, alpha])
     if stack != []:
         summap = copy.deepcopy(amap)
-        for i, weight in enumerate(stack):
+        for i, bin in enumerate(binc):
+        # for i, weight in enumerate(stack):
+            weight=stack[int(bin)]
             for j in range(10):
                 summap[i][j] *= weight
                 if j in [6, 7, 8]:
                     summap[i][j] *= weight
         outmap = [np.ma.sum([bin[i] for bin in summap],axis=0) for i in tqdm(range(11))]
         # outmap[-1] = np.ma.sqrt(np.ma.sum([bin[-1]**2*stack[i] for i,bin in enumerate(amap) if i<6],axis=0))
-        smooth_sigma=smoothsigma[len(WCDA._maptree._analysis_bins)-1] #int(list(WCDA._maptree._analysis_bins.keys())[-1])+1
+        if stack_sigma:
+            smooth_sigma=stack_sigma
+        else:
+            print("Set stack_sigma automatelly!!!")
+            stack_sigma=smoothsigma[len(WCDA._maptree._analysis_bins)] #int(list(WCDA._maptree._analysis_bins.keys())[-1])+1
         for i,pix in enumerate(tqdm(pixid)):
-            alpha[pix]=2*smooth_sigma*1.51/60./np.sin(theta)
+            theta, phi = hp.pix2ang(nside, pix)
+            theta = np.pi/2 - theta
+            alpha[pix]=2*stack_sigma*1.51/60./np.sin(theta)
         alpha=hp.ma(alpha)
         outmap[-1]=alpha
 
@@ -260,7 +273,9 @@ def high_pass_filter(image, cutoff_freq):
     return filtered_image
 
 
-def drawfits(fig=None, fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits', vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alpha=1):
+def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits', fig=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alpha=1):
+    from astropy.io import fits
+    from astropy.wcs import WCS
 # fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits'; vmin=-15; vmax=30
     # 打开 FITS 文件
     hdul = fits.open(fits_file_path)
@@ -342,18 +357,22 @@ def drawfits(fig=None, fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard
         return fig, data
     
 def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1):
+    from astropy.io import fits
+    from astropy.wcs import WCS
     # 将RA和DEC范围转换为SkyCoord对象
     ra=np.arange(ra_min, ra_max, xsize); dec=np.arange(dec_min, dec_max, ysize)
+    print(len(ra), len(dec))
     X,Y = np.meshgrid(ra, dec)
     coords = SkyCoord(ra=X, dec=Y, unit="deg", frame="icrs")
     # 使用SkyCoord对象获取对应的HEALPix像素索引
     npix=hp.nside2npix(nside)
     pixarea = 4*np.pi/npix
     pix_indices = hp.ang2pix(nside, coords.ra.degree, coords.dec.degree, lonlat=True)
+    map[map==hp.UNSEEN]=0
     if ifplot:
-        plt.figure()
-        plt.imshow(map[pix_indices], extent=[ra_min, ra_max, dec_min, dec_max], origin="lower")
+        plt.imshow(map[pix_indices], extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto')
         plt.gca().invert_xaxis()
+        plt.colorbar()
 
     # 创建一个新的FITS文件，其中包含指定方形区域的数据
     header = fits.Header()
@@ -366,7 +385,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     header["CRVAL2"] = dec.mean()
     header["CRPIX1"] = header["NAXIS1"] / 2
     header["CRPIX2"] = header["NAXIS2"] / 2
-    header["CD1_1"] = xsize
+    header["CD1_1"] = xsize*np.cos(np.radians(header["CRVAL2"]))
     header["CD2_2"] = ysize
 
     wcs = WCS(header)
@@ -481,9 +500,9 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 
     if ifdrawfits:
         if fitsfile:
-            drawfits(fig, fits_file_path=fitsfile, vmin=vmin, vmax=vmax, drawalpha=drawalpha, iffilter=iffilter, cmap=cmap, cutl=cutl, cutu=cutu, filter=filter, alpha=alphaf)
+            drawfits(fits_file_path=fitsfile, fig=fig, vmin=vmin, vmax=vmax, drawalpha=drawalpha, iffilter=iffilter, cmap=cmap, cutl=cutl, cutu=cutu, filter=filter, alpha=alphaf)
         else:
-            drawfits(fig, vmin=vmin, vmax=vmax, drawalpha=drawalpha, iffilter=iffilter, cmap=cmap, cutl=cutl, cutu=cutu, filter=filter, alpha=alphaf)
+            drawfits(fig=fig, vmin=vmin, vmax=vmax, drawalpha=drawalpha, iffilter=iffilter, cmap=cmap, cutl=cutl, cutu=cutu, filter=filter, alpha=alphaf)
 
     if legend:
         plt.legend()
@@ -500,41 +519,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
-def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"):
-    """put in a smooth map and get a sig map.
-
-        Args:
-        Returns:
-            sigmap: healpix
-    """
-    if len(mymap) == 1:
-        i=0
-        imap=mymap[0]
-    else:
-        imap=mymap[i]
-
-    if res:
-        scale=(imap[3]+imap[5])/(imap[6]+imap[8])
-        ON=imap[3]*scale
-        BK=imap[5]*scale
-        name+="_res"
-    else:
-        scale=(imap[3]+imap[4])/(imap[6]+imap[7])
-        ON=imap[3]*scale
-        BK=imap[4]*scale
-
-    alpha = imap[10]
-
-    if signif==5:
-        S=(ON-BK)/np.sqrt(ON+alpha*BK)
-    elif signif==9:
-        S=(ON-BK)/np.sqrt(ON*alpha+BK)
-    elif signif==17:
-        S=np.sqrt(2.)*np.sqrt(ON*np.log((1.+alpha)/alpha*ON/(ON+BK/alpha))+BK/alpha*np.log((1.+alpha)*BK/alpha/(ON+BK/alpha)))
-        S[ON<BK] *= -1
-    else:
-        S=(ON-BK)/np.sqrt(BK)
-
+def getsig1D(S, region_name, Modelname, name):
     bin_y,bin_x,patches=plt.hist(S.compressed(),bins=100)
     plt.close()
     bin_x=np.array(bin_x)
@@ -586,15 +571,55 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
     plt.legend()
     plt.savefig(f"../res/{region_name}/{Modelname}/hist_sig_{name}.pdf")
     plt.savefig(f"../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
+
+def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908", alpha=None):
+    """put in a smooth map and get a sig map.
+
+        Args:
+        Returns:
+            sigmap: healpix
+    """
+    if len(mymap) == 1:
+        i=0
+        imap=mymap[0]
+    else:
+        imap=mymap[i]
+
+    if res:
+        scale=(imap[3]+imap[5])/(imap[6]+imap[8])
+        ON=imap[3]*scale
+        BK=imap[5]*scale
+        name+="_res"
+    else:
+        scale=(imap[3]+imap[4])/(imap[6]+imap[7])
+        ON=imap[3]*scale
+        BK=imap[4]*scale
+
+    if alpha is not None:
+        alpha = alpha
+    else:
+        alpha = imap[10]
+
+    if signif==5:
+        S=(ON-BK)/np.sqrt(ON+alpha*BK)
+    elif signif==9:
+        S=(ON-BK)/np.sqrt(ON*alpha+BK)
+    elif signif==17:
+        S=np.sqrt(2.)*np.sqrt(ON*np.log((1.+alpha)/alpha*ON/(ON+BK/alpha))+BK/alpha*np.log((1.+alpha)*BK/alpha/(ON+BK/alpha)))
+        S[ON<BK] *= -1
+    else:
+        S=(ON-BK)/np.sqrt(BK)
+    getsig1D(S, region_name, Modelname, name)
     return S
 
-def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,pta,exta, binc="all"):
+def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,pta,exta, data_radius, binc="all", ifrunllh=True, detector="WCDA"):
+    import os
     """write residual map to skymap root file.
 
         Args:
             pta=[1,0,1], exta=[0,0]: if you have 3 pt sources and 2 ext sources, and you only want to keep 1st and 3st sources,you do like this.
     """
-    
+    print(outname+"_res")
     # outname = "residual_all"
 
     # root setting
@@ -606,9 +631,33 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
     colat = np.radians(90-dec1)
     lon = np.radians(ra1)
     vec = hp.ang2vec(colat,lon)
-    holepixid = hp.query_disc(1024,vec,np.radians(10))
+    holepixid = hp.query_disc(1024,vec,np.radians(data_radius))
     pixid=roi.active_pixels(1024)
     npix = hp.nside2npix(1024)
+
+    ptid = len(pta)
+    extid = len(exta)
+    if binc=="all":
+        binc = WCDA._active_planes
+
+    # cut=""
+    # kk=0
+    # if detector=="WCDA":
+    #     for i in range(6):
+    #         if str(i) not in binc:
+    #             if kk==0:
+    #                 cut=cut+f"name!={binc}"
+    #             else:
+    #                 cut=cut+f"&&name!={binc}"
+    #             kk+=1
+    # elif detector=="KM2A":
+    #     for i in range(14):
+    #         if str(i) not in binc:
+    #             if kk==0:
+    #                 cut=cut+f"name!={binc}"
+    #             else:
+    #                 cut=cut+f"&&name!={binc}"
+    #             kk+=1
 
     ## outfile
     fout = ROOT.TFile.Open(f"../res/{region_name}/{Modelname}/{outname}.root", 'recreate')
@@ -616,10 +665,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
     fout.Write(f"../res/{region_name}/{Modelname}/{outname}.root", ROOT.TFile.kOverwrite)
     fout.Close()
 
-    ptid = len(pta)
-    extid = len(exta)
-    if binc=="all":
-        binc = WCDA._active_planes
+
         
     for bin in binc:
         print('processing at nHit0',bin)
@@ -686,3 +732,42 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
         fout.Write()
         fout.Close()
     forg.Close()
+
+    os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {binc[0]} {binc[-1]}')
+    if ifrunllh:
+        runllhskymap(roi, f"../res/{region_name}/{Modelname}/{outname}.root", ra1, dec1, data_radius, outname, detector=detector, ifres=1)
+    return outname+"_res"
+
+def getllhskymap(inname, region_name, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
+    import glob
+    import os
+    folder_path = f"{libdir}/tools/llh_skymap/sourcetxt/{detector}_{inname}"
+    if not os.path.exists(folder_path):
+        pass
+    name = folder_path.replace("./","")
+    all_files = glob.glob(os.path.join(folder_path, '*'))
+    nside=1024
+    npix=hp.nside2npix(nside)
+    skymap=hp.UNSEEN*np.ones(npix)
+    for file in all_files:
+        datas = np.load(file, allow_pickle=True)[0]
+        for dd in datas:
+            if dd != []:
+                dd2 = np.array(dd)
+                if len(dd2) >0:
+                    skymap[dd2[:,0].astype(np.int)]=dd2[:,1]
+    skymap=hp.ma(skymap)
+    if ifsave:
+        hp.write_map(f"../res/{region_name}/{detector}_{inname}.fits.gz", skymap, overwrite=True)
+    if ifdraw:
+        sources={}
+        drawmap(region_name, "Modelname", sources, skymap, ra1, dec1, rad=2*data_radius, contours=[10000],save=0, 
+                cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "size": 20 ,"color": "grey"}, color="Fermi"
+                  )
+    if drawfullsky:
+        fig = mt.hpDraw("region_name", "Modelname", skymap,0,0,skyrange=(0,360,-20,80),
+                    colorlabel="Significance", contours=[1000], save=False, cat={}, color="Milagro", xsize=2048)
+    if tofits:
+        plt.figure()
+        heal2fits(skymap, f"../res/{region_name}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
+    return skymap

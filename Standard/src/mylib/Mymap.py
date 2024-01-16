@@ -245,6 +245,14 @@ def maskdiskout(map, ra1, dec1, radius):
     # map = hp.ma(map)
     return(map)
 
+def maskroi(map, roi):
+    nside=1024
+    pixIdx = list(np.arange(hp.nside2npix(nside)))
+    maskid = roi.active_pixels(nside)
+    map[np.delete(pixIdx,maskid)]=hp.UNSEEN
+    map=hp.ma(map)
+    return(map)
+
 def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, ifdraw=False, ifsave=True):
     """ Draw_lateral_distribution.
 
@@ -345,7 +353,7 @@ def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, 
             plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
     return psfdata
 
-def maskroi(ra1, dec1, data_radius, maskp=[]):
+def getmaskedroi(ra1, dec1, data_radius, maskp=[]):
     nside=2**10
     numpix = hp.nside2npix(nside)
     roimap = np.ones(numpix, dtype=np.float64)

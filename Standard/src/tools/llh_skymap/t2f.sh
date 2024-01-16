@@ -1,1 +1,1 @@
-python3.9 txt2fits.py -n siglist_G25_roi6.txt -o siglist_G25_roi6
+python3.9 txt2fits.py -n siglist_J0057.txt -o siglist_J0057

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from Myspec import *
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -63,17 +63,18 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
 
     result2 = fit("nothing","nothing", WCDA_1,lm2,int(i),int(i),mini=mini,savefit=False, ifgeterror=ifgeterror)
 
-    
     TSflux=result2[0].compute_TS(source,result2[1][1]).values[0][2]
-    
-    if ifpowerlawM:
-        lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)
-        result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
-        if result2[1][0].loc[kparname,"value"]<0:
-            TSflux=-TSflux
-    else:
-        lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace("PowerlawM","Powerlaw")], cl=2*CL-1)
-        result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
+    if not nCL:
+        if ifpowerlawM:
+            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)
+            if (ub-result2[1][0].iloc[0,0])>0:
+                result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
+            if result2[1][0].loc[kparname,"value"]<0:
+                TSflux=-TSflux
+        else:
+            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace("PowerlawM","Powerlaw")], cl=2*CL-1)
+            if (ub-result2[1][0].iloc[0,0])>0:
+                result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
     return result2, TSflux
 
 def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
@@ -219,10 +220,9 @@ def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False):
     Flux_WCDA=np.zeros((len(Detector._active_planes),8), dtype=np.double())
     # piv = result[1][0].values[3][0]/1e9
-    piv = 3
     par = lm.sources[source].parameters.keys()
     for pp in par:
         if ".K" in pp:
@@ -242,7 +242,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=False)
         jls.append(result2[0])
         flux1 = result2[1][0].values[0][0]
         errorl = abs(result2[1][0].values[0][1])
@@ -263,43 +263,70 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         Flux_WCDA[int(i)-imin][7]=np.sqrt(TSflux)
     return Flux_WCDA, jls
 
-def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2):
-    Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7]])
+def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True):
+    Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
     np.savetxt(f'../res/{region_name}/{Modelname}/Spectrum_{label}.txt', Fluxdata, delimiter='\t', fmt='%e')
-    Flux_WCDA[:,3][Flux_WCDA[:,3]<0]=0
-    Flux_WCDA[:,3][Flux_WCDA[:,7]<=0]=0
+    if ncut==True:
+        Flux_WCDA[:,3][Flux_WCDA[:,3]<0]=0
+        Flux_WCDA[:,3][Flux_WCDA[:,7]<=0]=0
 
     if ifsimpleTS:
         npd = Flux_WCDA[:,3]/Flux_WCDA[:,6]>=threshold
     else:
         npd = Flux_WCDA[:,7]>=threshold
-
-    if aserror:
-        plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
-            yerr=[1e9*Flux_WCDA[:,4][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,5][npd]*Flux_WCDA[:,0][npd]**2],\
-        #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
-        fmt='go',label=label,c=color)
-        
-        plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
-                        uplims=True,
-                        marker="None", color=color,
-                        markeredgecolor=color, markerfacecolor=color,
-                        linewidth=2.5, linestyle="None", alpha=1)
-        plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+    if not usexerr:
+        if aserror:
+            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+                yerr=[1e9*Flux_WCDA[:,4][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,5][npd]*Flux_WCDA[:,0][npd]**2],\
+            #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+            fmt='go',label=label,c=color)
+            
+            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=1)
+            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+        else:
+            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+                        yerr=[1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2],\
+                    #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+                    fmt='go',label=label,c=color)
+            
+            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=1)
+            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
     else:
-        plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
-                    yerr=[1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2],\
-                #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
-                fmt='go',label=label,c=color)
+        if aserror:
+            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+                    xerr=[Flux_WCDA[:,0][npd]-Flux_WCDA[:,1][npd], Flux_WCDA[:,2][npd]-Flux_WCDA[:,0][npd]], yerr=[1e9*Flux_WCDA[:,4][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,5][npd]*Flux_WCDA[:,0][npd]**2],\
+            #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+            fmt='go',label=label,c=color)
+            
+            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, xerr=[Flux_WCDA[:,0][~npd]-Flux_WCDA[:,1][~npd], Flux_WCDA[:,2][~npd]-Flux_WCDA[:,0][~npd]], yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=1)
+            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+        else:
+            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+                        xerr=[Flux_WCDA[:,0][npd]-Flux_WCDA[:,1][npd], Flux_WCDA[:,2][npd]-Flux_WCDA[:,0][npd]], yerr=[1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2],\
+                    #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+                    fmt='go',label=label,c=color)
+            
+            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, xerr=[Flux_WCDA[:,0][~npd]-Flux_WCDA[:,1][~npd], Flux_WCDA[:,2][~npd]-Flux_WCDA[:,0][~npd]], yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=1)
+            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
         
-        plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
-                        uplims=True,
-                        marker="None", color=color,
-                        markeredgecolor=color, markerfacecolor=color,
-                        linewidth=2.5, linestyle="None", alpha=1)
-        plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
 
-def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1):
+def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1, usexerr = False):
     data = np.loadtxt(file)
     data[1][data[1]<0]=0
     data[1][data[5]<=0]=0
@@ -314,40 +341,84 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
             npd = data[5]>=threshold
         except:
             npd = data[1]/data[2]>=threshold
-
-    if aserror:
-        plt.errorbar(data[0][npd],data[1][npd],
-            yerr=[data[2][npd],data[3][npd]],\
-        #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
-        fmt='go',label=label,c=color, alpha=alpha)
-        
-        plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
-                        yerr=[data[2][~npd],data[3][~npd]],
-                        uplims=True,
-                        marker="None", color=color,
-                        markeredgecolor=color, markerfacecolor=color,
-                        linewidth=2.5, linestyle="None", alpha=alpha)
-        plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
-    else:
-        try: 
-            plt.errorbar(data[0][npd],data[1][npd],data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
-        except:
-            plt.errorbar(data[0][npd],data[1][npd],data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
-        
-        try: 
-            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[4][~npd],
-                            uplims=True,
-                            marker="None", color=color,
-                            markeredgecolor=color, markerfacecolor=color,
-                            linewidth=2.5, linestyle="None", alpha=alpha)
-        except:
-            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[2][~npd],
-                            uplims=True,
-                            marker="None", color=color,
-                            markeredgecolor=color, markerfacecolor=color,
-                            linewidth=2.5, linestyle="None", alpha=alpha)
+    if not usexerr:
+        if aserror:
+            plt.errorbar(data[0][npd],data[1][npd],
+                yerr=[data[2][npd],data[3][npd]],\
+            #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+            fmt='go',label=label,c=color, alpha=alpha)
             
-        plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
+                            yerr=[data[2][~npd],data[3][~npd]],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=alpha)
+            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+        else:
+            try: 
+                plt.errorbar(data[0][npd],data[1][npd],data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
+            except:
+                plt.errorbar(data[0][npd],data[1][npd],data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
+            
+            try: 
+                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[4][~npd],
+                                uplims=True,
+                                marker="None", color=color,
+                                markeredgecolor=color, markerfacecolor=color,
+                                linewidth=2.5, linestyle="None", alpha=alpha)
+            except:
+                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[2][~npd],
+                                uplims=True,
+                                marker="None", color=color,
+                                markeredgecolor=color, markerfacecolor=color,
+                                linewidth=2.5, linestyle="None", alpha=alpha)
+                
+            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+    else:
+        if aserror:
+            plt.errorbar(data[0][npd],data[1][npd],
+                xerr=[data[0][npd]-data[6][npd], data[7][npd]-data[0][npd]],
+                yerr=[data[2][npd],data[3][npd]],\
+            #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
+            fmt='go',label=label,c=color, alpha=alpha)
+            
+            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
+                            xerr=[data[0][~npd]-data[6][~npd], data[7][~npd]-data[0][~npd]],
+                            yerr=[data[2][~npd],data[3][~npd]],
+                            uplims=True,
+                            marker="None", color=color,
+                            markeredgecolor=color, markerfacecolor=color,
+                            linewidth=2.5, linestyle="None", alpha=alpha)
+            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+        else:
+            try: 
+                plt.errorbar(data[0][npd],data[1][npd],
+                             xerr=[data[0][npd]-data[6][npd], data[7][npd]-data[0][npd]],
+                             yerr=data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
+            except:
+                plt.errorbar(data[0][npd],data[1][npd],
+                             xerr=[data[0][npd]-data[6][npd], data[7][npd]-data[0][npd]],
+                             yerr=data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
+            try: 
+                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],
+                             xerr=[data[0][~npd]-data[6][~npd], data[7][~npd]-data[0][~npd]],
+                             yerr=data[4][~npd],
+                                uplims=True,
+                                marker="None", color=color,
+                                markeredgecolor=color, markerfacecolor=color,
+                                linewidth=2.5, linestyle="None", alpha=alpha)
+            except:
+                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],
+                             xerr=[data[0][~npd]-data[6][~npd], data[7][~npd]-data[0][~npd]],
+                             yerr=data[2][~npd],
+                                uplims=True,
+                                marker="None", color=color,
+                                markeredgecolor=color, markerfacecolor=color,
+                                linewidth=2.5, linestyle="None", alpha=alpha)
+                
+            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+
     plt.xscale("log")
     plt.yscale("log")
 

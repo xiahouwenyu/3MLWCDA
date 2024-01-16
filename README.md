@@ -22,6 +22,25 @@ astromodels: https://astromodels.readthedocs.io/en/latest/
 欢迎反映需求和bug, 以及通过github提交你的修改和新增内容, 我们共同开发.
 
 ## 更新
+### V1.2更新 2024.1.16
+* Myspeedup 创建
+  * runllhskymap() 调用PBS加速获取llhskymap,大概6-10min一张6度roi天图,加速空间还很大,如合理分配节点以最大化利用多进程
+* Mysigmap 更新
+  * getllhskymap() 收集PBS结果并保存healpix和普通fits文件, 并画图
+  * write_resmap() 更新 可设置自动AddUserInfo并提交残差天图的runllhskymap()
+  * getsig1D()     单独的画一位显著性分布的函数
+  * heal2fits()    Bug 修复
+* Myfit 更新
+  * get_sources()  无需依赖拟合result, 可以画初始化模型
+  * Search()       更新 支持从catalog出发搜索新源, 支持KM2A
+  * getcatModel()  更新 修复Bug
+* Mymap 更新
+  * maskroi()      Mask healpix 非roi区域
+
+* Tools 更新
+  * LHAASO trans
+  * LHAASO llhskymap
+
 ### V1.1更新 2024.1.10
 * Myfit 更新
   * jointfit() 联合拟合多个探测器

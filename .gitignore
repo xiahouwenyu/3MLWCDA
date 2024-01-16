@@ -1,8 +1,14 @@
 Standard/src/*.ipynb
 Standard/src/tools/llh_skymap/skytxt/*.fits
+Standard/src/tools/llh_skymap/skytxt/*.gz
 Standard/src/tools/llh_skymap/skytxt/*.pdf
 Standard/src/tools/llh_skymap/skytxt/*.txt
-Standard/src/tools/llh_skymap/output
+Standard/src/tools/llh_skymap/sourcetxt/*
+Standard/src/tools/LHAASO_skytrans/skytxt/*txt
+Standard/src/tools/LHAASO_skytrans/skytxt/*pdf
+Standard/src/tools/LHAASO_skytrans/skytxt/*fits
+Standard/src/tools/LHAASO_skytrans/skytxt/*gz
+Standard/src/tools/llh_skymap/output/*
 Standard/src/tools/llh_skymap/*.gz
 Standard/src/tools/llh_skymap/__pycache__
 Standard/src/tools/skymap/*.gz
@@ -10,6 +16,11 @@ Standard/src/tools/skymap/*.pdf
 Standard/src/mylib/__pycache__
 Standard/src/.ipynb_checkpoints
 !Standard/src/Justdraw.ipynb
-# !Standard/src/3MLnew_J0248_tut.ipynb
+!Standard/src/tools/llh_skymap/sourcetxt/*ipynb
 !Standard/src/3MLnew_Crab.ipynb
 !Standard/src/3MLnew_Crab_jfit.ipynb
+!Standard/src/3MLnew_Crab_KM2A.ipynb
+!Standard/src/3MLnew_Crab_beys.ipynb
+!Standard/src/3MLnew_S147_KM2A.ipynb
+!Standard/src/3MLnew_S147.ipynb
+!Standard/src/sccatalog.ipynb

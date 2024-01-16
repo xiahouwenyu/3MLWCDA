@@ -1,0 +1,65 @@
+/data/home/cwy/.mylib/miniconda3/envs/3ML/lib/python3.9/site-packages/distributed/cli/dask_worker.py:266: FutureWarning: dask-worker is deprecated and will be removed in a future release; use `dask worker` instead
+  warnings.warn(
+2024-01-15 22:19:30,697 - distributed.nanny - INFO -         Start Nanny at: 'tcp://192.168.1.105:38320'
+2024-01-15 22:19:31,832 - distributed.worker - INFO -       Start worker at:  tcp://192.168.1.105:37526
+2024-01-15 22:19:31,832 - distributed.worker - INFO -          Listening to:  tcp://192.168.1.105:37526
+2024-01-15 22:19:31,832 - distributed.worker - INFO -          dashboard at:        192.168.1.105:33866
+2024-01-15 22:19:31,832 - distributed.worker - INFO - Waiting to connect to:   tcp://192.168.1.105:8786
+2024-01-15 22:19:31,832 - distributed.worker - INFO - -------------------------------------------------
+2024-01-15 22:19:31,832 - distributed.worker - INFO -               Threads:                        208
+2024-01-15 22:19:31,832 - distributed.worker - INFO -                Memory:                 754.14 GiB
+2024-01-15 22:19:31,832 - distributed.worker - INFO -       Local Directory: /tmp/dask-scratch-space/worker-_fxxt_44
+2024-01-15 22:19:31,832 - distributed.worker - INFO - -------------------------------------------------
+2024-01-15 22:19:31,846 - distributed.worker - INFO - Starting Worker plugin shuffle
+2024-01-15 22:19:31,846 - distributed.worker - INFO -         Registered to:   tcp://192.168.1.105:8786
+2024-01-15 22:19:31,846 - distributed.worker - INFO - -------------------------------------------------
+2024-01-15 22:19:31,847 - distributed.core - INFO - Starting established connection to tcp://192.168.1.105:8786
+2024-01-15 22:40:22,125 - distributed.utils_perf - WARNING - full garbage collections took 12% CPU time recently (threshold: 10%)
+2024-01-15 22:40:25,184 - distributed.utils_perf - WARNING - full garbage collections took 12% CPU time recently (threshold: 10%)
+2024-01-15 22:40:26,986 - distributed.utils_perf - WARNING - full garbage collections took 12% CPU time recently (threshold: 10%)
+2024-01-15 22:40:28,784 - distributed.utils_perf - WARNING - full garbage collections took 13% CPU time recently (threshold: 10%)
+2024-01-15 22:40:30,409 - distributed.utils_perf - WARNING - full garbage collections took 14% CPU time recently (threshold: 10%)
+2024-01-15 22:40:32,057 - distributed.utils_perf - WARNING - full garbage collections took 16% CPU time recently (threshold: 10%)
+2024-01-15 22:40:33,679 - distributed.utils_perf - WARNING - full garbage collections took 17% CPU time recently (threshold: 10%)
+2024-01-15 22:40:35,536 - distributed.utils_perf - WARNING - full garbage collections took 18% CPU time recently (threshold: 10%)
+2024-01-15 22:40:37,595 - distributed.utils_perf - WARNING - full garbage collections took 14% CPU time recently (threshold: 10%)
+2024-01-15 22:40:39,361 - distributed.utils_perf - WARNING - full garbage collections took 15% CPU time recently (threshold: 10%)
+2024-01-15 22:40:41,535 - distributed.utils_perf - WARNING - full garbage collections took 15% CPU time recently (threshold: 10%)
+2024-01-15 22:40:43,861 - distributed.utils_perf - WARNING - full garbage collections took 15% CPU time recently (threshold: 10%)
+2024-01-15 22:40:46,050 - distributed.utils_perf - WARNING - full garbage collections took 16% CPU time recently (threshold: 10%)
+2024-01-15 22:40:48,478 - distributed.utils_perf - WARNING - full garbage collections took 23% CPU time recently (threshold: 10%)
+2024-01-15 22:40:51,162 - distributed.utils_perf - WARNING - full garbage collections took 23% CPU time recently (threshold: 10%)
+2024-01-15 22:40:53,776 - distributed.utils_perf - WARNING - full garbage collections took 26% CPU time recently (threshold: 10%)
+2024-01-15 22:40:56,510 - distributed.utils_perf - WARNING - full garbage collections took 26% CPU time recently (threshold: 10%)
+2024-01-15 22:41:22,478 - distributed.utils_perf - WARNING - full garbage collections took 23% CPU time recently (threshold: 10%)
+2024-01-15 22:41:24,112 - distributed.utils_perf - WARNING - full garbage collections took 24% CPU time recently (threshold: 10%)
+2024-01-15 23:08:30,582 - distributed.worker - INFO - Stopping worker at tcp://192.168.1.105:37121. Reason: scheduler-close
+2024-01-15 23:08:30,585 - distributed.batched - INFO - Batched Comm Closed <TCP (closed) Worker->Scheduler local=tcp://192.168.1.105:39642 remote=tcp://192.168.1.105:8786>
+Traceback (most recent call last):
+  File "/data/home/cwy/.mylib/miniconda3/envs/3ML/lib/python3.9/site-packages/distributed/comm/tcp.py", line 298, in write
+    raise StreamClosedError()
+tornado.iostream.StreamClosedError: Stream is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/home/cwy/.mylib/miniconda3/envs/3ML/lib/python3.9/site-packages/distributed/batched.py", line 115, in _background_send
+    nbytes = yield coro
+  File "/data/home/cwy/.mylib/miniconda3/envs/3ML/lib/python3.9/site-packages/tornado/gen.py", line 767, in run
+    value = future.result()
+  File "/data/home/cwy/.mylib/miniconda3/envs/3ML/lib/python3.9/site-packages/distributed/comm/tcp.py", line 309, in write
+    convert_stream_closed_error(self, e)
+  File "/data/home/cwy/.mylib/miniconda3/envs/3ML/lib/python3.9/site-packages/distributed/comm/tcp.py", line 142, in convert_stream_closed_error
+    raise CommClosedError(f"in {obj}: {exc}") from exc
+distributed.comm.core.CommClosedError: in <TCP (closed) Worker->Scheduler local=tcp://192.168.1.105:39642 remote=tcp://192.168.1.105:8786>: Stream is closed
+2024-01-15 23:08:30,591 - distributed.nanny - INFO - Closing Nanny gracefully at 'tcp://192.168.1.105:33865'. Reason: scheduler-close
+2024-01-15 23:08:30,632 - distributed.core - INFO - Received 'close-stream' from tcp://192.168.1.105:8786; closing.
+2024-01-15 23:08:30,632 - distributed.nanny - INFO - Worker closed
+2024-01-15 23:08:30,781 - distributed._signals - INFO - Received signal SIGTERM (15)
+2024-01-15 23:08:30,782 - distributed.nanny - INFO - Closing Nanny at 'tcp://192.168.1.105:33865'. Reason: signal-15
+2024-01-15 23:08:30,782 - distributed.nanny - INFO - Nanny2024-01-15 23:08:30,955 - distributed._signals - INFO - Received signal SIGTERM (15)
+2024-01-15 23:08:30,956 - distributed.nanny -2024-01-15 23:08:31,128 - distributed._signals - INFO - Received signal SIGTERM (15)
+2024-01-15 23:08:31,128 - distributed.nanny - INFO - Closing Nanny at 'tcp://192.168.1.105:43425'. Reason: signal-15
+2024-01-15 23:08:31,128 - distributed.nanny - INFO - Nanny asking worker to close. Reason: signal-15
+2024-01-15 23:08:31,203 - distributed.nanny - INFO - Worker process 55293 was killed by signal 15
+2024-01-15 23:08:31,206 - distributed.dask_worker - INFO - End worker

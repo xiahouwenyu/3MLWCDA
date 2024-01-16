@@ -14,11 +14,16 @@ from tqdm import tqdm
 
 import root_numpy as rt
 
+from Mymap import *
+
 from Mysigmap import *
 
 from Mycoord import *
 
-from Mycatalog import LHAASOCat
+try:
+    from Mycatalog import LHAASOCat
+except:
+    pass
 
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
@@ -188,11 +193,11 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False):
     lm = Model()
     for i in range(len(LHAASOCat)):
         cc = LHAASOCat.iloc[i][" components"]
-        if "KM2A" in cc: continue
+        if detector not in cc: continue
         name = LHAASOCat.iloc[i]["Source name"]
         ras = float(LHAASOCat.iloc[i][" Ra"])
         decs = float(LHAASOCat.iloc[i][" Dec"])
@@ -204,25 +209,25 @@ def getcatModel(ra1, dec1, data_radius, model_radius):
         index = float(LHAASOCat.iloc[i][" index"])
         indexe = float(LHAASOCat.iloc[i][" index error"])
         name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace(" ","")
-        if distance(ra1,dec1, ras, decs)<=data_radius:
+        if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall):
             print(f"{name} in data_radius: {data_radius}")
-            if sigma == 0:
+            if sigma != 0:
                 prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-5*sigmae if sigma-5*sigmae>0 else 0},{sigma+5*sigmae}),
-                k={flux*1e-13}, kb=({(flux-5*fluxe)*1e-13 if (flux-5*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-5*indexe},{-index+5*indexe}), fitrange={5*pe})
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}),
+                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
             """
                 exec(prompt)
             else:
                 prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs},
-                k={flux*1e-13}, kb=({(flux-5*fluxe)*1e-13 if (flux-5*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-5*indexe},{-index+5*indexe}), fitrange={5*pe})
+                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
             """
                 exec(prompt)
         elif distance(ra1,dec1, ras, decs)<=model_radius:
             print(f"{name} in model_radius: {model_radius} have been fixed!!")
-            if sigma == 0:
+            if sigma != 0:
                 prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
@@ -417,7 +422,7 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
     TSresults
     return TS, TSresults
 
-def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}):
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False):
     source=[]
     pts=[]
     exts=[]
@@ -434,9 +439,22 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
     
     tDGE=""
 
+    if startfrom != None:
+        lm = load_model(startfrom)
+        exts=[]
+        next = lm.get_number_of_extended_sources()
+        if 'Diffuse' in lm.sources.keys():
+            next-=1
+        npt=lm.get_number_of_point_sources()
+    
+    if fromcatalog:
+        lm = getcatModel(ra1, dec1, data_radius, model_radius, rtsigma=2, fixall=fixcatall, detector=detector)
+        next = lm.get_number_of_extended_sources()
+        if 'Diffuse' in lm.sources.keys():
+            next-=1
+        npt=lm.get_number_of_point_sources()
 
-
-    if ifDGE:
+    if ifDGE and ('Diffuse' not in lm.sources.keys()):
         if freeDGE:
             tDGE="_DGE_free"
             Diffuse = set_diffusebkg(
@@ -451,14 +469,6 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
                             )
         lm.add_source(Diffuse)
         exts.append(Diffuse)
-
-    if startfrom != None:
-        lm = load_model(startfrom)
-        exts=[]
-        next = lm.get_number_of_extended_sources()
-        if 'Diffuse' in lm.sources.keys():
-            next-=1
-        npt=lm.get_number_of_point_sources()
 
     for N_src in range(100):
         data=np.zeros(1024*1024*12)
@@ -518,8 +528,11 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
 
             sources = get_sources(lm,result)
             sources.pop("Diffuse")
-            map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
-            map2 = hp.ma(map2)
+            if detector=="WCDA":
+                map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
+            else:
+                map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
+            map2 = maskroi(map2, roi)
             fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
             plt.show()
 
@@ -545,8 +558,11 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
 
         sources = get_sources(lm,result)
         sources.pop("Diffuse")
-        map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
-        map2 = hp.ma(map2)
+        if detector=="WCDA":
+            map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
+        else:
+            map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
+        map2 = maskroi(map2, roi)
         fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
         plt.show()
 
@@ -594,15 +610,13 @@ def Search(ra1, dec1, data_radius, region_name, WCDA, s, e,  mini = "ROOT", ifDG
             TS, TSdatafram = getTSall([], region_name+"_iter", bestmodelname, result, WCDA)
             return bestmodel,result
 
-
-
 def fun_Logparabola(x,K,alpha,belta,Piv):
     return K*pow(x/Piv,alpha-belta*np.log(x/Piv))
 
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=10, br=10, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3):
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     if file == None:
         from astropy.wcs import WCS
@@ -696,7 +710,7 @@ def set_diffusebkg(ra1, dec1, lr=10, br=10, K = 7.3776826e-13, Kf = True, Kb=Non
     if Kb:
         Diffusespec.K.bounds=Kb * fluxUnit
     else:
-        Diffusespec.K.bounds=(0.001*K,1000*K) * fluxUnit
+        Diffusespec.K.bounds=(0.0001*K,10000*K) * fluxUnit
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
@@ -729,7 +743,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     Diffuseshape.K = 1/u.deg**2
     return Diffuse
 
-def get_sources(lm,result):
+def get_sources(lm,result=None):
     """Get info of Sources.
 
         Args:
@@ -747,8 +761,12 @@ def get_sources(lm,result):
                 source['shape'] = "Point source"
             par = sc.parameters[p]
             if par.free:
-                puv = result[1][0].loc[p,"positive_error"]
-                plv = result[1][0].loc[p,"negative_error"]
+                if result is not None:
+                    puv = result[1][0].loc[p,"positive_error"]
+                    plv = result[1][0].loc[p,"negative_error"]
+                else:
+                    puv=0
+                    plv=0
                 source[p.split('.')[-1]] = (1,par,par.value,puv,plv)
             else:
                 source[p.split('.')[-1]] = (0,par,par.value,0,0)

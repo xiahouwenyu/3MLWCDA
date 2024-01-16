@@ -1,7 +1,10 @@
 {
   // Open the two input files
   // TFile* f1 = new TFile("../../../../data/20210305_20230731_new_ihep.root", "UPDATE");
-  TFile* f1 = new TFile("../../../../data/KM2A_all_final2.root", "UPDATE");
+  // TFile* f1 = new TFile("../../../../data/KM2A_all_final2.root", "UPDATE");
+  // TFile* f1 = new TFile("/data/home/cwy/Science/3MLWCDA/data/KM2A1234full_skymap_rcy_inte.root", "UPDATE");
+  TFile* f1 = new TFile("/data/home/cwy/Science/3MLWCDA/data/20210305-20230731_trans_fromhsc-inte.root", "UPDATE");
+  
   
   if(!f1 || f1->IsZombie()){
       cout<<"Unable to open the input file"<<endl;
@@ -17,7 +20,7 @@
 //   // Loop over all the trees in the first file
 
 
-  const int bins=14;
+  const int bins=6;
 
 
   int i = 0;

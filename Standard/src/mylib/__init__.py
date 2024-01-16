@@ -2,7 +2,7 @@ import sys
 import time
 from tqdm import tqdm
 
-progress_bar = tqdm(total=28, desc="Start!!!", position=0, leave=True)
+progress_bar = tqdm(total=31, desc="Start!!!", position=0, leave=True)
 
 
 sys.path.append(__file__[:-12])
@@ -25,6 +25,8 @@ progress_bar.update(1); progress_bar.set_description("Load Myspectrum")
 import Myspectrum
 progress_bar.update(1); progress_bar.set_description("Load Mycatalog")
 import Mycatalog
+progress_bar.update(1); progress_bar.set_description("Load Myspeedup")
+import Myspeedup
 
 progress_bar.update(1); progress_bar.set_description("Load importlib")
 import importlib
@@ -47,6 +49,8 @@ progress_bar.update(1); progress_bar.set_description("ReLoad Myspectrum")
 importlib.reload(Myspectrum)
 progress_bar.update(1); progress_bar.set_description("ReLoad Mycatalog")
 importlib.reload(Mycatalog)
+progress_bar.update(1); progress_bar.set_description("ReLoad Myspeedup")
+importlib.reload(Myspeedup)
 
 progress_bar.update(1); progress_bar.set_description("Load sub from Mycoord")
 from Mycoord import *
@@ -66,5 +70,7 @@ progress_bar.update(1); progress_bar.set_description("Load sub from Myspectrum")
 from Myspectrum import *
 progress_bar.update(1); progress_bar.set_description("Load sub from Mycatalog")
 from Mycatalog import *
+progress_bar.update(1); progress_bar.set_description("Load sub from Myspeedup")
+from Myspeedup import *
 
 print("Yourlib init successfully!!!")
