@@ -193,7 +193,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False, roi=None):
     lm = Model()
     for i in range(len(LHAASOCat)):
         cc = LHAASOCat.iloc[i][" components"]
@@ -208,39 +208,74 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
         fluxe = float(LHAASOCat.iloc[i][" N0 error"])
         index = float(LHAASOCat.iloc[i][" index"])
         indexe = float(LHAASOCat.iloc[i][" index error"])
-        name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace(" ","")
-        if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall):
-            print(f"{name} in data_radius: {data_radius}")
-            if sigma != 0:
-                prompt = f"""
+        name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","")
+        if roi is None:
+            if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall):
+                print(f"{name} in data_radius: {data_radius}")
+                if sigma != 0:
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}),
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
-            """
-                exec(prompt)
-            else:
-                prompt = f"""
+                """
+                    exec(prompt)
+                else:
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
-            """
-                exec(prompt)
-        elif distance(ra1,dec1, ras, decs)<=model_radius:
-            print(f"{name} in model_radius: {model_radius} have been fixed!!")
-            if sigma != 0:
-                prompt = f"""
+                """
+                    exec(prompt)
+            elif distance(ra1,dec1, ras, decs)<=model_radius:
+                print(f"{name} in model_radius: {model_radius} have been fixed!!")
+                if sigma != 0:
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
-            """
-                exec(prompt)
-            else:
-                prompt = f"""
+                """
+                    exec(prompt)
+                else:
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
-            """
-                exec(prompt)
+                """
+                    exec(prompt)
+        else:
+            if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall) and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024)):
+                print(f"{name} in data_radius: {data_radius}")
+                if sigma != 0:
+                    prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}),
+                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+lm.add_source({name})
+                """
+                    exec(prompt)
+                else:
+                    prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs},
+                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+lm.add_source({name})
+                """
+                    exec(prompt)
+            elif distance(ra1,dec1, ras, decs)<=model_radius:
+                print(f"{name} in model_radius: {model_radius} have been fixed!!")
+                if sigma != 0:
+                    prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,
+                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+lm.add_source({name})
+                """
+                    exec(prompt)
+                else:
+                    prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,
+                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+lm.add_source({name})
+                """
+                    exec(prompt)
+
     return lm
 
 
