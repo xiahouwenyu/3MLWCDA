@@ -199,8 +199,10 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
         cc = LHAASOCat.iloc[i][" components"]
         if detector not in cc: continue
         if detector=="WCDA":
+            Nc = 1e-13
             piv=3
         else:
+            Nc = 1e-16
             piv=50
         name = LHAASOCat.iloc[i]["Source name"]
         ras = float(LHAASOCat.iloc[i][" Ra"])
@@ -219,14 +221,14 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf}, piv={piv},
-                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, piv={piv},
-                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
@@ -235,14 +237,14 @@ lm.add_source({name})
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
-                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+                k={flux*Nc}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,  piv={piv},
-                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+                k={flux*Nc}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
                     exec(prompt)
@@ -252,14 +254,14 @@ lm.add_source({name})
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},  piv={piv},
-                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf},  piv={piv},
-                k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
@@ -268,14 +270,14 @@ lm.add_source({name})
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
-                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+                k={flux*Nc}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,  piv={piv},
-                k={flux*1e-13}, kf=True, index={-index}, indexf=True)
+                k={flux*Nc}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
                     exec(prompt)
