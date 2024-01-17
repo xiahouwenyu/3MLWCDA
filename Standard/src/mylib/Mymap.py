@@ -85,7 +85,7 @@ def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-
     if ifcolorbar:
         plt.colorbar()
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "color": "black", "angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename=""):
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename=""):
     """Draw healpixmap.
 
         Args:
@@ -196,8 +196,10 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     # plt.scatter(ra, dec, s=20**2,marker="+", facecolor="#000000", color="#000000")
     markerlist=["s","*","o","P","D","v","p","^"]
     if cat != {}:
-        if "color" not in cat.keys():
-            cat["color"]="black"
+        if "markercolor" not in cat.keys():
+            cat["markercolor"]="black"
+        if "labelcolor" not in cat.keys():
+            cat["labelcolor"]="black"
         if "size" not in cat.keys():
             cat["size"]=20
         if "angle" not in cat.keys():
@@ -205,8 +207,8 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
         if "catext" not in cat.keys():
             cat["catext"]=0
         for i,catname in enumerate(cat.keys()):
-            if (catname != "size") and (catname != "color") and (catname != "angle" and (catname != "catext")):
-                Drawcat(xmin,xmax,ymin,ymax,catname,cat[catname][1], cat["color"], angle=cat["angle"], label=catname, textlabel=cat[catname][0], size=cat["size"], drawext=cat["catext"])
+            if (catname != "size") and (catname != "markercolor") and (catname != "labelcolor") and (catname != "angle" and (catname != "catext")):
+                Drawcat(xmin,xmax,ymin,ymax,catname,cat[catname][1], cat["markercolor"], cat["labelcolor"], angle=cat["angle"], label=catname, textlabel=cat[catname][0], size=cat["size"], drawext=cat["catext"])
 
     if save:
         if plotres:

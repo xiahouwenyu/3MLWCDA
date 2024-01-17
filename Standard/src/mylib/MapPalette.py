@@ -10,7 +10,7 @@ except ImportError as e:
     raise SystemExit
 
 def setupDefaultColormap(ncolors):
-    """Create a color map based on the standard blue-green-red "jet" palette.
+    """Create a color map based on the standard blue-green-red "jet", palette.
 
         Args:
             ncolors: number of colors in the palette
@@ -385,5 +385,19 @@ def setupFrenchColormap(ncolors):
     textcolor = "#000000"
 
     return textcolor, newcm
+
+color1 = ["#8ECFC9", "#FFBE7A", "#FA7F6F", "#82B0D2", "#BEB8DC", "#E7DAD2"]
+color2 = ["#2878b5","#9ac9db","#f8ac8c","#c82423","#ff8884"]
+color3 = ["#F27970","#BB9727","#54B345","#32B897","#05B9E2","#8983BF","#C76DA2"]
+color4 = ["#A1A9D0","#F0988C","#B883D4","#9E9E9E","#CFEAF1","#C4A5DE","#F6CAE5","#96CCCB"]
+color6 = ["#63b2ee", "#76da91", "#f8cb7f", "#f89588", "#7cd6cf", "#9192ab", "#7898e1", "#efa666", "#eddd86", "#9987ce", "#63b2ee", "#76da91"]
+color7 = ["#3b6291", "#943c39", "#779043", "#624c7c", "#388498", "#bf7334", "#3f6899", "#9c403d", "#7d9847", "#675083", "#3b8ba1", "#c97937"]
+color8 = ["#002c53", "#ffa510", "#0c84c6", "#ffbd66", "#f74d4d", "#2455a4", "#41b7ac"]
+
+import matplotlib.colors as mcolors
+tabcolor = mcolors.TABLEAU_COLORS
+csscolor = mcolors.CSS4_COLORS
+colorall = color1+color2+color3+color4+color6+color6+color8+list(tabcolor.values())+list(csscolor.values())
+
 
 

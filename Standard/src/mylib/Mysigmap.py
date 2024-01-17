@@ -23,6 +23,8 @@ from Mycoord import *
 
 from Myspeedup import libdir, runllhskymap
 
+import MapPalette
+
 
 def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 0.22, 0.18, 0.15], 
            save = False, 
@@ -354,7 +356,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
         # 添加色标
         cbar = plt.colorbar(im, ax=ax, label='Intensity')
         plt.show()
-        return fig, data
+        return fig, wcs, data
     
 def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1):
     from astropy.io import fits
@@ -411,7 +413,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     # 将提取的数据保存到FITS文件
     fits.writeto(name, np.array(extracted_data.data), header, overwrite=True)
 
-def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "color": "grey", "angle": 60, "catext": 0}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
+def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "markercolor": "grey", "labelcolor": "black", "angle": 60, "catext": 1}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
     colors=['tab:red',
             'tab:blue',
             'tab:green',
@@ -442,16 +444,18 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
             )
     ax = plt.gca()
     # colors=list(mcolors.TABLEAU_COLORS.keys()) #CSS4_COLORS
-    colors=['tab:red',
-            'tab:blue',
-            'tab:green',
-            'tab:purple',
-            'tab:orange',
-            'tab:brown',
-            'tab:pink',
-            'tab:gray',
-            'tab:olive',
-            'tab:cyan']
+    # colors=['tab:red',
+    #         'tab:blue',
+    #         'tab:green',
+    #         'tab:purple',
+    #         'tab:orange',
+    #         'tab:brown',
+    #         'tab:pink',
+    #         'tab:olive',
+    #         'tab:cyan',
+    #         'tab:gray']
+    # colors[i]
+    colors = MapPalette.colorall
     i=0
     ifasymm=False
     for sc in sources.keys():
@@ -480,20 +484,21 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
                 thetau = source[par][3]
                 thetal = source[par][4]
 
+
         if sources[sc]['type'] == 'extended source' and not ifasymm:
-            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=mcolors.TABLEAU_COLORS[colors[i]], label=sc)
-            error_ellipse = Ellipse((x, y), width=sigma/np.cos(np.radians(y)), height=sigma, edgecolor=mcolors.TABLEAU_COLORS[colors[i]], fill=False,linestyle="-")
+            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i], label=sc)
+            error_ellipse = Ellipse((x, y), width=sigma/np.cos(np.radians(y)), height=sigma, edgecolor=colors[i], fill=False,linestyle="-")
             ax.add_artist(error_ellipse)
-            error_ellipse = Ellipse((x, y), width=(sigma+sigmau)/np.cos(np.radians(y)), height=sigma+sigmau, edgecolor=mcolors.TABLEAU_COLORS[colors[i]], fill=False,linestyle="--", alpha=0.5)
+            error_ellipse = Ellipse((x, y), width=(sigma+sigmau)/np.cos(np.radians(y)), height=sigma+sigmau, edgecolor=colors[i], fill=False,linestyle="--", alpha=0.5)
             ax.add_artist(error_ellipse)
-            error_ellipse = Ellipse((x, y), width=(sigma-abs(+sigmal))/np.cos(np.radians(y)), height=sigma-abs(sigmal), edgecolor=mcolors.TABLEAU_COLORS[colors[i]], fill=False,linestyle="--", alpha=0.5)
+            error_ellipse = Ellipse((x, y), width=(sigma-abs(+sigmal))/np.cos(np.radians(y)), height=sigma-abs(sigmal), edgecolor=colors[i], fill=False,linestyle="--", alpha=0.5)
             ax.add_artist(error_ellipse)
         elif ifasymm:
-            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=mcolors.TABLEAU_COLORS[colors[i]], label=sc)
+            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i], label=sc)
             print(x,y,sigma,e,theta)
-            Draw_ellipse(x,y,sigma,e,theta,mcolors.TABLEAU_COLORS[colors[i]],"-")
+            Draw_ellipse(x,y,sigma,e,theta,colors[i],"-")
         else:
-            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=mcolors.TABLEAU_COLORS[colors[i]],label=sc)
+            plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i],label=sc)
         i+=1
         # if i==1:
         #     i+=1

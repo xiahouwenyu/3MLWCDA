@@ -193,7 +193,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False, roi=None):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False, roi=None, pf=False):
     lm = Model()
     for i in range(len(LHAASOCat)):
         cc = LHAASOCat.iloc[i][" components"]
@@ -214,14 +214,14 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
                 print(f"{name} in data_radius: {data_radius}")
                 if sigma != 0:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}),
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs},
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
@@ -247,14 +247,14 @@ lm.add_source({name})
                 print(f"{name} in data_radius: {data_radius}")
                 if sigma != 0:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}),
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs},
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
@@ -691,6 +691,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
             for ira,counts in enumerate(decd):
                 lll = lrange[0]+ira*X_size
                 s[idec,ira] = (np.radians(X_size)*np.radians(Y_size)*np.cos(np.radians(ddd)))
+                # s[idec,ira] = (X_size*Y_size*np.cos(np.radians(ddd)))
 
         A = np.multiply(dataneed,s)
         ss = np.sum(s)

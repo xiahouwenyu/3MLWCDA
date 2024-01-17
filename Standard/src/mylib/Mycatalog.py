@@ -384,7 +384,7 @@ def GetLHAASOcat(xmin,xmax,ymin,ymax):
     # sources_tmp.sort(key=lambda source: source[0])
     return sources_tmp
 
-def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsize=7, label="Cat",textlabel=False, stype=None, criteria=None, iflabel=1, size=1, drawext=False):
+def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", angle=45, fontsize=7, label="Cat",textlabel=False, stype=None, criteria=None, iflabel=1, size=1, drawext=False):
     """Draw catalog.
 
         Args:
@@ -464,28 +464,28 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c="black",angle=45, fontsi
                 Va='top'
             i+=1
             if textlabel:
-                plt.text(rt,dt, s+'', color=c,
+                plt.text(rt,dt, s+'', color=c2,
                         rotation=Rotation, #catLabelsAngle,
                         rotation_mode='anchor',
                         va=Va,
                         fontdict={'family': 'sans-serif',
                                     'size': fontsize,
                                     'weight': 'bold'})
-                plt.plot([r,rt],[d,dt],'k--',c=c)
+                plt.plot([r,rt],[d,dt],'k--',c=c2)
             if iflabel==1:
-                plt.scatter(r,d, color=c, facecolors="none", 
+                plt.scatter(r,d, color=c1, facecolors="none", 
                 marker=mark,label=label, s=size)
                 if rs!=0 and drawext:
                     from matplotlib.patches import Ellipse
-                    error_ellipse = Ellipse((r, d), width=(rs)/np.cos(np.radians(d)), height=rs, edgecolor=c, fill=False,linestyle="--", alpha=0.5)
+                    error_ellipse = Ellipse((r, d), width=(rs)/np.cos(np.radians(d)), height=rs, edgecolor=c1, fill=False,linestyle="--", alpha=0.5)
                     ax=plt.gca()
                     ax.add_artist(error_ellipse)
             else:
-                plt.scatter(r,d, color=c, facecolors="none", 
+                plt.scatter(r,d, color=c1, facecolors="none", 
                 marker=mark, s=size)
                 if rs!=0 and drawext:
                     from matplotlib.patches import Ellipse
-                    error_ellipse = Ellipse((r, d), width=(rs)/np.cos(np.radians(d)), height=rs, edgecolor=c, fill=False,linestyle="--", alpha=0.5)
+                    error_ellipse = Ellipse((r, d), width=(rs)/np.cos(np.radians(d)), height=rs, edgecolor=c1, fill=False,linestyle="--", alpha=0.5)
                     ax=plt.gca()
                     ax.add_artist(error_ellipse)
             iflabel+=1

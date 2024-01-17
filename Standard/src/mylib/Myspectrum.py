@@ -421,6 +421,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
 
     plt.xscale("log")
     plt.yscale("log")
+    return data
 
 def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
     # print(file)
@@ -456,3 +457,17 @@ def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
     plt.yscale("log")
     # plt.ylim(1e-17,5e-10)
     plt.legend()
+
+def spec2naima(dir, data0057):
+    dataforlb = np.zeros(data0057.shape)
+    dataforlb[0] = data0057[0]
+    dataforlb[1] = data0057[6]
+    dataforlb[2] = data0057[7]
+    dataforlb[3] = data0057[1]
+    dataforlb[4] = data0057[2]
+    dataforlb[5] = data0057[3]
+    dataforlb[6] = data0057[4]
+    dataforlb[7] = data0057[5]
+    header = "E(TeV) E_68s E_68e flux(TeV/cm**2/s) fluxe fluxel fluxeu TS"
+    np.savetxt(dir,dataforlb.T, fmt='%.4e', header=header)
+    return dataforlb
