@@ -457,6 +457,34 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
     TSresults
     return TS, TSresults
 
+def getressimple(WCDA, lm):
+    data=np.zeros(1024*1024*12)
+    bkg =np.zeros(1024*1024*12)
+    model=np.zeros(1024*1024*12)
+    next = lm.get_number_of_extended_sources()
+    npt=lm.get_number_of_point_sources()
+    for i, plane_id in enumerate(WCDA._active_planes):
+        data_analysis_bin = WCDA._maptree[plane_id]
+        this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next).as_dense()
+        bkg_subtracted, data_map, background_map = WCDA._get_excess(data_analysis_bin, all_maps=True)
+        model += this_model_map_hpx
+        bkg   += background_map
+        data  += data_map
+
+
+    data[np.isnan(data)]=hp.UNSEEN
+    bkg[np.isnan(bkg)]=hp.UNSEEN
+    model[np.isnan(model)]=hp.UNSEEN
+    data=hp.ma(data)
+    bkg=hp.ma(bkg)
+    model=hp.ma(model)
+    # resu=data-bkg-model
+    on = data
+    off = bkg+model
+    resu = (on-off)/np.sqrt(on+off)
+    resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
+    return resu
+
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False):
     source=[]
     pts=[]
@@ -506,33 +534,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         exts.append(Diffuse)
 
     for N_src in range(100):
-        data=np.zeros(1024*1024*12)
-        bkg =np.zeros(1024*1024*12)
-        model=np.zeros(1024*1024*12)
-        for i, plane_id in enumerate(WCDA._active_planes):
-            data_analysis_bin = WCDA._maptree[plane_id]
-            if(N_src==0):
-                this_model_map_hpx=np.zeros(1024*1024*12)
-            else:
-                this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next+ifDGE).as_dense()
-            bkg_subtracted, data_map, background_map = WCDA._get_excess(data_analysis_bin, all_maps=True)
-            model += this_model_map_hpx
-            bkg   += background_map
-            data  += data_map
-
-
-        data[np.isnan(data)]=hp.UNSEEN
-        bkg[np.isnan(bkg)]=hp.UNSEEN
-        model[np.isnan(model)]=hp.UNSEEN
-        data=hp.ma(data)
-        bkg=hp.ma(bkg)
-        model=hp.ma(model)
-        # resu=data-bkg-model
-        on = data
-        off = bkg+model
-        resu = (on-off)/np.sqrt(on+off)
-        resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(smooth_sigma))
-
+        resu = getressimple(WCDA, lm)
         new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
         new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
         lon_array.append(new_source_lon_lat[0])
