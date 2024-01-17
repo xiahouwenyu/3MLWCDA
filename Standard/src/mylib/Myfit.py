@@ -198,6 +198,10 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
     for i in range(len(LHAASOCat)):
         cc = LHAASOCat.iloc[i][" components"]
         if detector not in cc: continue
+        if detector=="WCDA":
+            piv=3
+        else:
+            piv=50
         name = LHAASOCat.iloc[i]["Source name"]
         ras = float(LHAASOCat.iloc[i][" Ra"])
         decs = float(LHAASOCat.iloc[i][" Dec"])
@@ -214,14 +218,14 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
                 print(f"{name} in data_radius: {data_radius}")
                 if sigma != 0:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf}, piv={piv},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, piv={piv},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
@@ -230,14 +234,14 @@ lm.add_source({name})
                 print(f"{name} in model_radius: {model_radius} have been fixed!!")
                 if sigma != 0:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,
+{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,  piv={piv},
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
@@ -247,14 +251,14 @@ lm.add_source({name})
                 print(f"{name} in data_radius: {data_radius}")
                 if sigma != 0:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},  piv={piv},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+5*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf},
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf},  piv={piv},
                 k={flux*1e-13}, kb=({(flux-rtsigma*fluxe)*1e-13 if (flux-rtsigma*fluxe)*1e-13>0 else 1e-16}, {(flux+rtsigma*fluxe)*1e-13}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
@@ -263,14 +267,14 @@ lm.add_source({name})
                 print(f"{name} in model_radius: {model_radius} have been fixed!!")
                 if sigma != 0:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,
+{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,  piv={piv},
                 k={flux*1e-13}, kf=True, index={-index}, indexf=True)
 lm.add_source({name})
                 """
