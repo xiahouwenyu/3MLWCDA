@@ -51,6 +51,11 @@ class ConvolvedExtendedSource(object):
         dec_min = max(min([dec1, dec2, dec3, dec4]), lat_start)
         dec_max = min(max([dec1, dec2, dec3, dec4]), lat_stop)
 
+        if np.isnan(dec_min):
+            dec_min=lat_start
+        if np.isnan(dec_max):
+            dec_max=lat_stop
+
         # Get the defined dec bins lower edges
         lower_edges = np.array([x[0] for x in response.dec_bins])
         upper_edges = np.array([x[-1] for x in response.dec_bins])
@@ -61,7 +66,10 @@ class ConvolvedExtendedSource(object):
         # Wrap the selection so we have always one bin before and one after.
         # NOTE: we assume that the ROI do not overlap with the very first or the very last dec bin
         # Add one dec bin to cover the last part
-        dec_bins_to_consider_idx = np.append(dec_bins_to_consider_idx, [dec_bins_to_consider_idx[-1] + 1])
+        try:
+            dec_bins_to_consider_idx = np.append(dec_bins_to_consider_idx, [dec_bins_to_consider_idx[-1] + 1])
+        except:
+            raise Exception(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max}")
         # Add one dec bin to cover the first part
         dec_bins_to_consider_idx = np.insert(dec_bins_to_consider_idx, 0, [dec_bins_to_consider_idx[0] - 1])
 

@@ -170,7 +170,10 @@ class HAL(PluginPrototype):
 
     def _setup_psf_convolutors(self):
 
-        central_response_bins = self._response.get_response_dec_bin(self._roi.ra_dec_center[1])
+        if self._roi.ra_dec_center[1]>80 or self._roi.ra_dec_center[1]<-20:
+            central_response_bins = self._response.get_response_dec_bin(30)
+        else:
+            central_response_bins = self._response.get_response_dec_bin(self._roi.ra_dec_center[1])
 
         self._psf_convolutors = collections.OrderedDict()
         for bin_id in central_response_bins:
