@@ -731,7 +731,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
         wcs = WCS(naxis=2)
         wcs.wcs.crpix = [naxis1 / 2, naxis2 / 2]  # 中心像素坐标
         wcs.wcs.cdelt = np.array([0.1, 0.1])  # 每个像素的尺寸，单位为度
-        wcs.wcs.crval = [l, b]  # 图像中心的银道坐标，单位为度
+        wcs.wcs.crval = [l, 0]  # 图像中心的银道坐标，单位为度
         wcs.wcs.ctype = ['GLON-CAR', 'GLAT-CAR']  # 坐标系类型
         # 创建头文件
         header = fits.Header()
