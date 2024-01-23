@@ -25,6 +25,11 @@ from Myspeedup import libdir, runllhskymap
 
 import MapPalette
 
+from threeML import setup_logger
+
+log = setup_logger(__name__)
+log.propagate = False
+
 
 def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 0.22, 0.18, 0.15], 
            save = False, 
@@ -99,7 +104,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
             theta = np.pi/2 - theta
             alpha[pix]=2*smooth_sigma*1.51/60./np.sin(theta) #
 
-        print("Mask all")
+        log.info("Mask all")
         signal=hp.ma(signal)
         background=hp.ma(background)
         modelmap=hp.ma(modelmap)
@@ -107,15 +112,15 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
         alpha=hp.ma(alpha)
 
         if smooth:
-            print("Smooth Sig")
+            log.info("Smooth Sig")
             signal_smoothed=hp.sphtfunc.smoothing(signal,sigma=np.radians(smooth_sigma))
             signal_smoothed2=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(signal,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
 
-            print("Smooth bkg")
+            log.info("Smooth bkg")
             background_smoothed=hp.sphtfunc.smoothing(background,sigma=np.radians(smooth_sigma))
             background_smoothed2=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(background,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
 
-            print("Smooth Modelbkg")
+            log.info("Smooth Modelbkg")
             modelbkg_smoothed=hp.sphtfunc.smoothing(modelbkg,sigma=np.radians(smooth_sigma))
             modelbkg_smoothed2=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(modelbkg,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
         else:
@@ -127,7 +132,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
             modelbkg_smoothed2=np.array([])
 
         if save:
-            print("Save!")
+            log.info("Save!")
             hp.mollview(signal_smoothed,title="Mollview image RING",norm='hist',unit='Excess')
             hp.graticule()
             plt.savefig("../res/%s_excess_nHit0%s_%.2f.pdf"%(name, bin, smooth_sigma))
@@ -151,7 +156,7 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
         if stack_sigma:
             smooth_sigma=stack_sigma
         else:
-            print("Set stack_sigma automatelly!!!")
+            log.info("Set stack_sigma automatelly!!!")
             stack_sigma=smoothsigma[len(WCDA._maptree._analysis_bins)] #int(list(WCDA._maptree._analysis_bins.keys())[-1])+1
         for i,pix in enumerate(tqdm(pixid)):
             theta, phi = hp.pix2ang(nside, pix)
@@ -209,19 +214,19 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
     # for i in tqdm([0,1,2]):
     #     mapall[i] = hp.ma(mapall[i])
 
-    print("Smooth Sig")
+    log.info("Smooth Sig")
     mapall[3]=hp.sphtfunc.smoothing(mapall[0],sigma=np.radians(smooth_sigma))
     mapall[6]=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(mapall[0],sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
 
-    print("Smooth bkg")
+    log.info("Smooth bkg")
     mapall[4]=hp.sphtfunc.smoothing(mapall[1],sigma=np.radians(smooth_sigma))
     mapall[7]=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(mapall[1],sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
 
-    print("Smooth Modelbkg")
+    log.info("Smooth Modelbkg")
     mapall[5]=hp.sphtfunc.smoothing(mapall[2],sigma=np.radians(smooth_sigma))
     mapall[8]=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(mapall[2],sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
 
-    print("Mask all")
+    log.info("Mask all")
     for i in tqdm(range(3,8)):
         mapall[i] = hp.ma(mapall[i])
 
@@ -281,7 +286,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
 # fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits'; vmin=-15; vmax=30
     # 打开 FITS 文件
     hdul = fits.open(fits_file_path)
-    print(hdul.info())
+    log.info(str(hdul.info()))
 
     # 获取数据和坐标信息
     data = hdul[0].data
@@ -290,7 +295,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
     shape = wcs.array_shape
     a = wcs.pixel_to_world(0, 0)
     b = wcs.pixel_to_world(shape[1], shape[0])
-    print(wcs, shape, a,b)
+    log.info(f"{str(wcs)} \n {shape} \n {a} \n {b}")
 
     # 关闭 FITS 文件
     hdul.close()
@@ -363,7 +368,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     from astropy.wcs import WCS
     # 将RA和DEC范围转换为SkyCoord对象
     ra=np.arange(ra_min, ra_max, xsize); dec=np.arange(dec_min, dec_max, ysize)
-    print(len(ra), len(dec))
+    log.info(f"{len(ra)} {len(dec)}")
     X,Y = np.meshgrid(ra, dec)
     coords = SkyCoord(ra=X, dec=Y, unit="deg", frame="icrs")
     # 使用SkyCoord对象获取对应的HEALPix像素索引
@@ -495,7 +500,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
             ax.add_artist(error_ellipse)
         elif ifasymm:
             plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i], label=sc)
-            print(x,y,sigma,e,theta)
+            # log.info(x,y,sigma,e,theta)
             Draw_ellipse(x,y,sigma,e,theta,colors[i],"-")
         else:
             plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i],label=sc)
@@ -546,10 +551,10 @@ def getsig1D(S, region_name, Modelname, name):
             bounds=([100, -2, 0], [50000000, 2, 10]),
         )
     #popt,pcov = curve_fit(gaussian,bin_x[fit_range[0:-1]]+(bin_x[1]-bin_x[0])/2.,bin_y[fit_range[0:-1]],bounds=([100,-2,0],[50000000,2,10]))
-    print("************************")
-    print(popt)
-    print("************************")
-    print("max Significance= %.1f"%(max(S.compressed())))
+    log.info("************************")
+    log.info(popt)
+    log.info("************************")
+    log.info("max Significance= %.1f"%(max(S.compressed())))
 
     plt.figure()
     #plt.plot([0.,0.],[1,1e6],'k--',linewidth=0.5)
@@ -624,7 +629,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
         Args:
             pta=[1,0,1], exta=[0,0]: if you have 3 pt sources and 2 ext sources, and you only want to keep 1st and 3st sources,you do like this.
     """
-    print(outname+"_res")
+    log.info(outname+"_res")
     # outname = "residual_all"
 
     # root setting
@@ -673,7 +678,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
 
         
     for bin in binc:
-        print('processing at nHit0',bin)
+        log.info(f'processing at nHit0{bin}')
         ## outfile
         fout = ROOT.TFile.Open(f"../res/{region_name}/{Modelname}/{outname}.root", 'UPDATE')
         active_bin = WCDA._maptree._analysis_bins[bin]

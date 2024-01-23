@@ -117,3 +117,15 @@ def skyangle(ra1,dec1,ra2,dec2):
     dec2 = np.radians(dec2)
     angle= np.arccos(np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(ra1 - ra2))*180./np.pi
     return angle
+
+def hms_to_deg(ra_hours, ra_minutes, ra_seconds, dec_degrees, dec_minutes, dec_seconds):
+    '''转换时角为角度'''
+    ra_degrees = (ra_hours + ra_minutes/60 + ra_seconds/3600) * 15
+
+    # 转换赤纬为角度
+    sign = -1 if dec_degrees < 0 else 1
+    dec_degrees = abs(dec_degrees)
+    dec_degrees += dec_minutes/60 + dec_seconds/3600
+    dec_degrees *= sign
+
+    return ra_degrees, dec_degrees

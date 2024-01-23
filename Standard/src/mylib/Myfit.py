@@ -25,6 +25,9 @@ try:
 except:
     pass
 
+log = setup_logger(__name__)
+log.propagate = False
+
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             sigma=None,sf=False,sb=None,radius=None,rf=False,rb=None,
@@ -103,7 +106,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
     else:
         pass
 
-    # print(spat.name)
+    #  log.info(spat.name)
 
     if sigma is None and rdiff0 is None and radius is None and a is None:
         source = PointSource(name,ra,dec,spectral_shape=spec)
@@ -217,7 +220,7 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
         name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","")
         if roi is None:
             if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall):
-                print(f"{name} in data_radius: {data_radius}")
+                log.info(f"{name} in data_radius: {data_radius}")
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf}, piv={piv},
@@ -233,7 +236,7 @@ lm.add_source({name})
                 """
                     exec(prompt)
             elif distance(ra1,dec1, ras, decs)<=model_radius:
-                print(f"{name} in model_radius: {model_radius} have been fixed!!")
+                log.info(f"{name} in model_radius: {model_radius} have been fixed!!")
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
@@ -250,7 +253,7 @@ lm.add_source({name})
                     exec(prompt)
         else:
             if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall) and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024)):
-                print(f"{name} in data_radius: {data_radius}")
+                log.info(f"{name} in data_radius: {data_radius}")
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},  piv={piv},
@@ -266,7 +269,7 @@ lm.add_source({name})
                 """
                     exec(prompt)
             elif distance(ra1,dec1, ras, decs)<=model_radius:
-                print(f"{name} in model_radius: {model_radius} have been fixed!!")
+                log.info(f"{name} in model_radius: {model_radius} have been fixed!!")
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
@@ -545,7 +548,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
         lon_array.append(new_source_lon_lat[0])
         lat_array.append(new_source_lon_lat[1])
-        print(lon_array,lat_array)
+        log.info(lon_array,lat_array)
         plt.figure()
         hp.gnomview(resu,norm='',rot=[ra1,dec1],xsize=200,ysize=200,reso=6,title=Modelname)
         plt.scatter(lon_array,lat_array,marker='x',color='red')
@@ -659,12 +662,13 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None):
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     if file == None:
         from astropy.wcs import WCS
         from astropy.io import fits
-        name="Cache"
+        if name is None:
+            name="Cache"
         root_file=ROOT.TFile.Open(("../../data/gll_dust.root"),"read")
         root_th2d=root_file.Get("gll_region")
         X_nbins=root_th2d.GetNbinsX()
@@ -675,8 +679,8 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
         Y_max=root_th2d.GetYaxis().GetXmax()
         X_size=(X_max-X_min)/X_nbins
         Y_size=(Y_max-Y_min)/Y_nbins
-        # print(X_min,X_max,X_nbins, X_size)
-        # print(Y_min,Y_max,Y_nbins, Y_size)
+        #  log.info(X_min,X_max,X_nbins, X_size)
+        #  log.info(Y_min,Y_max,Y_nbins, Y_size)
         data = rt.hist2array(root_th2d).T
         lranges = lr
         branges = br
@@ -689,6 +693,13 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
 
         lrange=[l-lranges,l+lranges]
         brange=[-branges,branges]
+
+        log.info(f"Set diffuse range: {lrange} {brange}")
+        log.info("ra dec coner:")
+        log.info(gal2edm(lrange[0], brange[0]))
+        log.info(gal2edm(lrange[1], brange[0]))
+        log.info(gal2edm(lrange[1], brange[1]))
+        log.info(gal2edm(lrange[0], brange[1]))
         dataneed = data[int((brange[0]-Y_min)/Y_size):int((brange[1]-Y_min)/Y_size),int((lrange[0]-X_min)/X_size):int((lrange[1]-X_min)/X_size)]
 
         s = dataneed.copy()

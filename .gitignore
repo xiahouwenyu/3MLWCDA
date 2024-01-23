@@ -1,4 +1,3 @@
-Standard/src/*.ipynb
 Standard/src/tools/llh_skymap/skytxt/*.fits
 Standard/src/tools/llh_skymap/skytxt/*.gz
 Standard/src/tools/llh_skymap/skytxt/*.pdf
@@ -15,6 +14,14 @@ Standard/src/tools/skymap/*.gz
 Standard/src/tools/skymap/*.pdf
 Standard/src/mylib/__pycache__
 Standard/src/.ipynb_checkpoints
+Standard/src/*.fits
+Standard/src/*.ipynb
+Standard/src/*.py
+Standard/src/*.sh
+Standard/src/*.gz
+Standard/src/*.pha
+Standard/src/*.rsp2
+Standard/src/*.log
 !Standard/src/Justdraw.ipynb
 !Standard/src/tools/llh_skymap/sourcetxt/*ipynb
 !Standard/src/3MLnew_Crab.ipynb
@@ -26,4 +33,11 @@ Standard/src/.ipynb_checkpoints
 !Standard/src/3MLnew_Diffuse.ipynb
 !Standard/src/3MLnew_Diffuse_KM2A.ipynb
 !Standard/src/3MLnew_Fullsky.ipynb
+!Standard/src/3MLnew_Fermi.ipynb
 !Standard/src/sccatalog.ipynb
+!Standard/src/3MLnew_GRB080916.ipynb
+!Standard/src/3MLnew_GRB221009A_old.ipynb
+!Standard/src/3MLnew_GRB221009A.ipynb
+!Standard/src/*yaml
+!Standard/src/*yml
+!Standard/src/tutorial.ipynb

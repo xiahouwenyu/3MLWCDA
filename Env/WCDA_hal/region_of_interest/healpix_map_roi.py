@@ -13,6 +13,10 @@ from WCDA_hal.region_of_interest.healpix_roi_base import HealpixROIBase
 from WCDA_hal.region_of_interest.healpix_cone_roi import HealpixConeROI, _get_radians
 from ..flat_sky_projection import FlatSkyProjection
 
+from tqdm import tqdm
+import subprocess
+from subprocess import TimeoutExpired
+
 
 class HealpixMapROI(HealpixROIBase):
 
@@ -87,8 +91,10 @@ class HealpixMapROI(HealpixROIBase):
 
         model_pixels = temp_roi.active_pixels( self._original_nside )
 
-        if not all(p in model_pixels for p in active_pixels):
-            log.warning("Some pixels inside your ROI are not contained in the model map.")
+        # log.info("Check if roi inside model. May take long time: ")
+        # if not all(p in model_pixels for p in tqdm(active_pixels)):
+        #     log.warning("Some pixels inside your ROI are not contained in the model map.")
+
 
     def to_dict(self):
 

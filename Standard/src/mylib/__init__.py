@@ -2,7 +2,7 @@ import sys
 import time
 from tqdm import tqdm
 
-progress_bar = tqdm(total=31, desc="Start!!!", position=0, leave=True)
+progress_bar = tqdm(total=37, desc="Start!!!", position=0, leave=True)
 
 
 sys.path.append(__file__[:-12])
@@ -25,6 +25,10 @@ progress_bar.update(1); progress_bar.set_description("Load Myspectrum")
 import Myspectrum
 progress_bar.update(1); progress_bar.set_description("Load Mycatalog")
 import Mycatalog
+progress_bar.update(1); progress_bar.set_description("Load Mylightcurve")
+import Mylightcurve
+progress_bar.update(1); progress_bar.set_description("Load Mylcmodel")
+import Mylcmodel
 progress_bar.update(1); progress_bar.set_description("Load Myspeedup")
 import Myspeedup
 
@@ -49,6 +53,10 @@ progress_bar.update(1); progress_bar.set_description("ReLoad Myspectrum")
 importlib.reload(Myspectrum)
 progress_bar.update(1); progress_bar.set_description("ReLoad Mycatalog")
 importlib.reload(Mycatalog)
+progress_bar.update(1); progress_bar.set_description("ReLoad Mylightcurve")
+importlib.reload(Mylightcurve)
+progress_bar.update(1); progress_bar.set_description("ReLoad Mylcmodel")
+importlib.reload(Mylcmodel)
 progress_bar.update(1); progress_bar.set_description("ReLoad Myspeedup")
 importlib.reload(Myspeedup)
 
@@ -70,6 +78,10 @@ progress_bar.update(1); progress_bar.set_description("Load sub from Myspectrum")
 from Myspectrum import *
 progress_bar.update(1); progress_bar.set_description("Load sub from Mycatalog")
 from Mycatalog import *
+progress_bar.update(1); progress_bar.set_description("Load sub from Mylightcurve")
+from Mylightcurve import *
+progress_bar.update(1); progress_bar.set_description("Load sub from Mylcmodel")
+from Mylcmodel import *
 progress_bar.update(1); progress_bar.set_description("Load sub from Myspeedup")
 from Myspeedup import *
 

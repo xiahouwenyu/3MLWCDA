@@ -22,6 +22,15 @@ astromodels: https://astromodels.readthedocs.io/en/latest/
 欢迎反映需求和bug, 以及通过github提交你的修改和新增内容, 我们共同开发.
 
 ## 更新
+### V1.3更新 2024.1.24
+* Mylightcurve 创建
+  * wavelet() 得到光变小波变换
+  * nprebin() rebin
+  * Class lc() 读取, rebin, 加减, 拟合, 画图, MVT, 以及光变waveletspectrum.
+
+* Mylcmodel 创建
+  * SBPL() Smooth broken powerlaw
+
 ### V1.2更新 2024.1.16
 * Myspeedup 创建
   * runllhskymap() 调用PBS加速获取llhskymap,大概6-10min一张6度roi天图,加速空间还很大,如合理分配节点以最大化利用多进程

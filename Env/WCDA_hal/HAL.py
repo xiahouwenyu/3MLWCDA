@@ -657,10 +657,16 @@ class HAL(PluginPrototype):
     @staticmethod
     def _represent_healpix_map(fig, hpx_map, longitude, latitude, xsize, resolution, smoothing_kernel_sigma):
 
-        proj = get_gnomonic_projection(fig, hpx_map,
-                                       rot=(longitude, latitude, 0.0),
-                                       xsize=xsize,
-                                       reso=resolution)
+        radius = xsize / 2.2 * (resolution / 60.0)
+        if radius<=30:
+            proj = get_gnomonic_projection(fig, hpx_map,
+                                        rot=(longitude, latitude, 0.0),
+                                        xsize=xsize,
+                                        reso=resolution)
+        else:
+            # print("have been changed by caowy!")
+            proj = hp.cartview(hpx_map, coord=['C'], lonra=[0, 360], latra=[-20, 80], return_projected_map=True)
+            plt.close()
 
         if smoothing_kernel_sigma is not None:
 
@@ -828,12 +834,16 @@ class HAL(PluginPrototype):
         fig, sub = plt.subplots(1, 1)
 
         proj = self._represent_healpix_map(fig, total, longitude, latitude, xsize, resolution, smoothing_kernel_sigma)
-
+        
+        radius = xsize / 2.2 * (resolution / 60.0)
+        # if radius>30:
+        #     fig, sub = plt.subplots(1, 1)
         cax = sub.imshow(proj, origin='lower')
         fig.colorbar(cax)
         sub.axis('off')
 
-        hp.graticule(delta_coord, delta_coord)
+        if radius<=30:
+            hp.graticule(delta_coord, delta_coord)
 
         return fig
 

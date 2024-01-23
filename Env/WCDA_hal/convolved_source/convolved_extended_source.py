@@ -46,15 +46,23 @@ class ConvolvedExtendedSource(object):
         (ra1, dec1), (ra2, dec2), (ra3, dec3), (ra4, dec4) = flat_sky_projection.wcs.calc_footprint()
 
         (lon_start, lon_stop), (lat_start, lat_stop) = source.get_boundaries()
+        
+        decs = np.array([dec1, dec2, dec3, dec4])
+        nan_mask = np.isnan(decs)
+        if np.any(nan_mask):
+            log.warning(f"{self._name} dec_min have nan!")
+        decs = decs[~nan_mask]
+        if len(decs)!=0:
+            dec_min = max(min(decs), lat_start, -20)
+            dec_max = min(max(decs), lat_stop, 80)
+        else:
+            dec_min = max(lat_start, -20)
+            dec_max = min(lat_stop, 80)
+        # dec_min = max(min([-20, *decs]), lat_start)
+        # dec_max = min(max([80, *decs]), lat_stop)
 
         # Figure out maximum and minimum declination to be covered
-        dec_min = max(min([dec1, dec2, dec3, dec4]), lat_start)
-        dec_max = min(max([dec1, dec2, dec3, dec4]), lat_stop)
 
-        if np.isnan(dec_min):
-            dec_min=lat_start
-        if np.isnan(dec_max):
-            dec_max=lat_stop
 
         # Get the defined dec bins lower edges
         lower_edges = np.array([x[0] for x in response.dec_bins])
@@ -73,7 +81,10 @@ class ConvolvedExtendedSource(object):
         # Add one dec bin to cover the first part
         dec_bins_to_consider_idx = np.insert(dec_bins_to_consider_idx, 0, [dec_bins_to_consider_idx[0] - 1])
 
-        self._dec_bins_to_consider = [response.response_bins[centers[x]] for x in dec_bins_to_consider_idx]
+        try:
+            self._dec_bins_to_consider = [response.response_bins[centers[x]] for x in dec_bins_to_consider_idx]
+        except:
+            raise Exception(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max}")
 
         log.info("Considering %i dec bins for extended source %s" % (len(self._dec_bins_to_consider),
                                                                   self._name))

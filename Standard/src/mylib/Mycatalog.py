@@ -13,20 +13,22 @@ from tqdm import tqdm
 
 from astropy.io import fits
 
+from Myspeedup import libdir
+
 try:
-    LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
+    LHAASOCat = pd.read_csv(f"{libdir}/../../data/LHAASO_Catalog_Table1.csv")
     LHAASOCat=LHAASOCat[LHAASOCat[" Ra"]!=' ']
 
-    data = np.recfromtxt("../../data/RRL_table3.txt")
+    data = np.recfromtxt(f"{libdir}/../../data/RRL_table3.txt")
     data = np.array(data, dtype='U13')
     FASTHIIcat = pd.DataFrame(data[1:], columns=data[0])
 
     # A large catalogue of molecular clouds with accurate distances within 4 kpc of the Galactic disc
-    fits_file = "../../data/J_MNRAS_493_351_table1.dat.fits"
+    fits_file = f"{libdir}/../../data/J_MNRAS_493_351_table1.dat.fits"
     hdul = fits.open(fits_file)
     MCcat = pd.DataFrame(hdul[1].data) 
 except:
-    print("not a good position for data")
+    print(f"not a good position for data, no {libdir}/../../data/")
 
 def getViziercat(name, cut={}):
     Vizier.ROW_LIMIT = -1  # 无限制
