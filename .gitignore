@@ -7,6 +7,7 @@ Standard/src/tools/LHAASO_skytrans/skytxt/*txt
 Standard/src/tools/LHAASO_skytrans/skytxt/*pdf
 Standard/src/tools/LHAASO_skytrans/skytxt/*fits
 Standard/src/tools/LHAASO_skytrans/skytxt/*gz
+Standard/src/tools/LHAASO_skytrans/skytxt/*npy
 Standard/src/tools/llh_skymap/output/*
 Standard/src/tools/llh_skymap/*.gz
 Standard/src/tools/llh_skymap/__pycache__
@@ -45,5 +46,4 @@ Standard/src/*.par
 !Standard/src/3MLnew_GRB221009A.ipynb
 !Standard/src/*yaml
 !Standard/src/*yml
-
 !Standard/src/tutorial.ipynb
