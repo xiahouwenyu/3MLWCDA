@@ -7,7 +7,7 @@ int main(int argc, char *argv[])
     TFile *file = TFile::Open(argv[1], "UPDATE");
     TTree *BinInfo = (TTree*)file->Get("BinInfo");
     // file->Delete("BinInfo");
-    TTree* newTree = BinInfo->CopyTree(Form("name>=%s&&name<=%s",argv[2],argv[3]));
+    TTree* newTree = BinInfo->CopyTree(Form("name>=%i&&name<=%i",std::stoi(argv[2]),std::stoi(argv[3])));
     for (int i = 0; i <14;i++) {
         TTree *data = (TTree*)file->Get(Form("nHit%02d/data",i));
         TTree *bkg = (TTree*)file->Get(Form("nHit%02d/bkg",i));

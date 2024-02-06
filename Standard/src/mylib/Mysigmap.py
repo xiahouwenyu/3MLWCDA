@@ -235,6 +235,14 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
 
 import math
 def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"):
+    """
+        画椭圆
+
+        Parameters:
+
+        Returns:
+            >>> None
+    """ 
     angles_circle = np.arange(0, 2 * np.pi, 0.01)
     x = []
     y = []
@@ -257,6 +265,14 @@ def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"
 
 
 def high_pass_filter(image, cutoff_freq):
+    """
+        图像高通滤波
+
+        Parameters:
+
+        Returns:
+            >>> None
+    """ 
     # 进行二维傅里叶变换
     f_transform = np.fft.fft2(image)
     
@@ -281,6 +297,20 @@ def high_pass_filter(image, cutoff_freq):
 
 
 def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits', fig=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alpha=1):
+    """
+        画fits文件
+
+        Parameters:
+            fig: 画在什么上?
+            drawalpha: 是否画一定透明度的?
+            iffilter: 是否对一定阈值外的部分进行完全透明?
+            cutl: 阈值下限 0-1
+            cutu: 阈值上限 0-1
+            alpha: 透明度
+
+        Returns:
+            >>> fig, wcs, data
+    """ 
     from astropy.io import fits
     from astropy.wcs import WCS
 # fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/S147_mosaic.fits'; vmin=-15; vmax=30
@@ -364,6 +394,14 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
         return fig, wcs, data
     
 def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1):
+    """
+        将healpix天图转fits天图
+
+        Parameters:
+            name: 保存fits文件路径
+        Returns:
+            >>> None
+    """ 
     from astropy.io import fits
     from astropy.wcs import WCS
     # 将RA和DEC范围转换为SkyCoord对象
@@ -530,6 +568,14 @@ def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
 def getsig1D(S, region_name, Modelname, name):
+    """
+        从healpix显著性天图S画一维显著性分布并保存
+
+        Parameters:
+
+        Returns:
+            >>> None
+    """ 
     bin_y,bin_x,patches=plt.hist(S.compressed(),bins=100)
     plt.close()
     bin_x=np.array(bin_x)
@@ -622,13 +668,14 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
     getsig1D(S, region_name, Modelname, name)
     return S
 
-def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,pta,exta, data_radius, binc="all", ifrunllh=True, detector="WCDA"):
-    import os
+def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1, outname,pta,exta, data_radius, binc="all", ifrunllh=True, detector="WCDA"):
     """write residual map to skymap root file.
 
         Args:
             pta=[1,0,1], exta=[0,0]: if you have 3 pt sources and 2 ext sources, and you only want to keep 1st and 3st sources,you do like this.
+            ifrunllh: 顺便提交作业跑残差显著性天图
     """
+    import os
     log.info(outname+"_res")
     # outname = "residual_all"
 
@@ -743,12 +790,20 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, ra1, dec1, outname,
         fout.Close()
     forg.Close()
 
-    os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {binc[0]} {binc[-1]}')
+    os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
-        runllhskymap(roi, f"../res/{region_name}/{Modelname}/{outname}.root", ra1, dec1, data_radius, outname, detector=detector, ifres=1)
+        runllhskymap(roi, f"../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=int(binc[0]), e=int(binc[-1]))
     return outname+"_res"
 
-def getllhskymap(inname, region_name, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
+def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
+    """
+        搜集显著性天图作业的结果并保存fits文件
+
+        Parameters:
+        
+        Returns:
+            >>> healpix
+    """ 
     import glob
     import os
     folder_path = f"{libdir}/tools/llh_skymap/sourcetxt/{detector}_{inname}"
@@ -768,16 +823,16 @@ def getllhskymap(inname, region_name, ra1, dec1, data_radius, detector="WCDA", i
                     skymap[dd2[:,0].astype(np.int)]=dd2[:,1]
     skymap=hp.ma(skymap)
     if ifsave:
-        hp.write_map(f"../res/{region_name}/{detector}_{inname}.fits.gz", skymap, overwrite=True)
+        hp.write_map(f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits.gz", skymap, overwrite=True)
     if ifdraw:
         sources={}
-        drawmap(region_name, "Modelname", sources, skymap, ra1, dec1, rad=2*data_radius, contours=[10000],save=0, 
-                cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "size": 20 ,"color": "grey"}, color="Fermi"
+        drawmap(region_name, Modelname, sources, skymap, ra1, dec1, rad=2*data_radius, contours=[10000],save=ifsave, savename=inname,
+                cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "size": 20,"markercolor": "grey","labelcolor": "black","angle": 60,"catext": 1 }, color="Fermi"
                   )
     if drawfullsky:
         fig = mt.hpDraw("region_name", "Modelname", skymap,0,0,skyrange=(0,360,-20,80),
                     colorlabel="Significance", contours=[1000], save=False, cat={}, color="Milagro", xsize=2048)
     if tofits:
         plt.figure()
-        heal2fits(skymap, f"../res/{region_name}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
+        heal2fits(skymap, f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
     return skymap

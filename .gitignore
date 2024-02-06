@@ -20,8 +20,13 @@ Standard/src/*.py
 Standard/src/*.sh
 Standard/src/*.gz
 Standard/src/*.pha
+Standard/src/*.rsp
 Standard/src/*.rsp2
 Standard/src/*.log
+Standard/src/*.ctr
+Standard/src/*.eps
+Standard/src/runtest*
+Standard/src/*.par
 !Standard/src/Justdraw.ipynb
 !Standard/src/tools/llh_skymap/sourcetxt/*ipynb
 !Standard/src/3MLnew_Crab.ipynb
@@ -40,4 +45,5 @@ Standard/src/*.log
 !Standard/src/3MLnew_GRB221009A.ipynb
 !Standard/src/*yaml
 !Standard/src/*yml
+
 !Standard/src/tutorial.ipynb

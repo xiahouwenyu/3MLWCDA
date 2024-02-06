@@ -10,11 +10,17 @@ import numpy as np
 
 
 def edm2gal(ra1,dec1):
+    """
+        赤道转银道
+    """
     coord=SkyCoord(ra1*u.deg,dec1*u.deg,frame='icrs').transform_to('galactic')
     l,b=coord.l.degree,coord.b.degree
     return l,b
 
 def gal2edm(l1,b1):
+    """
+        银道转赤道
+    """
     coord=SkyCoord(l1*u.deg,b1*u.deg,frame='galactic').transform_to('icrs')
     ra,dec=coord.ra.degree,coord.dec.degree
     return ra,dec
@@ -26,6 +32,15 @@ def icrs2altaz(
     source_ra = 288.263,
     source_dec = 19.803
     ):
+    """
+        赤道转地平
+
+        Parameters:
+            longitude, latitude: 地球经纬度
+            
+        Returns:
+            zenith_angle,azimuth_angle
+    """
     # 将MJD转换为Time对象
     obs_time = Time(mjd, format='mjd')
 
@@ -93,6 +108,14 @@ def icrs2j200(RA, DEC):
     return ra,dec
 
 def distance(ra1, dec1, ra2, dec2):
+    """
+        天球角距离
+
+        Parameters:
+            
+        Returns:
+            角距离 degree
+    """
     # 将角度转换为弧度
     ra1_rad = np.radians(ra1)
     dec1_rad = np.radians(dec1)
@@ -111,6 +134,14 @@ def distance(ra1, dec1, ra2, dec2):
     return theta_deg
 
 def skyangle(ra1,dec1,ra2,dec2):
+    """
+        天球角距离
+
+        Parameters:
+            
+        Returns:
+            角距离 degree
+    """
     ra1 = np.radians(ra1)
     dec1 = np.radians(dec1)
     ra2 = np.radians(ra2)
@@ -119,7 +150,14 @@ def skyangle(ra1,dec1,ra2,dec2):
     return angle
 
 def hms_to_deg(ra_hours, ra_minutes, ra_seconds, dec_degrees, dec_minutes, dec_seconds):
-    '''转换时角为角度'''
+    """
+        转换时角为角度
+
+        Parameters:
+            
+        Returns:
+            ra_degrees, dec_degrees
+    """ 
     ra_degrees = (ra_hours + ra_minutes/60 + ra_seconds/3600) * 15
 
     # 转换赤纬为角度

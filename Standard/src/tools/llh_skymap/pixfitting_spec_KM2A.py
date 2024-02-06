@@ -52,12 +52,12 @@ if __name__ == "__main__":
                            dec=dec_crab,
                            spectral_shape=spectrum)
     fluxUnit=1./(u.TeV* u.cm**2 * u.s)
-    spectrum.K=0 *fluxUnit
+    spectrum.K=1e-15 *fluxUnit
     spectrum.K.fix=False
-    spectrum.K.bounds=(-1e-12*fluxUnit, 1e-12*fluxUnit)
+    spectrum.K.bounds=(-1e-11*fluxUnit, 1e-11*fluxUnit)
     spectrum.piv= 50.*u.TeV
     spectrum.piv.fix=True
-    spectrum.index=-3.2
+    spectrum.index=-3.5
     spectrum.index.fix=True
     WCDA.psf_integration_method="fast"
     model=Model(source)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
             try:
                 param_df, like_df = jl.fit(quiet=True)
             except (CannotComputeCovariance,OverflowError,FitFailed,RuntimeError):
-                rr.append([pid, 0])
+                rr.append([pid, hp.UNSEEN])
             else:
                 results = jl.results
                 TS=jl.compute_TS("Pixel",like_df)
@@ -93,7 +93,7 @@ if __name__ == "__main__":
                     else:
                         sig=-np.sqrt(ts)
                 else:
-                    sig=0
+                    sig=hp.UNSEEN
                 rr.append([pid, sig])
         return rr
 

@@ -20,6 +20,7 @@ class SBPL(Function1D, metaclass=FunctionMeta):
                 initial value : 10
             omega :
                 desc : break smooth
+                min : 0
                 initial value : 1
             alpha1 :
                 desc : index 1

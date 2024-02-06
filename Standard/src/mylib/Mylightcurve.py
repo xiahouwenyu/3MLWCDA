@@ -2,6 +2,7 @@ from threeML import *
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import ROOT as rt
 
 
 log = setup_logger(__name__)
@@ -50,6 +51,9 @@ def SSQPL(x,par):
 def gaussian(x, amplitude, mean, stddev):
     return amplitude * np.exp(-((x - mean) / 2 / stddev)**2)
 
+def poly(x, a, b, c):
+    return a*x**2 + b*x + c
+
 # Tools 
 def raw2array(data):
     Tfit = []
@@ -63,6 +67,7 @@ def poisson_fluctuation(x):
     return np.random.poisson(x)
 
 def p2sigma(p):
+    import scipy.stats as stats
     """p value to sigma"""
     return -stats.norm.ppf(p/2)
 
@@ -453,6 +458,13 @@ def plot_spectrum_with_background(spectrum_results, low_bound, median, hi_bound,
 ########################### . LC class
 
 class lc(object):
+    """
+        光变类
+
+        Parameters:
+
+        Returns:
+    """ 
     # read
     filedata=""
     funcfile=""
@@ -471,6 +483,7 @@ class lc(object):
 
     linebkg = list(range(bins))
     func = list(range(bins))
+    bkgp = []
     bkg=None
     tho=None
     method="from_root"
@@ -478,7 +491,7 @@ class lc(object):
     #for GRB
     t90=None
 
-    def __init__(self, file = None, tname = None, ebin=None, funcfile=None):
+    def __init__(self, file = None, tname = None, ebin=None, funcfile=None, bkgfile=None, bkgscale=None):
         """ 
             从root文件里读取TH1D作为光变
         """
@@ -491,6 +504,11 @@ class lc(object):
                 if tname != None:
                     self.time = self.upfile[tname].axis().centers()
                     self.counts = self.upfile[tname].values()
+                    if bkgfile is not None:
+                        bkgr = uproot.open(bkgfile)
+                        self.bkg = bkgr[tname].values()
+                        if bkgscale is not None:
+                            self.bkg = self.bkg * bkgscale
                 else:
                     self.time = self.upfile[f"mjd{ebin};1"].axis().centers()
                     self.counts = self.upfile[f"mjd{ebin};1"].values()
@@ -504,8 +522,8 @@ class lc(object):
                             self.linebkg[i] = ffunc.Get("linebkg%d"%i)
                         self.bkg = [self.linebkg[ebin].Eval(tt)*self.dt for tt in self.time]
                         self.tho = [self.func[ebin].Eval(tt-226)*self.dt for tt in self.time]
-                        np.save("../../data/lc_data/GRB221009A/bkg.npy", self.bkg)
-                        np.save("../../data/lc_data/GRB221009A/tho.npy", self.tho)
+                        # np.save("../../data/lc_data/GRB221009A/bkg.npy", self.bkg)
+                        # np.save("../../data/lc_data/GRB221009A/tho.npy", self.tho)
                     elif "npy" in self.funcfile:
                         self.bkg = np.load(self.funcfile) #[-1]*self.dt
                         self.tho = np.load(self.funcfile.replace("bkg","tho")) #[-1]*self.dt
@@ -514,6 +532,7 @@ class lc(object):
                 Tdata = raw2array(data)
                 self.time = Tdata[:,0]
                 self.counts = Tdata[:,1]
+            self.ebin = ebin
             self.dt=self.time[1]-self.time[0]
             self.t0=self.time[0]-self.dt
             self.nt=len(self.time)
@@ -528,24 +547,35 @@ class lc(object):
 
         tolerance=0.00000005
         newclass.counts=self.counts
+        if self.bkg is not None:
+            newclass.bkg = self.bkg
         for i, tt in enumerate(tqdm(others.time)):
             indices = np.where(np.isclose(self.time, tt, rtol=tolerance, atol=tolerance))[0]
             newclass.counts[indices] = self.counts[indices]+others.counts[i]
-        
+            if others.bkg is not None:
+                newclass.bkg[indices] = self.bkg[indices]+others.bkg[i]
         return newclass
     
+    @property
+    def bkgpar(self):
+        if self.linebkg is not None:
+            self.bkgp = self.linebkg[self.ebin].GetParameters()
+        return self.bkgp
     def drawlc(self, t1 = 230, t2 = 334.8576):
         ax = plt.axes([0.1, 0.75, 0.65, 0.2])
         if self.bkg is not None:
-            self.counts_nt = self.counts-np.array(self.bkg)*self.dt
+            self.counts_nt = self.counts-np.array(self.bkg)
         else:
             self.counts_nt = self.counts
         idx = (self.time >= t1) & (self.time <= t2)
         ax.plot(self.time[idx],self.counts_nt[idx],'k', linewidth=1.5)
         a=plt.show()
 
-    def getdatafram(self):
-        return pd.DataFrame(np.array([self.time, self.counts, np.sqrt(self.counts)]).T, columns=['x', 'y', 'yerr'])
+    def getdatafram(self, subbkg=True):
+        if not subbkg:
+            return pd.DataFrame(np.array([self.time, self.counts, np.sqrt(self.counts)]).T, columns=['x', 'y', 'yerr'])
+        else:
+            return pd.DataFrame(np.array([self.time, self.counts_nt, np.sqrt(self.counts)]).T, columns=['x', 'y', 'yerr'])
 
     def rebin(self, tobin):
         self.time, self.counts = nprebinmean(self.time,tobin), nprebin(self.counts,tobin)
@@ -570,6 +600,23 @@ class lc(object):
             ll+=f"par1: {par:.2f} ± {np.sqrt(covariance[i][i]):.2f} . "
         plt.plot(xx, func(xx, *params), label=ll)
         plt.legend()
+
+    def fitbkg(self, func, t1, t2, p0=None, asbkg=True, plot=False):
+        from scipy.optimize import curve_fit
+        rs = int((t1-self.t0)/self.dt)
+        re = int((t2-self.t0)/self.dt)
+        params, covariance = curve_fit(func, self.time[rs:re], self.bkg[rs:re], p0=p0)
+        xx = np.arange(t1,t2,0.1)
+        ll=""
+        if plot:
+            plt.plot(self.time[rs:re], self.bkg[rs:re])
+            for i, par in enumerate(params):
+                ll+=f"par1: {par:.2f} ± {np.sqrt(covariance[i][i]):.2f} . "
+            plt.plot(xx, func(xx, *params), label=ll)
+            plt.legend()
+        if asbkg:
+            self.bkg = [func(tt, *params) for tt in self.time]
+        self.bkgp = params
 
     def Drawtimeband(self,t1, t2, tt1, tt2):
         fig = plt.figure()

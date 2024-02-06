@@ -35,8 +35,8 @@ def go(args):
     #roi=HealpixMapROI(ra=ra_Cocoon,dec=dec_Cocoon,data_radius=data_radius,model_radius=model_radius, roifile='/home/lhaaso/tangruiyi/analysis/cocoonstuff/roi.fits')
     WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
     # Use from bin 1 to bin 9
-    # WCDA.set_active_measurements(0,5)
-    WCDA.set_active_measurements(2,7)
+    WCDA.set_active_measurements(0,5)
+    # WCDA.set_active_measurements(2,7)
 
 #    pixid=roi.active_pixels(roi._original_nside)
     #pixid=roi.active_pixels(1024)
@@ -59,9 +59,9 @@ def go(args):
     spectrum.K=1e-15*fluxUnit
     spectrum.K.fix=False
     spectrum.K.bounds=(-1e-13*fluxUnit, 1e-13*fluxUnit)
-    spectrum.piv= 50.*u.TeV
+    spectrum.piv= 3.*u.TeV
     spectrum.piv.fix=True
-    spectrum.index=-3.5
+    spectrum.index=-2.6
     spectrum.index.fix=True
     WCDA.psf_integration_method="fast"
     model=Model(source)
@@ -81,8 +81,8 @@ def go(args):
         source.position.ra.fix=True
         source.position.dec=dec_pix
         source.position.dec.fix=True
-        # WCDA.set_active_measurements(0,5)
-        WCDA.set_active_measurements(2,7)
+        WCDA.set_active_measurements(0,5)
+        # WCDA.set_active_measurements(2,7)
         data = DataList(WCDA)
         jl = JointLikelihood(model, data, verbose=False)
         jl.set_minimizer("ROOT")
@@ -95,19 +95,21 @@ def go(args):
                 fs.write(str(errid)+"\n")
         else:
             results = jl.results
-            #WCDA.get_log_like()
-            TS=jl.compute_TS("Pixel",like_df)
-            ts=TS.values[0][2]
-            print("TS:",ts)
-            #ts_list.append(ts)
+            # #WCDA.get_log_like()
+            # TS=jl.compute_TS("Pixel",like_df)
+            # ts=TS.values[0][2]
+            # print("TS:",ts)
+            # #ts_list.append(ts)
             K_fitted=results.optimized_model.Pixel.spectrum.main.Powerlaw.K.value
-            if(ts>=0):
-                if(K_fitted>=0):
-                    sig=np.sqrt(ts)
-                else:
-                    sig=-np.sqrt(ts)
-            else:
-                sig=0
+            sig = K_fitted
+            # if(ts>=0):
+            #     if(K_fitted>=0):
+            #         sig=np.sqrt(ts)
+            #     else:
+            #         sig=-np.sqrt(ts)
+            # else:
+            #     sig=0
+            
           #  sig_list.append(sig)
         with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
             fs.write(str(pid)+" "+str(sig)+"\n")

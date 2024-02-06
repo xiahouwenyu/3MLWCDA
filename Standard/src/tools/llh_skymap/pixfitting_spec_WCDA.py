@@ -79,7 +79,7 @@ if __name__ == "__main__":
             try:
                 param_df, like_df = jl.fit(quiet=True)
             except (CannotComputeCovariance,OverflowError,FitFailed,RuntimeError):
-                rr.append([pid, 0])
+                rr.append([pid, hp.UNSEEN])
             else:
                 results = jl.results
                 TS=jl.compute_TS("Pixel",like_df)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
                     else:
                         sig=-np.sqrt(ts)
                 else:
-                    sig=0
+                    sig=hp.UNSEEN
                 rr.append([pid, sig])
         return rr
 

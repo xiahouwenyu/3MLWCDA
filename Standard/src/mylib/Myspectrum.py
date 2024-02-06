@@ -13,9 +13,77 @@ import scipy as sp
 
 import matplotlib.pyplot as plt
 
+from Mylightcurve import p2sigma
+
 from Myspec import *
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False):
+def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True, CL=0.95):
+    """
+        获取参数llh扫描的上限
+
+        Parameters:
+        
+        Returns:
+            >>> 上限, 新minimum
+    """ 
+    jl.restore_best_fit()
+    (
+    current_value,
+    current_delta,
+    current_min,
+    current_max,
+    ) = jl.minimizer._internal_parameters[par]
+    orgllh = [current_value, jl.minus_log_like_profile(current_value)]
+    if current_value<0:
+        current_value=1e-24
+    trials = np.logspace(-30, np.log10(current_value)+2, num)
+    deltaTS=[]
+    for trial in trials:
+        deltaTS.append(2*(jl.minus_log_like_profile(trial)-jl.minus_log_like_profile(trials[0])))
+    deltaTS = np.array(deltaTS)
+    TSneed = p2sigma(1-(2*CL-1))**2
+    indices = np.where(deltaTS == min(deltaTS))[0]
+    newmini = trials[indices]
+    if np.any(current_value!=newmini):
+        log.info("Find new minimun!!")
+        if not isinstance(newmini, np.ndarray):
+            current_value=newmini
+            deltaTS = deltaTS-deltaTS[indices]
+        else:
+            current_value=newmini.max()
+            newmini=newmini.max()
+            deltaTS = deltaTS-deltaTS[indices[0]]
+    else:
+        newmini = None
+
+
+    try:
+        upper = trials[(deltaTS>=TSneed) & (trials>=current_value)][0]
+        sigma1 = trials[deltaTS>=1 & (trials>=current_value)][0]
+        sigma2 = trials[deltaTS>=4 & (trials>=current_value)][0]
+        sigma3 = trials[deltaTS>=9 & (trials>=current_value)][0]
+    except:
+        upper=0; sigma1=0; sigma2=0; sigma3=0
+    if plot:
+        plt.figure()
+        try:
+            plt.scatter(current_value, trials[indices], marker="*", c="tab:blue", zorder=4, s=100)
+        except:
+            plt.scatter(current_value, trials[indices[0]], marker="*", c="tab:blue", zorder=4, s=100)
+        plt.plot(trials,deltaTS)
+        plt.axhline(TSneed,color="black", linestyle="--", label=f"95% upperlimit: {upper:.2e}")
+        plt.axvline(upper,color="black", linestyle="--")
+        plt.axhline(1,color="tab:green", linestyle="--", label=f"1 sigma: {sigma1:.2e}")
+        plt.axhline(4,color="tab:orange", linestyle="--", label=f"2 sigma: {sigma2:.2e}")
+        plt.axhline(9,color="tab:red", linestyle="--", label=f"3 sigma: {sigma3:.2e}")
+        plt.legend()
+        plt.ylabel(r"$\Delta TS$")
+        plt.xlabel(par)
+        plt.xscale("log")
+        plt.show()
+    return upper, newmini
+
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -49,7 +117,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 elif ("SpatialTemplate" not in pa):
                     kparname=newpa
                     # print("change bounds!!!!")
-                    lm2.sources[ss].parameters[newpa].bounds=(-1e-11,1e-11)*fluxUnit
+                    lm2.sources[ss].parameters[newpa].bounds=(-1000*par[pa].value*1e9,1000*par[pa].value*1e9)*fluxUnit
     else:
         for ss in sources:
             freep = lm2.sources[ss].free_parameters.keys()
@@ -57,27 +125,60 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 if (ss == source and ".K" not in fp) or ss != source:
                     lm2.sources[ss].free_parameters[fp].fix = True
                 elif (ss == source and ".K" in fp and lm.sources[ss].components['main'].shape.name=="PowerlawM"):
-                    lm2.sources[ss].free_parameters[fp].bounds=(-1e-11,1e-11)
+                    lm2.sources[ss].free_parameters[fp].bounds=(-1000*lm2.sources[ss].free_parameters[fp].value*1e9,1000*lm2.sources[ss].free_parameters[fp].value*1e9) * fluxUnit
                 else:
                     kparname=fp
 
     result2 = fit("nothing","nothing", WCDA_1,lm2,int(i),int(i),mini=mini,savefit=False, ifgeterror=ifgeterror)
 
     TSflux=result2[0].compute_TS(source,result2[1][1]).values[0][2]
+    if np.isnan(TSflux) or TSflux>1e10:
+        TSflux=0
     if not nCL:
         if ifpowerlawM:
-            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)
-            if (ub-result2[1][0].iloc[0,0])>0:
+            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)    
+            if int(i) >= 10 and TSflux<threshold**2:
+                ub, mewmini = get_upperlimit(result2[0], kparname, CL=CL)
+                if mewmini is not None:
+                    result2[1][0].iloc[0,0] = mewmini
+            if (ub-result2[1][0].iloc[0,0])>0 and TSflux<threshold**2:
+                result2[1][0].iloc[0,3] = (ub-result2[1][0].iloc[0,0])/1.96
                 result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
+                result2[1][0].iloc[0,1] = 0.9*result2[1][0].iloc[0,2]
+            # elif TSflux<4:
+            #     log.warning("upper limit is lower than value, just use 0 as the value!")
+            #     result2[1][0].iloc[0,3] = (ub)/1.96
+            #     result2[1][0].iloc[0,2] = (ub)/1.96
+            #     result2[1][0].iloc[0,1] = 0.9*result2[1][0].iloc[0,2]
             if result2[1][0].loc[kparname,"value"]<0:
                 TSflux=-TSflux
         else:
             lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace("PowerlawM","Powerlaw")], cl=2*CL-1)
-            if (ub-result2[1][0].iloc[0,0])>0:
+            if int(i) >= 10  and TSflux<threshold**2:
+                ub, mewmini = get_upperlimit(result2[0], kparname.replace("PowerlawM","Powerlaw"), CL=CL)
+                if mewmini is not None:
+                    result2[1][0].iloc[0,0] = mewmini
+            if (ub-result2[1][0].iloc[0,0])>0 and TSflux<threshold**2:
+                result2[1][0].iloc[0,3] = (ub-result2[1][0].iloc[0,0])/1.96
                 result2[1][0].iloc[0,2] = (ub-result2[1][0].iloc[0,0])/1.96
+                result2[1][0].iloc[0,1] = 0.9*result2[1][0].iloc[0,2]
+            # elif TSflux<4:
+            #     log.warning("upper limit is lower than value, just use 0 as the value!")
+            #     result2[1][0].iloc[0,3] = (ub)/1.96
+            #     result2[1][0].iloc[0,2] = (ub)/1.96
+            #     result2[1][0].iloc[0,1] = 0.9*result2[1][0].iloc[0,2]
+
     return result2, TSflux
 
 def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
+    """
+        获取拟合能谱下每个bin的能量以及其误差
+
+        Parameters:
+        
+        Returns:
+            >>> x,x_lo,x_hi
+    """ 
     piv=3
     par = lm.sources[source].parameters.keys()
     for pp in par:
@@ -127,6 +228,14 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
     return x,x_lo,x_hi
 
 def getexposure(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
+    """
+        获取每个bin的counts到流强转化比
+
+        Parameters:
+        
+        Returns:
+            >>> ratio
+    """ 
     piv=3
     par = lm.sources[source].parameters.keys()
     for pp in par:
@@ -169,6 +278,14 @@ def getexposure(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
     return th1.Integral(1,nbins-1)/sp.integrate.quad(xfunc,0.1,20,args=(K*1e9,index,piv))[0]
 
 def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
+    """
+        获取整个探测器在拟合能谱下的能量及其误差范围
+
+        Parameters:
+        
+        Returns:
+            >>> x,x_lo,x_hi, th1
+    """ 
     piv=3
     par = lm.sources[source].parameters.keys()
     for pp in par:
@@ -220,7 +337,23 @@ def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False, threshold=2):
+    """
+        获取某个源的能谱点
+
+        Parameters:
+            source: 想获取的源名称
+            ifgeterror: 是否获取精确的误差, 似乎有些毛病!
+            ifpowerlawM: 是否允许负的拟合范围, 防止卡边界,建议允许
+            CL: 上限点取%多少上限?
+            piv: 固定的piv energy, 需和之前相同
+            nCL: 不使用扫描的上限
+            threshold: 上限处理的显著性阈值, 默认2sigma
+        
+        Returns:
+            能谱点举证以及每个bin拟合结果列表: list([jl, results])
+            >>> Flux_WCDA, results
+    """ 
     Flux_WCDA=np.zeros((len(Detector._active_planes),8), dtype=np.double())
     # piv = result[1][0].values[3][0]/1e9
     par = lm.sources[source].parameters.keys()
@@ -237,13 +370,14 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
     imin=100
-    jls = []
-    for i in Detector._active_planes:
+    results = []
+    silence_logs()
+    for i in tqdm(Detector._active_planes):
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=False)
-        jls.append(result2[0])
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
+        results.append(result2)
         flux1 = result2[1][0].values[0][0]
         errorl = abs(result2[1][0].values[0][1])
         erroru = result2[1][0].values[0][2]
@@ -258,13 +392,39 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         Flux_WCDA[int(i)-imin][4]=Flux_WCDA[int(i)-imin][3]*(errorl/flux1)
         Flux_WCDA[int(i)-imin][5]=Flux_WCDA[int(i)-imin][3]*(erroru/flux1)
         Flux_WCDA[int(i)-imin][6]=Flux_WCDA[int(i)-imin][3]*(error1/flux1)
+        # print(i, flux1, error1, Flux_WCDA[int(i)-imin][3], Flux_WCDA[int(i)-imin][6])
         if TSflux<0:
             TSflux=0
         Flux_WCDA[int(i)-imin][7]=np.sqrt(TSflux)
-    return Flux_WCDA, jls
+    activate_logs()
+    return Flux_WCDA, results
 
-def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True):
+def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None):
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
+    """
+        从能谱点矩阵画能谱点
+
+        Parameters:
+            aserror: 使用非对称误差
+            ifsimpleTS: 是否仅仅用误差比来估计显著性
+            threshold: 上限显著性阈值
+            usexerr: 使用横向误差
+
+            CL: 上限点取%多少上限?
+            piv: 固定的piv energy, 需和之前相同
+            nCL: 不使用扫描的上限
+            threshold: 上限处理的显著性阈值, 默认2sigma
+            ncut: 是否不允许负的流强, 强行拉到0
+            subplot: 作为子图的ax
+        
+        Returns:
+            >>> None
+    """ 
+    if subplot is not None:
+        ax = subplot
+    else:
+        ax = plt.gca()
+
     np.savetxt(f'../res/{region_name}/{Modelname}/Spectrum_{label}.txt', Fluxdata, delimiter='\t', fmt='%e')
     if ncut==True:
         Flux_WCDA[:,3][Flux_WCDA[:,3]<0]=0
@@ -276,57 +436,65 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
         npd = Flux_WCDA[:,7]>=threshold
     if not usexerr:
         if aserror:
-            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+            ax.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
                 yerr=[1e9*Flux_WCDA[:,4][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,5][npd]*Flux_WCDA[:,0][npd]**2],\
             #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
             fmt='go',label=label,c=color)
             
-            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
+            ax.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=1)
-            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+            ax.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
         else:
-            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+            ax.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
                         yerr=[1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2],\
                     #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
                     fmt='go',label=label,c=color)
             
-            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
+            ax.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=1)
-            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+            ax.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
     else:
         if aserror:
-            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+            ax.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
                     xerr=[Flux_WCDA[:,0][npd]-Flux_WCDA[:,1][npd], Flux_WCDA[:,2][npd]-Flux_WCDA[:,0][npd]], yerr=[1e9*Flux_WCDA[:,4][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,5][npd]*Flux_WCDA[:,0][npd]**2],\
             #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
             fmt='go',label=label,c=color)
             
-            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, xerr=[Flux_WCDA[:,0][~npd]-Flux_WCDA[:,1][~npd], Flux_WCDA[:,2][~npd]-Flux_WCDA[:,0][~npd]], yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
+            ax.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, xerr=[Flux_WCDA[:,0][~npd]-Flux_WCDA[:,1][~npd], Flux_WCDA[:,2][~npd]-Flux_WCDA[:,0][~npd]], yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=1)
-            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+            ax.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
         else:
-            plt.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
+            ax.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
                         xerr=[Flux_WCDA[:,0][npd]-Flux_WCDA[:,1][npd], Flux_WCDA[:,2][npd]-Flux_WCDA[:,0][npd]], yerr=[1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2, 1e9*Flux_WCDA[:,6][npd]*Flux_WCDA[:,0][npd]**2],\
                     #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
                     fmt='go',label=label,c=color)
             
-            plt.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, xerr=[Flux_WCDA[:,0][~npd]-Flux_WCDA[:,1][~npd], Flux_WCDA[:,2][~npd]-Flux_WCDA[:,0][~npd]], yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
+            ax.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2, xerr=[Flux_WCDA[:,0][~npd]-Flux_WCDA[:,1][~npd], Flux_WCDA[:,2][~npd]-Flux_WCDA[:,0][~npd]], yerr=[1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,6][~npd]*Flux_WCDA[:,0][~npd]**2],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=1)
-            plt.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
+            ax.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
         
 
 def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1, usexerr = False):
+    """
+        从之前Draw_sepctrum_points 保存在res文件夹中的能谱点txt文件画能谱, 参数和Draw_sepctrum_points类似
+
+        Parameters:
+        
+        Returns:
+            >>> None
+    """ 
     data = np.loadtxt(file)
     data[1][data[1]<0]=0
     data[1][data[5]<=0]=0
@@ -424,6 +592,14 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     return data
 
 def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
+    """
+        对WebPlotDigitizer-4.6的点画图
+
+        Parameters:
+        
+        Returns:
+            >>> None
+    """ 
     # print(file)
     data2 = pd.read_csv(file,sep=',',header=None)
     x2 = fixx*data2.iloc[:,0].values
@@ -439,6 +615,14 @@ def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e
     plt.xscale("log")
 
 def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
+    """
+        对hsc的矩阵画图
+
+        Parameters:
+        
+        Returns:
+            >>> None
+    """ 
     Energy = np.array(Energy)
     Flux = np.array(Flux)
     Ferr = np.array(Ferr)
@@ -459,6 +643,14 @@ def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
     plt.legend()
 
 def spec2naima(dir, data0057):
+    """
+        将读取的能谱点矩阵转化为naima方便复制的形式
+
+        Parameters:
+        
+        Returns:
+            >>> None
+    """ 
     dataforlb = np.zeros(data0057.shape)
     dataforlb[0] = data0057[0]
     dataforlb[1] = data0057[6]

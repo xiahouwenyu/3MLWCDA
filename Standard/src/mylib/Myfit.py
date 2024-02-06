@@ -55,6 +55,8 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             par: Parameters. if sigma is not None, is guassian,or rdiff0 is not None, is Continuous_injection_diffusion,such as this.
             parf: fix it?
             parb: boundary
+            spec: Logparabola
+            spat: Diffusion/Diffusion2D/Disk/Asymm/Ellipse
         Returns:
             Source
     """
@@ -197,6 +199,19 @@ if parb != None:
     return source
 
 def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False, roi=None, pf=False):
+    """
+        获取LHAASO catalog模型
+
+        Parameters:
+            detector: WCDA 还是 KM2A的模型?
+            rtsigma: 参数范围是原来模型误差的几倍?
+            fixall: 固定所有参数?
+            roi: 如果有不规则roi!!!
+            pf:  固定位置信息, 写得很烂, 后面可以精细化调节想要固定和放开的.
+
+        Returns:
+            model
+    """ 
     lm = Model()
     for i in range(len(LHAASOCat)):
         cc = LHAASOCat.iloc[i][" components"]
@@ -287,8 +302,38 @@ lm.add_source({name})
 
     return lm
 
+def model2bayes(model):
+    """
+        将llh模型设置先验以方便bayes分析
+
+        Parameters:
+
+        Returns:
+            model
+    """ 
+    for param in model.free_parameters.values():
+
+        if param.has_transformation():
+            param.set_uninformative_prior(Log_uniform_prior)
+        else:
+            param.set_uninformative_prior(Uniform_prior)
+    return model
 
 def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
+    """
+        进行拟合
+
+        Parameters:
+            Detector: 实例化探测器插件
+            s,e: 开始结束bin范围
+            mini: minimizer minuit/ROOT/ grid/PAGMO
+            verbose: 是否输出拟合过程
+            ifgeterror: 是否运行llh扫描获得更准确的误差, 稍微费时间点.
+            savefit: 是否保存所有拟合结果到 res/regionname/modelname 文件夹
+
+        Returns:
+            >>> [jl,result]
+    """ 
     activate_progress_bars()
     Detector.set_active_measurements(s,e)
     datalist = DataList(Detector)
@@ -313,7 +358,27 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         # Set the minimizer for the JointLikelihood object
         jl.set_minimizer(grid_minimizer)
     elif mini == "PAGMO":
-        _extracted_from_fit_30(jl)
+        #Create an instance of the PAGMO minimizer
+        pagmo_minimizer = GlobalMinimization("pagmo")
+
+        import pygmo
+
+        my_algorithm = pygmo.algorithm(pygmo.bee_colony(gen=20))
+
+        # Create an instance of a local minimizer
+        local_minimizer = LocalMinimization("minuit")
+
+        # Setup the global minimization
+        pagmo_minimizer.setup(
+            second_minimization=local_minimizer,
+            algorithm=my_algorithm,
+            islands=10,
+            population_size=10,
+            evolution_cycles=1,
+        )
+
+        # Set the minimizer for the JointLikelihood object
+        jl.set_minimizer(pagmo_minimizer)
     else:
         jl.set_minimizer(mini)
 
@@ -329,6 +394,8 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
 
     if ifgeterror:
+        from IPython.display import display
+        display(jl.results.get_data_frame())
         result = list(result)
         result[0] = jl.get_errors()
 
@@ -357,7 +424,50 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
 
     return [jl,result]
 
+def get_vari_dis(result, var="J0057.Gaussian_on_sphere.sigma"):
+    """
+        获取变量采样分布
+
+        Parameters:
+            result: 拟合返回的 [jl,result]
+            var: 参数名称
+
+        Returns:
+            >>> None
+    """ 
+    rr = result[0].results
+    ss = rr.get_variates(var)
+    r68 = ss.equal_tail_interval(cl=0.68)
+    u95 = ss.equal_tail_interval(cl=2*0.95-1)
+    nt,bins,patches=plt.hist(ss.samples, alpha=0.8)
+    x = np.arange(r68[0], r68[1], 0.001*bins.std())
+    x2 = np.arange(0, u95[1], 0.001*bins.std())
+    plt.axvline(r68[0], c="green", alpha=0.8, label=f"r68: {r68[0]:.2e} <--> {r68[1]:.2e}")
+    plt.axvline(r68[1], c="green", alpha=0.8)
+    plt.fill_between(x,1000*np.ones(len(x)), 0, color="g", alpha=0.3)
+    plt.fill_between(x2,1000*np.ones(len(x2)), 0, color="black", alpha=0.3)
+    plt.axvline(u95[1], c="black", label=f"upper limit(95%): {u95[1]:.2e}")
+    plt.xlabel(var)
+    plt.legend()
+    plt.ylabel("NSample")
+    plt.xlim(left=bins.min()-0.2*bins.std())
+    plt.ylim(0,nt.max()+0.2*nt.std())
+
 def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
+    """
+        进行联合拟合
+
+        Parameters:
+            Detector: 实例化探测器插件列表,如: [WCDA, KM2A]
+            s,e: 开始结束bin范围列表, 和探测器同维
+            mini: minimizer minuit/ROOT/ grid/PAGMO
+            verbose: 是否输出拟合过程
+            ifgeterror: 是否运行llh扫描获得更准确的误差, 稍微费时间点.
+            savefit: 是否保存所有拟合结果到 res/regionname/modelname 文件夹
+
+        Returns:
+            >>> [jl,result]
+    """ 
     activate_progress_bars()
     for i in range(len(Detector)):
         Detector[i].set_active_measurements(s[i],e[i])
@@ -383,7 +493,27 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         # Set the minimizer for the JointLikelihood object
         jl.set_minimizer(grid_minimizer)
     elif mini == "PAGMO":
-        _extracted_from_fit_30(jl)
+        #Create an instance of the PAGMO minimizer
+        pagmo_minimizer = GlobalMinimization("pagmo")
+
+        import pygmo
+
+        my_algorithm = pygmo.algorithm(pygmo.bee_colony(gen=20))
+
+        # Create an instance of a local minimizer
+        local_minimizer = LocalMinimization("minuit")
+
+        # Setup the global minimization
+        pagmo_minimizer.setup(
+            second_minimization=local_minimizer,
+            algorithm=my_algorithm,
+            islands=10,
+            population_size=10,
+            evolution_cycles=1,
+        )
+
+        # Set the minimizer for the JointLikelihood object
+        jl.set_minimizer(pagmo_minimizer)
     else:
         jl.set_minimizer(mini)
 
@@ -399,6 +529,8 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
             fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
 
     if ifgeterror:
+        from IPython.display import display
+        display(jl.results.get_data_frame())
         result = list(result)
         result[0] = jl.get_errors()
 
@@ -429,31 +561,16 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
 
     return [jl,result]
 
-# TODO Rename this here and in `fit`
-def _extracted_from_fit_30(jl):
-    #Create an instance of the PAGMO minimizer
-    pagmo_minimizer = GlobalMinimization("pagmo")
-
-    import pygmo
-
-    my_algorithm = pygmo.algorithm(pygmo.bee_colony(gen=20))
-
-    # Create an instance of a local minimizer
-    local_minimizer = LocalMinimization("minuit")
-
-    # Setup the global minimization
-    pagmo_minimizer.setup(
-        second_minimization=local_minimizer,
-        algorithm=my_algorithm,
-        islands=10,
-        population_size=10,
-        evolution_cycles=1,
-    )
-
-    # Set the minimizer for the JointLikelihood object
-    jl.set_minimizer(pagmo_minimizer)
-
 def getTSall(TSlist, region_name, Modelname, result, WCDA):
+    """
+        获取TS值
+
+        Parameters:
+            TSlist: 想要获取TS得source名称
+
+        Returns:
+            >>> 总的TS, TSresults(Dataframe)
+    """ 
     TS = {}
     for sc in tqdm(TSlist):
         TS[sc]=result[0].compute_TS(sc,result[1][1]).values[0][2]
@@ -467,6 +584,15 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
     return TS, TSresults
 
 def getressimple(WCDA, lm):
+    """
+        获取简单快速的拟合残差显著性天图,但是显著性y值完全是错的,仅仅看形态分布等
+
+        Parameters:
+
+
+        Returns:
+            残差healpix
+    """ 
     data=np.zeros(1024*1024*12)
     bkg =np.zeros(1024*1024*12)
     model=np.zeros(1024*1024*12)
@@ -495,6 +621,23 @@ def getressimple(WCDA, lm):
     return resu
 
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False):
+    """
+        在一个区域搜索新源
+
+        Parameters:
+            ifDGE: 是否考虑弥散
+            freeDGE: 是否放开弥散
+            ifAsymm: 是否使用非对称高斯
+            ifnopt: 是否不用点源
+            startfrom: 从什么模型开始迭代?
+            fromcatalog: 从catalog模型开始迭代?
+            cat: 中间图所画的catalog信息
+            detector: KM2A还是WCDA!!!!!!
+            fixcatall: 是否固定catalog源,如果从catalog开始的话
+
+        Returns:
+            >>> bestmodel, [jl, result
+    """ 
     source=[]
     pts=[]
     exts=[]
@@ -663,6 +806,18 @@ def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
 def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None):
+    """
+        自动生成区域弥散模版
+
+        Parameters:
+            lr: 沿着银河的范围半径
+            br: 垂直银河的范围
+            file: 如果有生成好的模版文件,用它
+            name: 模版文件缓存名称
+
+        Returns:
+            弥散源
+    """ 
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     if file == None:
         from astropy.wcs import WCS
@@ -755,6 +910,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
 
         # 保存为 FITS 文件
         file = f'/data/home/cwy/Science/3MLWCDA/data/{name}_dust_bkg_template.fits'
+        log.info(f"diffuse file path: {file}")
         hdu.writeto(file, overwrite=True)
         
     Diffuseshape = SpatialTemplate_2D(fits_file=file)
@@ -777,6 +933,15 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
     return Diffuse
 
 def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3):
+    """
+        读取fits的形态模版
+
+        Parameters:
+            fits_file: 模版fits文件,正常格式就行,但需要归一化到每sr
+
+        Returns:
+            弥散源
+    """ 
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     Diffuseshape = SpatialTemplate_2D(fits_file=fits_file)
     Diffusespec = Powerlaw()

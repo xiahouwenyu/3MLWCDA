@@ -12,9 +12,20 @@ from tqdm import tqdm
 
 from Mycoord import *
 
-def Drawgascontour():
+def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22):
+    """
+        叠加fitscontour
+
+        Parameters:
+            file: fits 文件
+            levels: contour levels
+            norm: 范围
+
+        Returns:
+            >>> None
+    """ 
     from matplotlib.colors import Normalize
-    with fits.open('../../data/J0248_co_-55--30_all.fits') as hdul:
+    with fits.open(file) as hdul:
             # 输出文件信息
             qtsj = hdul[0].data
             hdul[0].header
@@ -39,9 +50,19 @@ def Drawgascontour():
     galactic_coord = SkyCoord(Glon* u.degree, Glat* u.degree, frame='galactic')
     j2000_coords = galactic_coord.transform_to('fk5')
     Glon,Glat = j2000_coords.ra,j2000_coords.dec
-    plt.contour(Glon,Glat,qtsj,5,cmap="Greys",levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22,norm=Normalize(vmin=0.2e22,vmax=1e22),alpha=0.7)
+    plt.contour(Glon,Glat,qtsj,5,cmap="Greys",levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
 
 def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
+    """
+        从healpix获取差值图片
+
+        Parameters:
+            xmin,xmax,ymin,ymax: 图片坐标范围
+            xsize: 分辨率
+
+        Returns:
+            >>> img array
+    """ 
     faspect = abs(xmax - xmin)/abs(ymax-ymin)
     phi   = np.linspace(xmin, xmax, xsize)
     theta = np.linspace(ymin, ymax, int(xsize/faspect))
@@ -53,6 +74,14 @@ def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     return rotimg
 
 def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-4, ifimg=False, ifGAL=False, iflog=False, ifcolorbar=False):
+    """
+        画区域的银河diffuse模版 countour
+
+        Parameters:
+
+        Returns:
+            >>> None
+    """ 
     import ROOT
     import root_numpy as rt
     from matplotlib.colors import Normalize
@@ -221,6 +250,14 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     return fig
 
 def maskdisk(map, ra1, dec1, radius):
+    """
+        mask healpix 圆形区域
+
+        Parameters:
+
+        Returns:
+            >>> healpix
+    """ 
     # 将源的坐标转换为HEALPix像素坐标
     nside=1024
     ipix = hp.ang2pix(nside, ra1, dec1, lonlat=True)
@@ -234,6 +271,14 @@ def maskdisk(map, ra1, dec1, radius):
     return(map)
 
 def maskdiskout(map, ra1, dec1, radius):
+    """
+        mask healpix 圆形区域以外
+
+        Parameters:
+
+        Returns:
+            >>> healpix
+    """ 
     # 将源的坐标转换为HEALPix像素坐标
     nside=1024
     ipix = hp.ang2pix(nside, ra1, dec1, lonlat=True)
@@ -248,6 +293,14 @@ def maskdiskout(map, ra1, dec1, radius):
     return(map)
 
 def maskroi(map, roi):
+    """
+        mask 不规则 roi 区域以外
+
+        Parameters:
+
+        Returns:
+            >>> healpix
+    """ 
     nside=1024
     pixIdx = list(np.arange(hp.nside2npix(nside)))
     maskid = roi.active_pixels(nside)
@@ -356,6 +409,15 @@ def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, 
     return psfdata
 
 def getmaskedroi(ra1, dec1, data_radius, maskp=[]):
+    """
+        获取不规则roi
+
+        Parameters:
+            maskp: 如: [(85.78, 23.40, 2), (83.63, 22.02, 3)] 及需要mask得中心以及范围序列
+
+        Returns:
+            >>> roi
+    """ 
     nside=2**10
     numpix = hp.nside2npix(nside)
     roimap = np.ones(numpix, dtype=np.float64)

@@ -3,11 +3,29 @@ import os
 
 libdir = subprocess.run("pwd -P", shell=True, capture_output=True, text=True).stdout.replace("\n","")
 
-def runllhskymap(roi, maptree, ra1, dec1, data_radius, region_name, detector="WCDA", ifres=False, jc=10, sn=1000):
+def runllhskymap(roi, maptree, response, ra1, dec1, data_radius, region_name, detector="WCDA", ifres=False, jc=10, sn=1000, s=None,e=None):
+    """
+        交作业跑显著性天图, 结果用Mysigmap里面的getllhskymap查看
+
+        Parameters:
+            ifres: 是否标记为残差显著性天图
+            jc: 每一个作业进程数
+            sn: 每一个作业跑多少个pixel?
+        Returns:
+            >>> None
+    """ 
     parts = int(len(roi.active_pixels(1024))/sn)+1
     if ifres:
         region_name=region_name+"_res"
     if detector=="WCDA":
-        os.system(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runwcdaall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn}")
+        if s is None:
+            s=0
+        if e is None:
+            e=5
+        os.system(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runwcdaall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response}")
     elif detector=="KM2A":
-        os.system(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runkm2aall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn}")
+        if s is None:
+            s=2
+        if e is None:
+            e=7
+        os.system(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runkm2aall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response}")

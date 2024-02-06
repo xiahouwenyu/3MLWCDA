@@ -105,7 +105,7 @@ class ResponseBin(object):
 
         tf1 = open_ttree.FindObjectAny(psf_label_tf1)
 
-        psf_fun = PSFWrapper.from_TF1(tf1)
+        psf_fun = PSFWrapper.from_TF1(tf1, psf_label_tf1)
 
         return cls(analysis_bin_id, min_dec, max_dec, dec_center, sim_n_sig_events, sim_n_bg_events,
                    sim_energy_bin_low,

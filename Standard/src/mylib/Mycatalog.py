@@ -31,6 +31,16 @@ except:
     print(f"not a good position for data, no {libdir}/../../data/")
 
 def getViziercat(name, cut={}):
+    """
+        从Vizier获取catalogDataframe
+ 
+        Parameters:
+            name: - catalog编号, 比如: J/MNRAS/493/1512, 可以在检索Vizier时获取.
+            cut: - 筛选catalog 某参数仅小于某个值, 不完备, 有需求修改.
+        
+        Returns:
+            catalog Dataframe
+    """
     Vizier.ROW_LIMIT = -1  # 无限制
     Vizier.MAX_RESULTS = -1 # 无限制
     Vizier.TIMEOUT = 180 # 设置超时时间
@@ -41,6 +51,23 @@ def getViziercat(name, cut={}):
     return cat
 
 def GetAnyCat(xmin,xmax,ymin,ymax, cat, indexname, indexra, indexdec, indexs=None, coor="C", unitx="degree", unity="degree"):
+    """
+        将Dataframe格式的catalog转化为本程序的标准格式
+ 
+        Parameters:
+            xmin,xmax,ymin,ymax: - ra dec 的搜索范围.
+            cat: - catalog Dataframe.
+            indexname: - 源名在第几列?
+            indexra: - ra 信息第几列?
+            indexdec: - dec 信息第几列?
+            indexs: - size 信息第几列?
+            coor: - 坐标C 还是 G?
+            unitx, unity: - xy 坐标单位.
+
+        Returns:
+            本程序catalog标准格式 
+            >>> list(zip(ra,dec,name,sizes))
+    """
     xa=[]
     ya=[]
     assoca=[]
@@ -335,7 +362,16 @@ def GetAGNcat(xmin,xmax,ymin,ymax):
     sources_tmp.sort(key=lambda source: source[0])
     return sources_tmp
 
-def GetLHAASOcat(xmin,xmax,ymin,ymax):
+def GetLHAASOcat(xmin,xmax,ymin,ymax, showrepeatkm2a=True):
+    """
+        Parameters:
+            xmin,xmax,ymin,ymax: - ra dec 的搜索范围.
+            showrepeatkm2a: - 是否展示重复的KM2A源
+
+        Returns:
+            本程序catalog标准格式 
+            >>> list(zip(ra,dec,name,sizes))
+    """
     LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
     xa=[]
     ya=[]
@@ -348,8 +384,8 @@ def GetLHAASOcat(xmin,xmax,ymin,ymax):
         det = LHAASOCat.loc[i][1]
         assoc = LHAASOCat.loc[i][0]
         ass = str(LHAASOCat.loc[i][13])
-        if ass != " " and ass != "nan":
-            assoc+=ass
+        # if ass != " " and ass != "nan":
+        #     assoc+=ass
         if changeWCDA:
             assoc=assoc.replace("LHAASO","WCDA")
             changeWCDA=False
@@ -364,7 +400,8 @@ def GetLHAASOcat(xmin,xmax,ymin,ymax):
                 rakm2a=ras
                 deckm2a=decs
                 assockm2a=assoc
-                continue
+                if not showrepeatkm2a:
+                    continue
         elif "WCDA" in det:
             if ras==" ":
                 ras=rakm2a
@@ -391,7 +428,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
 
         Args:
             xmin: min of ra.
-            cat: name of the catalog: TeVCat/3FHL/4FGL/PSR/SNR/AGN/QSO/Simbad
+            cat: name of the catalog: TeVCat/3FHL/4FGL/PSR/SNR/AGN/QSO/Simbad/LHAASO/YMC/GYMC/WR
             mark: marker
             stype: source type in Simbad
             criteria: Simbad criteria
@@ -493,6 +530,23 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
             iflabel+=1
 
 def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=500, sizelhaaso=200, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=True, zmax=30, catname=None, yrange=None):
+    """
+        画图并比较 LHAASOCat 以及任何 Dataframe格式的cat
+
+        Parameters:
+            sizecat: - 点的大小
+            catinfo: - 标注对应的名称映射, 比如{"name": "MCid"}
+            distcut: - LHAASO 源于 anycat中的角距离cut, 用于筛选对映体
+            bkgmap: - 画图背景文件, 一般是LHAASO全天llh天图
+            ifbkg: - 画背景吗?
+            skyrange: - ra dec 范围, 默认银道坐标, 除非参数coor变更
+            ifcut: - 是否加dist cut
+            zmax: - 背景显著性colorbar上限
+            catname: - label 标注
+            
+        Returns:
+            筛选后的Dataframe
+    """
     #load LHAASO
     LHAASOCat=LHAASOCat[LHAASOCat[" Ra"].values!=' ']
     lhra = LHAASOCat[" Ra"].values; lhra=lhra[lhra!=' ']; lhra=lhra.astype(np.float)
