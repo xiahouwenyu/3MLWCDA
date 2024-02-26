@@ -399,7 +399,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
     activate_logs()
     return Flux_WCDA, results
 
-def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None):
+def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=False, subplot=None):
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
     """
         从能谱点矩阵画能谱点
@@ -486,7 +486,7 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
             ax.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
         
 
-def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1, usexerr = False):
+def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1, usexerr = False, ncut=False, subplot=None):
     """
         从之前Draw_sepctrum_points 保存在res文件夹中的能谱点txt文件画能谱, 参数和Draw_sepctrum_points类似
 
@@ -496,8 +496,14 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
             >>> None
     """ 
     data = np.loadtxt(file)
-    data[1][data[1]<0]=0
-    data[1][data[5]<=0]=0
+    if ncut==True:
+        data[1][data[1]<0]=0
+        data[1][data[5]<=0]=0
+
+    if subplot is not None:
+        ax = subplot
+    else:
+        ax = plt.gca()
 
     if ifsimpleTS:
         try: 
@@ -511,65 +517,65 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
             npd = data[1]/data[2]>=threshold
     if not usexerr:
         if aserror:
-            plt.errorbar(data[0][npd],data[1][npd],
+            ax.errorbar(data[0][npd],data[1][npd],
                 yerr=[data[2][npd],data[3][npd]],\
             #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
             fmt='go',label=label,c=color, alpha=alpha)
             
-            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
+            ax.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
                             yerr=[data[2][~npd],data[3][~npd]],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=alpha)
-            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
         else:
             try: 
-                plt.errorbar(data[0][npd],data[1][npd],data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
+                ax.errorbar(data[0][npd],data[1][npd],data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
             except:
-                plt.errorbar(data[0][npd],data[1][npd],data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
+                ax.errorbar(data[0][npd],data[1][npd],data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
             
             try: 
-                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[4][~npd],
+                ax.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[4][~npd],
                                 uplims=True,
                                 marker="None", color=color,
                                 markeredgecolor=color, markerfacecolor=color,
                                 linewidth=2.5, linestyle="None", alpha=alpha)
             except:
-                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[2][~npd],
+                ax.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],data[2][~npd],
                                 uplims=True,
                                 marker="None", color=color,
                                 markeredgecolor=color, markerfacecolor=color,
                                 linewidth=2.5, linestyle="None", alpha=alpha)
                 
-            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
     else:
         if aserror:
-            plt.errorbar(data[0][npd],data[1][npd],
+            ax.errorbar(data[0][npd],data[1][npd],
                 xerr=[data[0][npd]-data[6][npd], data[7][npd]-data[0][npd]],
                 yerr=[data[2][npd],data[3][npd]],\
             #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
             fmt='go',label=label,c=color, alpha=alpha)
             
-            plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
+            ax.errorbar(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],
                             xerr=[data[0][~npd]-data[6][~npd], data[7][~npd]-data[0][~npd]],
                             yerr=[data[2][~npd],data[3][~npd]],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=alpha)
-            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
         else:
             try: 
-                plt.errorbar(data[0][npd],data[1][npd],
+                ax.errorbar(data[0][npd],data[1][npd],
                              xerr=[data[0][npd]-data[6][npd], data[7][npd]-data[0][npd]],
                              yerr=data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
             except:
-                plt.errorbar(data[0][npd],data[1][npd],
+                ax.errorbar(data[0][npd],data[1][npd],
                              xerr=[data[0][npd]-data[6][npd], data[7][npd]-data[0][npd]],
                              yerr=data[2][npd],fmt="go", label=label, color=color, alpha=alpha)
             try: 
-                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],
+                ax.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],
                              xerr=[data[0][~npd]-data[6][~npd], data[7][~npd]-data[0][~npd]],
                              yerr=data[4][~npd],
                                 uplims=True,
@@ -577,7 +583,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
                                 markeredgecolor=color, markerfacecolor=color,
                                 linewidth=2.5, linestyle="None", alpha=alpha)
             except:
-                plt.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],
+                ax.errorbar(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],
                              xerr=[data[0][~npd]-data[6][~npd], data[7][~npd]-data[0][~npd]],
                              yerr=data[2][~npd],
                                 uplims=True,
@@ -585,10 +591,10 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
                                 markeredgecolor=color, markerfacecolor=color,
                                 linewidth=2.5, linestyle="None", alpha=alpha)
                 
-            plt.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
 
-    plt.xscale("log")
-    plt.yscale("log")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
     return data
 
 def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
@@ -614,7 +620,7 @@ def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e
     plt.yscale("log")
     plt.xscale("log")
 
-def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
+def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label="", colorp="tab:blue", subplot=None, lm=False):
     """
         对hsc的矩阵画图
 
@@ -623,24 +629,32 @@ def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label=""):
         Returns:
             >>> None
     """ 
+    if subplot is not None:
+        ax = subplot
+    else:
+        ax = plt.gca()
+    label2=""
+    if lm:
+        label2 = " WCDA"
+    
     Energy = np.array(Energy)
     Flux = np.array(Flux)
     Ferr = np.array(Ferr)
     color = np.array([1,     1,     1,   1,     1,     1,     0,     0,     0,     0,     0,     0,     0,     0,     0,  0])
     color = color[:len(Energy)]
-    plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color="tab:blue", label=label+" WCDA")
-    plt.errorbar(Energy[Ferr==0][color[Ferr==0]==1],np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,marker=".",linestyle="none",color="tab:blue", uplims=True)
+    ax.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color=colorp, label=label+label2)
+    ax.errorbar(Energy[Ferr==0][color[Ferr==0]==1],np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,marker=".",linestyle="none",color=colorp, uplims=True)
 
     if len(Energy)>6:
-        plt.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color="cornflowerblue", label=label+" KM2A")
-        plt.errorbar(Energy[Ferr==0][color[Ferr==0]==0],np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,marker=".",linestyle="none",color="cornflowerblue", uplims=True)
+        ax.errorbar(Energy[Ferr!=0][color[Ferr!=0]==0],np.array(Flux[Ferr!=0][color[Ferr!=0]==0])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==0])*Fc,marker="o",linestyle="none",color=colorp.replace("tab:", ""), label=label+" KM2A")
+        ax.errorbar(Energy[Ferr==0][color[Ferr==0]==0],np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==0])*Fc,marker=".",linestyle="none",color=colorp.replace("tab:", ""), uplims=True)
 
-    plt.xlabel(r"$E (TeV)$")
-    plt.ylabel(r"$TeV cm^{-2}s^{-1}$")
-    plt.xscale("log")
-    plt.yscale("log")
-    # plt.ylim(1e-17,5e-10)
-    plt.legend()
+    ax.set_xlabel(r"$E (TeV)$")
+    ax.set_ylabel(r"$TeV cm^{-2}s^{-1}$")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    # ax.ylim(1e-17,5e-10)
+    ax.legend()
 
 def spec2naima(dir, data0057):
     """

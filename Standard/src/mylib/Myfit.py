@@ -384,6 +384,12 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
 
     result = jl.fit()
 
+    if ifgeterror:
+        from IPython.display import display
+        display(jl.results.get_data_frame())
+        result = list(result)
+        result[0] = jl.get_errors()
+
     freepars = []
     fixedpars = []
     for p in Model.parameters:
@@ -392,12 +398,6 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             freepars.append("%-45s %35.6g ± %2.6g %s" % (p, par.value, result[0]["error"][p], par._unit))
         else:
             fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
-
-    if ifgeterror:
-        from IPython.display import display
-        display(jl.results.get_data_frame())
-        result = list(result)
-        result[0] = jl.get_errors()
 
     if savefit:
         time1 = strftime("%m-%d-%H", localtime())
@@ -805,7 +805,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None):
     """
         自动生成区域弥散模版
 
@@ -881,9 +881,10 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = 7.3776826e-13, Kf = True, Kb=None,
 
         F0=10.394e-12/(u.TeV*u.cm**2*u.s*u.sr)
         # K=F0*(sa*u.sr)/(ss*u.sr)/((hsa*u.sr)/(hss*u.sr))
-        K = F0*hss*(sa/hsa)
-        Kz = F0*hss*(zsa/hsa)
-        K = K.value
+        if K is None:
+            K = F0*hss*(sa/hsa)
+            Kz = F0*hss*(zsa/hsa)
+            K = K.value
 
         # 定义图像大小
         naxis1 = len(ll)  # 银经

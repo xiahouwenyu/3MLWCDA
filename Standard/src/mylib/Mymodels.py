@@ -164,6 +164,7 @@ class Continuous_injection_diffusion2D(Function2D, metaclass=FunctionMeta):
                 initial value : 0.0
                 min : 0.0
                 max : 360.0
+                delta : 0.1
 
             lat0 :
 
@@ -171,6 +172,7 @@ class Continuous_injection_diffusion2D(Function2D, metaclass=FunctionMeta):
                 initial value : 0.0
                 min : -90.0
                 max : 90.0
+                delta : 0.1
 
             rdiff0 :
 
@@ -178,6 +180,7 @@ class Continuous_injection_diffusion2D(Function2D, metaclass=FunctionMeta):
                 initial value : 1.0
                 min : 0
                 max : 20
+                delta : 0.1
         """
 
     def _set_units(self, x_unit, y_unit, z_unit):

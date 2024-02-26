@@ -414,6 +414,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     pixarea = 4*np.pi/npix
     pix_indices = hp.ang2pix(nside, coords.ra.degree, coords.dec.degree, lonlat=True)
     map[map==hp.UNSEEN]=0
+    map[map<=-10]=0
     if ifplot:
         plt.imshow(map[pix_indices], extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto')
         plt.gca().invert_xaxis()
@@ -498,7 +499,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     #         'tab:cyan',
     #         'tab:gray']
     # colors[i]
-    colors = MapPalette.colorall
+    # colors = MapPalette.colorall
     i=0
     ifasymm=False
     for sc in sources.keys():
@@ -513,9 +514,9 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
                 yeu = source[par][3]
                 yel = source[par][4]
             elif par in ["sigma","rdiff0","radius", "a"]:
-                sigma = source[par][2]
-                sigmau = source[par][3]
-                sigmal = source[par][4]
+                sigma = 2*source[par][2]
+                sigmau = 2*source[par][3]
+                sigmal = 2*source[par][4]
             elif par in ["e", "elongation"]:
                 ifasymm=True
                 e = source[par][2]

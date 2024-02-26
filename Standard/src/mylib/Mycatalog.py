@@ -516,7 +516,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
                 marker=mark,label=label, s=size)
                 if rs!=0 and drawext:
                     from matplotlib.patches import Ellipse
-                    error_ellipse = Ellipse((r, d), width=(rs)/np.cos(np.radians(d)), height=rs, edgecolor=c1, fill=False,linestyle="--", alpha=0.5)
+                    error_ellipse = Ellipse((r, d), width=(2*rs)/np.cos(np.radians(d)), height=2*rs, edgecolor=c1, fill=False,linestyle="--", alpha=0.5)
                     ax=plt.gca()
                     ax.add_artist(error_ellipse)
             else:
@@ -524,7 +524,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
                 marker=mark, s=size)
                 if rs!=0 and drawext:
                     from matplotlib.patches import Ellipse
-                    error_ellipse = Ellipse((r, d), width=(rs)/np.cos(np.radians(d)), height=rs, edgecolor=c1, fill=False,linestyle="--", alpha=0.5)
+                    error_ellipse = Ellipse((r, d), width=(2*rs)/np.cos(np.radians(d)), height=2*rs, edgecolor=c1, fill=False,linestyle="--", alpha=0.5)
                     ax=plt.gca()
                     ax.add_artist(error_ellipse)
             iflabel+=1

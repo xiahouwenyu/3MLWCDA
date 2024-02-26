@@ -1,4 +1,4 @@
-name: 3ML
+name: 3MLpure
 channels:
   - conda-forge
   - defaults
