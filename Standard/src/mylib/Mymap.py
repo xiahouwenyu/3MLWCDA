@@ -12,6 +12,27 @@ from tqdm import tqdm
 
 from Mycoord import *
 
+def settransWCDA(WCDA, ra1, tansit=None):
+    """
+        叠加fitscontour
+
+        Parameters:
+            file: fits 文件
+            levels: contour levels
+            norm: 范围
+
+        Returns:
+            >>> None
+    """ 
+    if tansit is None:
+        import ROOT as rt
+        file = rt.TFile("../../data/20210305_20230731_bkgJ2000.root", "READ")
+        hside = file.Get("hSide")
+        tansit = hside.GetBinContent(int(ra1/360*86164))/10
+
+    for i in range(6):           
+        WCDA._maptree._analysis_bins[str(i)]._n_transits=tansit
+
 def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22):
     """
         叠加fitscontour
@@ -37,6 +58,14 @@ def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array(
     cdelt2 = hdul[0].header['CDELT2']
     crpix1 = hdul[0].header['CRPIX1']
     crpix2 = hdul[0].header['CRPIX2']
+
+    # CTYPE : 'GLON-AIT'  'GLAT-AIT'  
+    # CRVAL : 0.0  0.0  
+    # CRPIX : 8.5  -169.5  
+    # PC1_1 PC1_2  : 1.0  0.0  
+    # PC2_1 PC2_2  : 0.0  1.0  
+    # CDELT : 0.090031633151485  0.090031633151485  
+    # NAXIS : 1111  731,
 
     # 计算x轴和y轴的坐标范围
     naxis1, naxis2 = qtsj.shape

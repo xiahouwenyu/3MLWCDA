@@ -28,6 +28,8 @@ Standard/src/*.ctr
 Standard/src/*.eps
 Standard/src/runtest*
 Standard/src/*.par
+Standard/src/*.pdf
+Standard/src/*.txt
 !Standard/src/Justdraw.ipynb
 !Standard/src/tools/llh_skymap/sourcetxt/*ipynb
 !Standard/src/3MLnew_Crab.ipynb

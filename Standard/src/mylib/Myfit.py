@@ -239,14 +239,14 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf}, piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
@@ -272,14 +272,14 @@ lm.add_source({name})
                 if sigma != 0:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},  piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
                 else:
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf},  piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-16}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
+                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
 lm.add_source({name})
                 """
                     exec(prompt)
@@ -593,6 +593,7 @@ def getressimple(WCDA, lm):
         Returns:
             残差healpix
     """ 
+    WCDA.set_model(lm)
     data=np.zeros(1024*1024*12)
     bkg =np.zeros(1024*1024*12)
     model=np.zeros(1024*1024*12)
@@ -600,7 +601,10 @@ def getressimple(WCDA, lm):
     npt=lm.get_number_of_point_sources()
     for i, plane_id in enumerate(WCDA._active_planes):
         data_analysis_bin = WCDA._maptree[plane_id]
+        # try:
         this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next).as_dense()
+        # except:
+        #     this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next-1).as_dense()
         bkg_subtracted, data_map, background_map = WCDA._get_excess(data_analysis_bin, all_maps=True)
         model += this_model_map_hpx
         bkg   += background_map
@@ -673,25 +677,28 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         if freeDGE:
             tDGE="_DGE_free"
             Diffuse = set_diffusebkg(
-                            ra1, dec1,
-                            Kf=False, indexf=False
+                            ra1, dec1, model_radius, model_radius,
+                            Kf=False, indexf=False,
+                            name = region_name
                             )
         else:
             tDGE="_DGE_fix"
             Diffuse = set_diffusebkg(
-                            ra1, dec1,
-                            file=DGEfile
+                            ra1, dec1, model_radius, model_radius,
+                            file=DGEfile,
+                            name = region_name
                             )
         lm.add_source(Diffuse)
         exts.append(Diffuse)
 
+    # WCDA.set_model(lm)
     for N_src in range(100):
         resu = getressimple(WCDA, lm)
         new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
         new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
         lon_array.append(new_source_lon_lat[0])
         lat_array.append(new_source_lon_lat[1])
-        log.info(lon_array,lat_array)
+        log.info(f"Maxres ra,dec: {lon_array},{lat_array}")
         plt.figure()
         hp.gnomview(resu,norm='',rot=[ra1,dec1],xsize=200,ysize=200,reso=6,title=Modelname)
         plt.scatter(lon_array,lat_array,marker='x',color='red')
@@ -910,7 +917,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         hdu = fits.PrimaryHDU(data=dataneed/sa, header=header)
 
         # 保存为 FITS 文件
-        file = f'/data/home/cwy/Science/3MLWCDA/data/{name}_dust_bkg_template.fits'
+        file = f'../../data/{name}_dust_bkg_template.fits'
         log.info(f"diffuse file path: {file}")
         hdu.writeto(file, overwrite=True)
         

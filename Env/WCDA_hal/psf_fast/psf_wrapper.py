@@ -285,8 +285,5 @@ class InvalidPSF(object):
         if item in ["__deepcopy__", "to_pandas"]:
 
             return object.__getattribute__(self, item)
-        # print("Trying to use an invalid PSF")
-        if not is_parallel_computation_active:
-            raise InvalidPSFError("Trying to use an invalid PSF")
-        else:
-            return object.__getattribute__(self, item)
+
+        raise InvalidPSFError("Trying to use an invalid PSF")

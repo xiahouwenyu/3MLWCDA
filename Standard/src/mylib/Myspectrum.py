@@ -33,7 +33,7 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
     current_min,
     current_max,
     ) = jl.minimizer._internal_parameters[par]
-    orgllh = [current_value, jl.minus_log_like_profile(current_value)]
+    # orgllh = [current_value, jl.minus_log_like_profile(current_value)]
     if current_value<0:
         current_value=1e-24
     trials = np.logspace(-30, np.log10(current_value)+2, num)
@@ -376,7 +376,11 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
+        try:
+            result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
+        except:
+            log.warning(f"Point {i} failed to fit, skip it!")
+            continue
         results.append(result2)
         flux1 = result2[1][0].values[0][0]
         errorl = abs(result2[1][0].values[0][1])
@@ -399,7 +403,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
     activate_logs()
     return Flux_WCDA, results
 
-def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=False, subplot=None):
+def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None):
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
     """
         从能谱点矩阵画能谱点
@@ -597,7 +601,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     ax.set_yscale("log")
     return data
 
-def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624):
+def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624, logx=1, logy=1, xbias=0, ybias=0, upthereshold=2):
     """
         对WebPlotDigitizer-4.6的点画图
 
@@ -608,17 +612,19 @@ def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e
     """ 
     # print(file)
     data2 = pd.read_csv(file,sep=',',header=None)
-    x2 = fixx*data2.iloc[:,0].values
-    y2 = fixy*data2.iloc[:,1].values
+    x2 = fixx*data2.iloc[:,0].values+xbias
+    y2 = fixy*data2.iloc[:,1].values+ybias
     id2 = data2.iloc[:,2].values
     x2=x2.reshape([int(len(id2)/size),size])
     y2=y2.reshape([int(len(id2)/size),size])
-    cut = np.abs(y2[:,1]-y2[:,0])/y2[:,0]<0.1
+    cut = np.abs(y2[:,0])/np.abs(y2[:,1]-y2[:,0])<upthereshold
     # print(cut)
     plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt=".", xerr=np.array([x2[:,0][cut]-x2[:,3][cut], x2[:,4][cut]-x2[:,0][cut]]), color=color, uplims=True, label=label, capsize=3,) #
     plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut], xerr=np.array([x2[:,0][~cut]-x2[:,3][~cut], x2[:,4][~cut]-x2[:,0][~cut]]), fmt="o", color=color, capsize=3,)
-    plt.yscale("log")
-    plt.xscale("log")
+    if logy:
+        plt.yscale("log")
+    if logx:
+        plt.xscale("log")
 
 def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label="", colorp="tab:blue", subplot=None, lm=False):
     """
