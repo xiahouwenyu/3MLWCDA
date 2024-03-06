@@ -393,7 +393,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
         plt.show()
         return fig, wcs, data
     
-def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1):
+def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1, projection="TAN", coord="C"):
     """
         将healpix天图转fits天图
 
@@ -425,8 +425,12 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     header["NAXIS"] = 2
     header["NAXIS1"] = int(len(ra))
     header["NAXIS2"] = int(len(dec))
-    header["CTYPE1"] = "RA---TAN"
-    header["CTYPE2"] = "DEC--TAN"
+    if coord=="C":
+        header["CTYPE1"] = f"RA---{projection}"
+        header["CTYPE2"] = f"DEC--{projection}"
+    else: 
+        header["CTYPE1"] = f"GLON-{projection}"
+        header["CTYPE2"] = f"GLAT-{projection}"
     header["CRVAL1"] = ra.mean()
     header["CRVAL2"] = dec.mean()
     header["CRPIX1"] = header["NAXIS1"] / 2
