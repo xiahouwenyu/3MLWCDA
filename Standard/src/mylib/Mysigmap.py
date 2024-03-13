@@ -324,7 +324,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
 
     shape = wcs.array_shape
     a = wcs.pixel_to_world(0, 0)
-    b = wcs.pixel_to_world(shape[1], shape[0])
+    b = wcs.pixel_to_world(shape[1]-1, shape[0]-1)
     log.info(f"{str(wcs)} \n {shape} \n {a} \n {b}")
 
     # 关闭 FITS 文件
@@ -393,7 +393,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
         plt.show()
         return fig, wcs, data
     
-def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=True, check=False, alpha=1, projection="TAN", coord="C"):
+def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=False, check=False, alpha=1, projection="CAR", coord="C", saveCAR=0, flip=0):
     """
         将healpix天图转fits天图
 
@@ -401,11 +401,11 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
             name: 保存fits文件路径
         Returns:
             >>> None
-    """ 
+    """
     from astropy.io import fits
     from astropy.wcs import WCS
     # 将RA和DEC范围转换为SkyCoord对象
-    ra=np.arange(ra_min, ra_max, xsize); dec=np.arange(dec_min, dec_max, ysize)
+    ra=np.arange(ra_min, ra_max, xsize)+xsize/2; dec=np.arange(dec_min, dec_max, ysize)+ysize/2
     log.info(f"{len(ra)} {len(dec)}")
     X,Y = np.meshgrid(ra, dec)
     coords = SkyCoord(ra=X, dec=Y, unit="deg", frame="icrs")
@@ -414,11 +414,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     pixarea = 4*np.pi/npix
     pix_indices = hp.ang2pix(nside, coords.ra.degree, coords.dec.degree, lonlat=True)
     map[map==hp.UNSEEN]=0
-    map[map<=-10]=0
-    if ifplot:
-        plt.imshow(map[pix_indices], extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto')
-        plt.gca().invert_xaxis()
-        plt.colorbar()
+    map[map<=-1000000]=0
 
     # 创建一个新的FITS文件，其中包含指定方形区域的数据
     header = fits.Header()
@@ -426,25 +422,38 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     header["NAXIS1"] = int(len(ra))
     header["NAXIS2"] = int(len(dec))
     if coord=="C":
-        header["CTYPE1"] = f"RA---{projection}"
-        header["CTYPE2"] = f"DEC--{projection}"
+        header["CTYPE1"] = f"RA---CAR"
+        header["CTYPE2"] = f"DEC--CAR"
     else: 
-        header["CTYPE1"] = f"GLON-{projection}"
-        header["CTYPE2"] = f"GLAT-{projection}"
+        header["CTYPE1"] = f"GLON-CAR"
+        header["CTYPE2"] = f"GLAT-CAR"
+    # header["CRVAL1"] = ra.mean()
+    # header["CRVAL2"] = dec.mean()
+    # header["CRPIX1"] = header["NAXIS1"] / 2
+    # header["CRPIX2"] = header["NAXIS2"] / 2
     header["CRVAL1"] = ra.mean()
-    header["CRVAL2"] = dec.mean()
-    header["CRPIX1"] = header["NAXIS1"] / 2
-    header["CRPIX2"] = header["NAXIS2"] / 2
-    header["CD1_1"] = xsize*np.cos(np.radians(header["CRVAL2"]))
+    header["CRVAL2"] = 0
+    header["CRPIX1"] = header["NAXIS1"] / 2 #(180-ra.mean())/xsize + 
+    header["CRPIX2"] = (0-dec.mean())/xsize + header["NAXIS2"] / 2 # - xsize/2
+    header["CD1_1"] = xsize #*np.cos(np.radians(header["CRVAL2"]))
     header["CD2_2"] = ysize
+    if flip:
+        header['FLIP_LR'] = True
 
     wcs = WCS(header)
+    log.info(f"{str(wcs)}")
 
     # 创建一个空的二维数组，用于存储提取的数据
     extracted_data = np.zeros((header["NAXIS2"], header["NAXIS1"]))
     
     # 将HEALPix数据的指定区域复制到新数组中
     extracted_data = map[pix_indices]
+    extracted_data[np.isnan(extracted_data)]=0
+
+    if ifplot:
+        plt.imshow(extracted_data.data, extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto')
+        plt.gca().invert_xaxis()
+        plt.colorbar()
 
     if ifnorm:
         extracted_data = extracted_data-extracted_data.min()
@@ -458,20 +467,37 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
         plt.imshow(area, extent=[ra_min, ra_max, dec_min, dec_max], origin="lower")
         plt.gca().invert_xaxis()
 
-    # 将提取的数据保存到FITS文件
-    fits.writeto(name, np.array(extracted_data.data), header, overwrite=True)
+    if saveCAR:
+        # 将提取的数据保存到FITS文件
+        fits.writeto(name+"_CAR.fits", np.array(extracted_data), header, overwrite=True)
+
+    if projection is "CAR":
+        fits.writeto(name, np.array(extracted_data), header, overwrite=True)
+
+    if projection is not "CAR":
+        wcs2 = WCS(naxis=2)
+        log.info(f"Trans CAR to {projection}: \n {str(wcs)}")
+        if coord=="C":
+            wcs2.wcs.ctype = [f'RA---{projection}', f'DEC--{projection}']
+        else:
+            wcs2.wcs.ctype = [f'GLON-{projection}', f'GLAT-{projection}']
+        wcs2.wcs.crval = [ra.mean(), 0]
+        wcs2.wcs.crpix = [header["NAXIS1"] / 2, (0-dec.mean())/xsize + header["NAXIS2"] / 2]
+        if flip:
+            # extracted_data = np.fliplr(extracted_data)
+            wcs2.wcs.cdelt = np.array([-xsize, ysize])
+        else:
+            wcs2.wcs.cdelt = np.array([xsize, ysize])
+        wcs2.wcs.cunit = ['deg', 'deg']
+        
+
+        from reproject import reproject_interp
+        hdu = fits.PrimaryHDU(extracted_data, header=header)
+        array, footprint = reproject_interp(hdu, wcs2, shape_out=[len(dec), len(ra)], parallel=10)
+        fits.writeto(name, np.array(array), wcs2.to_header(), overwrite=True)
 
 def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "markercolor": "grey", "labelcolor": "black", "angle": 60, "catext": 1}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
-    colors=['tab:red',
-            'tab:blue',
-            'tab:green',
-            'tab:purple',
-            'tab:orange',
-            'tab:brown',
-            'tab:pink',
-            'tab:gray',
-            'tab:olive',
-            'tab:cyan']
+    colors=MapPalette.colorall 
         ):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
@@ -502,8 +528,6 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     #         'tab:olive',
     #         'tab:cyan',
     #         'tab:gray']
-    # colors[i]
-    # colors = MapPalette.colorall
     i=0
     ifasymm=False
     for sc in sources.keys():
@@ -545,6 +569,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
             plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i], label=sc)
             # log.info(x,y,sigma,e,theta)
             Draw_ellipse(x,y,sigma,e,theta,colors[i],"-")
+            ifasymm = False
         else:
             plt.errorbar(x, y, yerr=(np.abs([yel]), np.abs([yeu])), xerr=(np.abs([xel]), np.abs([xeu])), fmt='o',markersize=2,capsize=1,elinewidth=1,color=colors[i],label=sc)
         i+=1

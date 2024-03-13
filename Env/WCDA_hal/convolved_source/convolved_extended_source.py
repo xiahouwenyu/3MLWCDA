@@ -77,14 +77,18 @@ class ConvolvedExtendedSource(object):
         try:
             dec_bins_to_consider_idx = np.append(dec_bins_to_consider_idx, [dec_bins_to_consider_idx[-1] + 1])
         except:
-            raise Exception(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max}")
+            # raise Exception(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max} : {decs} : {lat_start}-{lat_stop}")
+            log.info(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max} : {decs} : {lat_start}-{lat_stop}")
+            dec_min = min(decs)
+            dec_max = max(decs)
+
         # Add one dec bin to cover the first part
         dec_bins_to_consider_idx = np.insert(dec_bins_to_consider_idx, 0, [dec_bins_to_consider_idx[0] - 1])
 
         try:
             self._dec_bins_to_consider = [response.response_bins[centers[x]] for x in dec_bins_to_consider_idx]
         except:
-            raise Exception(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max}")
+            raise Exception(f"{self._name} meet problem!!! dec range Error: {dec_min}-{dec_max} : {decs} : {lat_start}-{lat_stop}")
 
         log.info("Considering %i dec bins for extended source %s" % (len(self._dec_bins_to_consider),
                                                                   self._name))

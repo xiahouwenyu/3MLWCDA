@@ -393,6 +393,11 @@ color4 = ["#A1A9D0","#F0988C","#B883D4","#9E9E9E","#CFEAF1","#C4A5DE","#F6CAE5",
 color6 = ["#63b2ee", "#76da91", "#f8cb7f", "#f89588", "#7cd6cf", "#9192ab", "#7898e1", "#efa666", "#eddd86", "#9987ce", "#63b2ee", "#76da91"]
 color7 = ["#3b6291", "#943c39", "#779043", "#624c7c", "#388498", "#bf7334", "#3f6899", "#9c403d", "#7d9847", "#675083", "#3b8ba1", "#c97937"]
 color8 = ["#002c53", "#ffa510", "#0c84c6", "#ffbd66", "#f74d4d", "#2455a4", "#41b7ac"]
+blue_palette = ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b']
+red_palette = ['#fff5f0', '#fee0d2', '#fcbba1', '#fc9272', '#fb6a4a', '#ef3b2c', '#cb181d', '#a50f15', '#67000d']
+green_palette = ['#edf8e9', '#c7e9c0', '#a1d99b', '#74c476', '#41ab5d', '#238b45', '#006d2c', '#00441b']
+orange_palette = ['#fff5eb', '#fee6ce', '#fdd0a2', '#fdae6b', '#fd8d3c', '#f16913', '#d94801', '#a63603', '#7f2704']
+colorrainbow = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple']
 
 import matplotlib.colors as mcolors
 tabcolor = mcolors.TABLEAU_COLORS

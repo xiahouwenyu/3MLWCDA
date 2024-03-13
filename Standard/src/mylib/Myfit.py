@@ -33,7 +33,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             sigma=None,sf=False,sb=None,radius=None,rf=False,rb=None,
             ################################ Spectrum
             k=1.3e-13,kf=False,kb=None,piv=3,pf=True,index=-2.6,indexf=False,indexb=None,alpha=-2.6,alphaf=False,alphab=None,beta=0,betaf=False,betab=None,
-
+            kn=None,
             fitrange=None,
             ################################ Continuous_injection_diffusion
             rdiff0=None, rdiff0f=False, rdiff0b=None, delta=None, deltaf=False, deltab=None,
@@ -64,7 +64,10 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
 
     if spec is None:
-        spec = Powerlaw() 
+        if kn is not None:
+            spec = PowerlawN() 
+        else:
+            spec = Powerlaw() 
     
     if spat is None:
         spat=Gaussian_on_sphere()
@@ -154,6 +157,9 @@ if parb != None:
     #### set spectral
     spec.K = k * fluxUnit
     spec.K.fix = kf
+    if kn is not None:
+        spec.Kn = kn
+        spec.Kn.fix = True
     if kb != None:
         spec.K.bounds = kb * fluxUnit
 
@@ -163,7 +169,7 @@ if parb != None:
     if spec.name == "Log_parabola":
         setspecParameter("alpha",alpha,alphaf,alphab)
         setspecParameter("beta",beta,betaf,betab)
-    elif spec.name == "Powerlaw" or spec.name == "PowerlawM":
+    elif spec.name == "Powerlaw" or spec.name == "PowerlawM" or spec.name == "PowerlawN":
         setspecParameter("index",index,indexf,indexb)
     #### set spatial
 
@@ -198,7 +204,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, fixall=False, roi=None, pf=False):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, rtflux=3, rtindex=3, rtp=3, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50):
     """
         获取LHAASO catalog模型
 
@@ -207,21 +213,34 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
             rtsigma: 参数范围是原来模型误差的几倍?
             fixall: 固定所有参数?
             roi: 如果有不规则roi!!!
-            pf:  固定位置信息, 写得很烂, 后面可以精细化调节想要固定和放开的.
+            pf:  固定位置信息? #, 写得很烂, 后面可以精细化调节想要固定和放开的.
+            sf:  固定延展度信息?
+            kf:  固定能谱flux?
+            indexf: 固定能谱指数?
+            mpf: 固定data radius外但是model radius内的位置信息?
+            msf: 固定data radius外但是model radius内的延展度信息?
+            mkf: 固定data radius外但是model radius内的能谱flux?
+            mindexf: 固定data radius外但是model radius内的能谱指数?
+            Kscale: 能谱缩放因子
+            releaseall: 释放所有ROI内参数?
+            indexb: 能谱指数范围 ()
+            sb: 延展度范围 ()
+            kb: 能谱flux范围 ()
 
         Returns:
             model
     """ 
     lm = Model()
+    opf = pf; osf=sf; okf=kf; oindexf=indexf
     for i in range(len(LHAASOCat)):
         cc = LHAASOCat.iloc[i][" components"]
         if detector not in cc: continue
         if detector=="WCDA":
             Nc = 1e-13
-            piv=3
+            piv=WCDApiv
         else:
             Nc = 1e-16
-            piv=50
+            piv=KM2Apiv
         name = LHAASOCat.iloc[i]["Source name"]
         ras = float(LHAASOCat.iloc[i][" Ra"])
         decs = float(LHAASOCat.iloc[i][" Dec"])
@@ -233,73 +252,221 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
         index = float(LHAASOCat.iloc[i][" index"])
         indexe = float(LHAASOCat.iloc[i][" index error"])
         name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","")
-        if roi is None:
-            if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall):
-                log.info(f"{name} in data_radius: {data_radius}")
-                if sigma != 0:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf}, piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
-lm.add_source({name})
-                """
-                    exec(prompt)
-                else:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
-lm.add_source({name})
-                """
-                    exec(prompt)
-            elif distance(ra1,dec1, ras, decs)<=model_radius:
-                log.info(f"{name} in model_radius: {model_radius} have been fixed!!")
-                if sigma != 0:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
-                k={flux*Nc}, kf=True, index={-index}, indexf=True)
-lm.add_source({name})
-                """
-                    exec(prompt)
-                else:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,  piv={piv},
-                k={flux*Nc}, kf=True, index={-index}, indexf=True)
-lm.add_source({name})
-                """
-                    exec(prompt)
+        if indexb is not None:
+            indexel = indexb[0]
+            indexeh = indexb[1]
         else:
-            if distance(ra1,dec1, ras, decs)<=data_radius and (not fixall) and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024)):
-                log.info(f"{name} in data_radius: {data_radius}")
-                if sigma != 0:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0},{sigma+rtsigma*sigmae}), raf={pf}, decf={pf}, sf={pf},  piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+5*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
-lm.add_source({name})
-                """
-                    exec(prompt)
-                else:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf},  piv={piv},
-                k={flux*Nc}, kb=({(flux-rtsigma*fluxe)*Nc if (flux-rtsigma*fluxe)*Nc>0 else 1e-20}, {(flux+rtsigma*fluxe)*Nc}), index={-index}, indexb=({-index-rtsigma*indexe},{-index+rtsigma*indexe}), fitrange={rtsigma*pe})
-lm.add_source({name})
-                """
-                    exec(prompt)
-            elif distance(ra1,dec1, ras, decs)<=model_radius:
-                log.info(f"{name} in model_radius: {model_radius} have been fixed!!")
-                if sigma != 0:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sf=True, raf=True, decf=True,  piv={piv},
-                k={flux*Nc}, kf=True, index={-index}, indexf=True)
-lm.add_source({name})
-                """
-                    exec(prompt)
-                else:
-                    prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, raf=True, decf=True,  piv={piv},
-                k={flux*Nc}, kf=True, index={-index}, indexf=True)
-lm.add_source({name})
-                """
-                    exec(prompt)
+            indexel = max(-5,-index-rtindex*indexe)
+            indexeh = min(1,-index+rtindex*indexe)
 
+        if sb is not None:
+            sbl = sb[0]
+            sbh = sb[1]
+        else:
+            sbl = sigma-rtsigma*sigmae if sigma-rtsigma*sigmae>0 else 0
+            sbh = sigma+rtsigma*sigmae if sigma+rtsigma*sigmae<model_radius else model_radius
+
+        if kb is not None:
+            kbl = kb[0]
+            kbh = kb[1]
+        else:
+            kbl = (flux-rtflux*fluxe)*Nc if (flux-rtflux*fluxe)*Nc>0 else 1e-18
+            kbh = (flux+rtflux*fluxe)*Nc
+
+        if Kscale is not None:
+            flux = flux/Kscale
+            fluxe = fluxe/Kscale
+
+        doit=False
+        if sigma == 0:
+            sigma=None
+        if roi is None:
+            if (distance(ra1,dec1, ras, decs)<data_radius):
+                log.info(f"{name} in data_radius: {data_radius}")
+                sf = osf 
+                pf = opf
+                kf = okf
+                indexf = oindexf
+                doit=True
+            elif (distance(ra1,dec1, ras, decs)<=model_radius):
+                log.info(f"{name} in model_radius: {model_radius}")
+                sf = msf 
+                pf = mpf
+                kf = mkf
+                indexf = mindexf
+                doit=True
+                
+        else:
+            if (distance(ra1,dec1, ras, decs)<data_radius and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024))):
+                sf = osf 
+                pf = opf
+                kf = okf
+                indexf = oindexf
+                doit=True
+                log.info(f"{name} in roi: {data_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
+            elif (distance(ra1,dec1, ras, decs)<=model_radius):
+                sf = msf 
+                pf = mpf
+                kf = mkf
+                indexf = mindexf
+                doit=True
+                log.info(f"{name} in model_radius: {model_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
+
+        if fixall:
+            sf = True
+            pf = True
+            kf = True
+            indexf = True
+
+        if releaseall:
+            sf = False
+            pf = False
+            kf = False
+            indexf = False
+        
+        if doit:
+            log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
+            if sigma is not None:
+                log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f}) fitrange={rtp*pe:.2f}")
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale})
+lm.add_source({name})
+            """
+                exec(prompt)
+            else:
+                log.info(f"Mor: fitrange={rtp*pe:.2f}")
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale})
+lm.add_source({name})
+            """
+                exec(prompt)
+    return lm
+
+
+def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, releaseall=False, indexb=None, sb=None, kb=None):
+    """
+        从hsc yaml文件获取模型
+
+        Parameters:
+            fixall: 固定所有参数?
+            roi: 如果有不规则roi!!!
+            pf:  固定位置信息? #, 写得很烂, 后面可以精细化调节想要固定和放开的.
+            sf:  固定延展度信息?
+            kf:  固定能谱flux?
+            indexf: 固定能谱指数?
+            mpf: 固定data radius外但是model radius内的位置信息?
+            msf: 固定data radius外但是model radius内的延展度信息?
+            mkf: 固定data radius外但是model radius内的能谱flux?
+            mindexf: 固定data radius外但是model radius内的能谱指数?
+            Kscale: 能谱缩放因子
+            releaseall: 释放所有ROI内参数?
+            indexb: 能谱指数范围 ()
+            sb: 延展度范围 ()
+            kb: 能谱flux范围 ()
+
+        Returns:
+            model
+    """ 
+    config = yaml.load(open(file), Loader=yaml.FullLoader)
+    config = dict(config)
+    opf = pf; osf=sf; okf=kf; oindexf=indexf
+    for scid in config.keys():
+        scconfig = dict(config['Src0'])
+        name = scconfig['Name'].replace("-", "M").replace("+", "P")
+        piv = scconfig['Epiv']
+        flux = scconfig['SEDModel']["F0"][0]
+        kb = [scconfig['SEDModel']["F0"][1], scconfig['SEDModel']["F0"][2]]
+        Nc = scconfig['SEDModel']["F0"][4]
+        index =  -scconfig['SEDModel']['alpha'][0]
+        indexb =  [-scconfig['SEDModel']['alpha'][2], -scconfig['SEDModel']['alpha'][1]]
+        ras = scconfig["MorModel"]['ra'][0]
+        rab = [scconfig["MorModel"]['ra'][1], scconfig["MorModel"]['ra'][2]]
+        decs = scconfig["MorModel"]['dec'][0]
+        decb = [scconfig["MorModel"]['dec'][1], scconfig["MorModel"]['dec'][2]]
+        sigma=None
+        if scconfig["MorModel"]['type'] == 'Ext_gaus':
+            sigma = scconfig["MorModel"]['sigma'][0]
+            sigmab = [scconfig["MorModel"]['sigma'][1], scconfig["MorModel"]['sigma'][2]]
+
+        if indexb is not None:
+            indexel = indexb[0]
+            indexeh = indexb[1]
+
+        if sb is not None:
+            sbl = sb[0]
+            sbh = sb[1]
+
+        if kb is not None:
+            kbl = kb[0]*Nc
+            kbh = kb[1]*Nc
+
+        doit=False
+        if sigma == 0:
+            sigma=None
+        if roi is None:
+            if (distance(ra1,dec1, ras, decs)<data_radius):
+                log.info(f"{name} in data_radius: {data_radius}")
+                sf = osf 
+                pf = opf
+                kf = okf
+                indexf = oindexf
+                doit=True
+            elif (distance(ra1,dec1, ras, decs)<=model_radius):
+                log.info(f"{name} in model_radius: {model_radius}")
+                sf = msf 
+                pf = mpf
+                kf = mkf
+                indexf = mindexf
+                doit=True
+                
+        else:
+            if (distance(ra1,dec1, ras, decs)<data_radius and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024))):
+                sf = osf 
+                pf = opf
+                kf = okf
+                indexf = oindexf
+                doit=True
+                log.info(f"{name} in roi: {data_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
+            elif (distance(ra1,dec1, ras, decs)<=model_radius):
+                sf = msf 
+                pf = mpf
+                kf = mkf
+                indexf = mindexf
+                doit=True
+                log.info(f"{name} in model_radius: {model_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
+
+        if fixall:
+            sf = True
+            pf = True
+            kf = True
+            indexf = True
+
+        if releaseall:
+            sf = False
+            pf = False
+            kf = False
+            indexf = False
+        
+        if doit:
+            log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
+            if sigma is not None:
+                log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f})")
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
+lm.add_source({name})
+            """
+                exec(prompt)
+            else:
+                log.info(f"Mor: ")
+                prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
+lm.add_source({name})
+            """
+                exec(prompt)
     return lm
 
 def model2bayes(model):
@@ -624,7 +791,7 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfrom=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False):
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False):
     """
         在一个区域搜索新源
 
@@ -658,8 +825,16 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
     
     tDGE=""
 
-    if startfrom != None:
-        lm = load_model(startfrom)
+    if startfromfile is not None:
+        lm = load_model(startfromfile)
+        exts=[]
+        next = lm.get_number_of_extended_sources()
+        if 'Diffuse' in lm.sources.keys():
+            next-=1
+        npt=lm.get_number_of_point_sources()
+
+    if startfrommodel is not None:
+        lm = startfrommodel
         exts=[]
         next = lm.get_number_of_extended_sources()
         if 'Diffuse' in lm.sources.keys():
@@ -812,7 +987,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None):
     """
         自动生成区域弥散模版
 
@@ -825,7 +1000,6 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         Returns:
             弥散源
     """ 
-    fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     if file == None:
         from astropy.wcs import WCS
         from astropy.io import fits
@@ -876,10 +1050,17 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         ss = np.sum(s)
         sa = np.sum(A)
 
+
+
         # fi*si ours
         zsa = 1.3505059134209275e-05
         # si ours
         zss = 0.41946493776343513
+
+        # # fi*si ours
+        # zsa = sa
+        # # si ours
+        # zss = ss
 
         # fi*si hsc
         hsa = 1.33582226223935e-05
@@ -889,9 +1070,13 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         F0=10.394e-12/(u.TeV*u.cm**2*u.s*u.sr)
         # K=F0*(sa*u.sr)/(ss*u.sr)/((hsa*u.sr)/(hss*u.sr))
         if K is None:
-            K = F0*hss*(sa/hsa)
-            Kz = F0*hss*(zsa/hsa)
+            K = F0*hss*(sa/hsa) #/ss
+            Kz = F0*hss*(zsa/hsa) #/ss
             K = K.value
+
+        log.info(f"total sr: {ss}"+"\n"+f"ratio: {ss/2.745913003176557}")
+        log.info(f"integration: {sa}"+"\n"+f"ratio: {sa/0.00012671770357488944}")
+        log.info(f"set K to: {K}")
 
         # 定义图像大小
         naxis1 = len(ll)  # 银经
@@ -920,25 +1105,48 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         file = f'../../data/{name}_dust_bkg_template.fits'
         log.info(f"diffuse file path: {file}")
         hdu.writeto(file, overwrite=True)
-        
-    Diffuseshape = SpatialTemplate_2D(fits_file=file)
-    Diffusespec = Powerlaw()
-    Diffuse = ExtendedSource("Diffuse",spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
-    Diffusespec.K = K * fluxUnit
-    Diffusespec.K.fix=Kf
-    if Kb:
-        Diffusespec.K.bounds=Kb * fluxUnit
+    fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+
+    if Kn is not None:
+        Diffusespec = PowerlawN()
+        Diffuseshape = SpatialTemplate_2D(fits_file=file)
+        Diffuse = ExtendedSource("Diffuse",spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
+        kk=float(K/Kn)
+        Kb=np.array(Kb)/float(Kn)
+        Diffusespec.K = kk * fluxUnit
+        Diffusespec.K.fix=Kf
+        if Kb is not None:
+            Diffusespec.K.bounds=Kb * fluxUnit
+        else:
+            Diffusespec.K.bounds=(0.0001*kk,10000*kk) * fluxUnit
+        Diffusespec.Kn = Kn
+        Diffusespec.Kn.fix = True
     else:
-        Diffusespec.K.bounds=(0.0001*K,10000*K) * fluxUnit
+        Diffusespec = Powerlaw()
+        Diffuseshape = SpatialTemplate_2D(fits_file=file)
+        Diffuse = ExtendedSource("Diffuse",spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
+        Diffusespec.K = K * fluxUnit
+        Diffusespec.K.fix=Kf
+        if Kb is not None:
+            Diffusespec.K.bounds=Kb * fluxUnit
+        else:
+            Diffusespec.K.bounds=(0.0001*K,10000*K) * fluxUnit
+
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
 
     Diffusespec.index = index
     Diffusespec.index.fix = indexf
-    Diffusespec.index.bounds = (-4,-1)
+    if indexb is not None:
+        Diffusespec.index.bounds = indexb
+    else:
+        Diffusespec.index.bounds = (-4,-1)
     Diffuseshape.K = 1/u.deg**2
-    return Diffuse
+    if ifreturnratio:
+        return Diffuse, sa/0.00012671770357488944
+    else:
+        return Diffuse
 
 def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3):
     """
@@ -969,7 +1177,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     Diffusespec.index.fix = indexf
     Diffusespec.index.bounds = (-4,-1)
     Diffuseshape.K = 1/u.deg**2
-    return Diffuse
+
 
 def get_sources(lm,result=None):
     """Get info of Sources.

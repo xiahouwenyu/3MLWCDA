@@ -95,15 +95,18 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
     # Define model
     sources = lm2.sources.keys()
     if ifpowerlawM:
+        #遍历源
         oldscs = copy.deepcopy(lm2.sources)
         for ss in sources:
             par = copy.deepcopy(lm2.sources[ss].parameters)
+            #PoerlawM() 替换
             if ss==source:
                 lm2.remove_source(ss)
                 if str(oldscs[ss].source_type) == "point source":
                     lm2.add_source(PointSource(ss, 0, 0, spectral_shape=PowerlawM()))
                 elif str(oldscs[ss].source_type) == "extended source":
                     lm2.add_source(ExtendedSource(ss, spatial_shape=oldscs[ss].spatial_shape, spectral_shape=PowerlawM()))
+            #遍历参数
             for pa in par.keys():
                 newpa=pa
                 if ss==source:
@@ -119,8 +122,10 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                     # print("change bounds!!!!")
                     lm2.sources[ss].parameters[newpa].bounds=(-1000*par[pa].value*1e9,1000*par[pa].value*1e9)*fluxUnit
     else:
+        #遍历源
         for ss in sources:
             freep = lm2.sources[ss].free_parameters.keys()
+            #遍历参数
             for fp in freep:
                 if (ss == source and ".K" not in fp) or ss != source:
                     lm2.sources[ss].free_parameters[fp].fix = True
@@ -376,11 +381,13 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        try:
-            result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
-        except:
-            log.warning(f"Point {i} failed to fit, skip it!")
-            continue
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
+        # try:
+        #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
+        # except Exception as e:
+        #     log.info(f"{e}")
+        #     log.info(f"Point {i} failed to fit, skip it!")
+        #     continue
         results.append(result2)
         flux1 = result2[1][0].values[0][0]
         errorl = abs(result2[1][0].values[0][1])
@@ -601,7 +608,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     ax.set_yscale("log")
     return data
 
-def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624, logx=1, logy=1, xbias=0, ybias=0, upthereshold=2):
+def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624, logx=1, logy=1, xbias=0, ybias=0, upthereshold=None):
     """
         对WebPlotDigitizer-4.6的点画图
 
@@ -617,7 +624,9 @@ def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e
     id2 = data2.iloc[:,2].values
     x2=x2.reshape([int(len(id2)/size),size])
     y2=y2.reshape([int(len(id2)/size),size])
-    cut = np.abs(y2[:,0])/np.abs(y2[:,1]-y2[:,0])<upthereshold
+    if upthereshold is not None:
+        cut = np.abs(y2[:,0])/np.abs(y2[:,1]-y2[:,0])<upthereshold
+    cut = np.abs(y2[:,1]-y2[:,0])/y2[:,0]<0.1
     # print(cut)
     plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt=".", xerr=np.array([x2[:,0][cut]-x2[:,3][cut], x2[:,4][cut]-x2[:,0][cut]]), color=color, uplims=True, label=label, capsize=3,) #
     plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut], xerr=np.array([x2[:,0][~cut]-x2[:,3][~cut], x2[:,4][~cut]-x2[:,0][~cut]]), fmt="o", color=color, capsize=3,)

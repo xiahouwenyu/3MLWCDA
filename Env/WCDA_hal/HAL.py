@@ -39,6 +39,7 @@ from WCDA_hal.healpix_handling import get_gnomonic_projection
 from WCDA_hal.psf_fast import PSFConvolutor
 from WCDA_hal.log_likelihood import log_likelihood
 from WCDA_hal.util import ra_to_longitude
+import contextlib
 
 
 

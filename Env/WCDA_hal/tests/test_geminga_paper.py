@@ -147,24 +147,24 @@ def go(args):
         ra_c, dec_c, rad = 107, 13, 5.4
         # llh.set_ROI(107, 13, 5.4, True)
 
-    if args.plugin == 'old':
+    # if args.plugin == 'old':
 
-        llh = WCDALike("Geminga", args.mtfile, args.rsfile, fullsky=True)
-        llh.set_active_measurements(args.startBin, args.stopBin)
-        llh.set_ROI(ra_c, dec_c, rad, True)
+    #     llh = WCDALike("Geminga", args.mtfile, args.rsfile, fullsky=True)
+    #     llh.set_active_measurements(args.startBin, args.stopBin)
+    #     llh.set_ROI(ra_c, dec_c, rad, True)
 
-    else:
+    # else:
 
-        roi = HealpixConeROI(data_radius=rad,
-                             model_radius=rad + 10.0,
-                             ra=ra_c, dec=dec_c)
-    
-        llh = HAL("WCDA",
-                  args.mtfile,
-                  args.rsfile,
-                  roi)
-            
-        llh.set_active_measurements(args.startBin, args.stopBin)
+    roi = HealpixConeROI(data_radius=rad,
+                            model_radius=rad + 10.0,
+                            ra=ra_c, dec=dec_c)
+
+    llh = HAL("WCDA",
+                args.mtfile,
+                args.rsfile,
+                roi)
+        
+    llh.set_active_measurements(args.startBin, args.stopBin)
 
     print(lm)
 
@@ -218,23 +218,18 @@ def go(args):
     # Print the TS, significance, and fit parameters, and then plot stuff
     print("\nTest statistic:")
 
-    if args.plugin == 'old':
-
-        TS = llh.calc_TS()
-
-    else:
     
-        if "B0656" in lm and "Geminga" in lm:
-            lm.unlink(lm.B0656.spatial_shape.rdiff0)
-        
-        TS_df = jl.compute_TS("Geminga", like_df)
-        TS = TS_df.loc['WCDA', 'TS']
-        
-        TS_df2 = jl.compute_TS("B0656", like_df)
-        TS2 = TS_df2.loc['WCDA', 'TS']
-        
-        print (TS_df)
-        print (TS_df2)
+    if "B0656" in lm and "Geminga" in lm:
+        lm.unlink(lm.B0656.spatial_shape.rdiff0)
+    
+    TS_df = jl.compute_TS("Geminga", like_df)
+    TS = TS_df.loc['WCDA', 'TS']
+    
+    TS_df2 = jl.compute_TS("B0656", like_df)
+    TS2 = TS_df2.loc['WCDA', 'TS']
+    
+    print (TS_df)
+    print (TS_df2)
 
     print("Test statistic: %g" % TS)
 
@@ -265,9 +260,9 @@ if __name__ == "__main__":
 
     p = argparse.ArgumentParser(description="Example spectral fit with LiFF")
     p.add_argument("-m", "--maptreefile", dest="mtfile",
-                   help="LiFF MapTree ROOT file", default="./maptree.root")
+                   help="LiFF MapTree ROOT file", default="./data/geminga_maptree.root")
     p.add_argument("-r", "--responsefile", dest="rsfile",
-                   help="LiFF detector response ROOT file", default="./response.root")
+                   help="LiFF detector response ROOT file", default="./data/geminga_response.root")
     p.add_argument("--startBin", dest="startBin", default=1, type=int,
                    help="Starting analysis bin [0..9]")
     p.add_argument("--stopBin", dest="stopBin", default=9, type=int,
