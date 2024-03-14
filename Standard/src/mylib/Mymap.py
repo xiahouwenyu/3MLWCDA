@@ -14,12 +14,9 @@ from Mycoord import *
 
 def settransWCDA(WCDA, ra1, tansit=None):
     """
-        叠加fitscontour
+        修改天图tansit
 
         Parameters:
-            file: fits 文件
-            levels: contour levels
-            norm: 范围
 
         Returns:
             >>> None
@@ -33,7 +30,7 @@ def settransWCDA(WCDA, ra1, tansit=None):
     for i in range(6):           
         WCDA._maptree._analysis_bins[str(i)]._n_transits=tansit
 
-def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22):
+def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22, oldmethod=0, cmap="Greys"):
     """
         叠加fitscontour
 
@@ -45,41 +42,63 @@ def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array(
         Returns:
             >>> None
     """ 
-    from matplotlib.colors import Normalize
-    with fits.open(file) as hdul:
-            # 输出文件信息
-            qtsj = hdul[0].data
-            hdul[0].header
-    hdul[0].header
-    # 获取坐标信息
-    crval1 = hdul[0].header['CRVAL1']
-    crval2 = hdul[0].header['CRVAL2']
-    cdelt1 = hdul[0].header['CDELT1']
-    cdelt2 = hdul[0].header['CDELT2']
-    crpix1 = hdul[0].header['CRPIX1']
-    crpix2 = hdul[0].header['CRPIX2']
+    if oldmethod:
+        from matplotlib.colors import Normalize
+        with fits.open(file) as hdul:
+                # 输出文件信息
+                qtsj = hdul[0].data
+                hdul[0].header
+        hdul[0].header
+        # 获取坐标信息
+        crval1 = hdul[0].header['CRVAL1']
+        crval2 = hdul[0].header['CRVAL2']
+        cdelt1 = hdul[0].header['CDELT1']
+        cdelt2 = hdul[0].header['CDELT2']
+        crpix1 = hdul[0].header['CRPIX1']
+        crpix2 = hdul[0].header['CRPIX2']
 
-    # CTYPE : 'GLON-AIT'  'GLAT-AIT'  
-    # CRVAL : 0.0  0.0  
-    # CRPIX : 8.5  -169.5  
-    # PC1_1 PC1_2  : 1.0  0.0  
-    # PC2_1 PC2_2  : 0.0  1.0  
-    # CDELT : 0.090031633151485  0.090031633151485  
-    # NAXIS : 1111  731,
+        # CTYPE : 'GLON-AIT'  'GLAT-AIT'  
+        # CRVAL : 0.0  0.0  
+        # CRPIX : 8.5  -169.5  
+        # PC1_1 PC1_2  : 1.0  0.0  
+        # PC2_1 PC2_2  : 0.0  1.0  
+        # CDELT : 0.090031633151485  0.090031633151485  
+        # NAXIS : 1111  731,
 
-    # 计算x轴和y轴的坐标范围
-    naxis1, naxis2 = qtsj.shape
-    xmin = (1 - crpix1) * cdelt1 + crval1
-    xmax = (naxis1 - crpix1) * cdelt1 + crval1
-    ymin = (1 - crpix2) * cdelt2 + crval2
-    ymax = (naxis2 - crpix2) * cdelt2 + crval2
-    glon = np.linspace(xmin,xmax,naxis1)
-    glat = np.linspace(ymin,ymax,naxis2)
-    Glon,Glat = np.meshgrid(glon,glat)
-    galactic_coord = SkyCoord(Glon* u.degree, Glat* u.degree, frame='galactic')
-    j2000_coords = galactic_coord.transform_to('fk5')
-    Glon,Glat = j2000_coords.ra,j2000_coords.dec
-    plt.contour(Glon,Glat,qtsj,5,cmap="Greys",levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
+        # 计算x轴和y轴的坐标范围
+        naxis1, naxis2 = qtsj.shape
+        xmin = (1 - crpix1) * cdelt1 + crval1
+        xmax = (naxis1 - crpix1) * cdelt1 + crval1
+        ymin = (1 - crpix2) * cdelt2 + crval2
+        ymax = (naxis2 - crpix2) * cdelt2 + crval2
+        glon = np.linspace(xmin,xmax,naxis1)
+        glat = np.linspace(ymin,ymax,naxis2)
+        Glon,Glat = np.meshgrid(glon,glat)
+        galactic_coord = SkyCoord(Glon* u.degree, Glat* u.degree, frame='galactic')
+        j2000_coords = galactic_coord.transform_to('fk5')
+        Glon,Glat = j2000_coords.ra,j2000_coords.dec
+        plt.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
+    else:
+        from matplotlib.colors import Normalize
+        from astropy.io import fits
+        from astropy.wcs import WCS
+        import numpy as np
+        with fits.open(file) as hdul:
+                # 输出文件信息
+                qtsj = hdul[0].data
+                wcs = WCS(hdul[0].header)
+
+        naxis1, naxis2 = qtsj.shape
+        # 构建像素坐标数组，例如：(x, y)
+        x, y = np.meshgrid(np.arange(naxis2), np.arange(naxis1))
+
+        # 使用wcs计算天球坐标
+        ra, dec = wcs.all_pix2world(x, y, 0)
+
+        galactic_coord = SkyCoord(ra* u.degree, dec* u.degree, frame='galactic')
+        j2000_coords = galactic_coord.transform_to('fk5')
+        Glon,Glat = j2000_coords.ra,j2000_coords.dec
+        plt.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
 
 def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     """

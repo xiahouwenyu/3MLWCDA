@@ -256,8 +256,12 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
             indexel = indexb[0]
             indexeh = indexb[1]
         else:
-            indexel = max(-5,-index-rtindex*indexe)
-            indexeh = min(1,-index+rtindex*indexe)
+            if detector=="WCDA":
+                indexel = max(-4,-index-rtindex*indexe)
+                indexeh = min(-1,-index+rtindex*indexe)
+            else: 
+                indexel = max(-5.5,-index-rtindex*indexe)
+                indexeh = min(-1.5,-index+rtindex*indexe)
 
         if sb is not None:
             sbl = sb[0]
@@ -270,12 +274,17 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
             kbl = kb[0]
             kbh = kb[1]
         else:
-            kbl = (flux-rtflux*fluxe)*Nc if (flux-rtflux*fluxe)*Nc>0 else 1e-18
-            kbh = (flux+rtflux*fluxe)*Nc
+            if detector=="WCDA":
+                kbl = max(1e-15, (flux-rtflux*fluxe)*Nc)
+                kbh = min(1e-11, (flux+rtflux*fluxe)*Nc)
+            else:
+                kbl = max(1e-18, (flux-rtflux*fluxe)*Nc)
+                kbh = min(1e-14, (flux+rtflux*fluxe)*Nc)
 
         if Kscale is not None:
             flux = flux/Kscale
             fluxe = fluxe/Kscale
+
 
         doit=False
         if sigma == 0:
@@ -311,6 +320,12 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
                 indexf = mindexf
                 doit=True
                 log.info(f"{name} in model_radius: {model_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
+
+        if kf or indexf:
+            if detector=="WCDA":
+                piv=3
+            else:
+                piv=50
 
         if fixall:
             sf = True
@@ -369,18 +384,20 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
         Returns:
             model
     """ 
+    lm = Model()
+    import yaml
     config = yaml.load(open(file), Loader=yaml.FullLoader)
     config = dict(config)
     opf = pf; osf=sf; okf=kf; oindexf=indexf
     for scid in config.keys():
-        scconfig = dict(config['Src0'])
+        scconfig = dict(config[scid])
         name = scconfig['Name'].replace("-", "M").replace("+", "P")
         piv = scconfig['Epiv']
         flux = scconfig['SEDModel']["F0"][0]
-        kb = [scconfig['SEDModel']["F0"][1], scconfig['SEDModel']["F0"][2]]
+        Kb = [scconfig['SEDModel']["F0"][1], scconfig['SEDModel']["F0"][2]]
         Nc = scconfig['SEDModel']["F0"][4]
         index =  -scconfig['SEDModel']['alpha'][0]
-        indexb =  [-scconfig['SEDModel']['alpha'][2], -scconfig['SEDModel']['alpha'][1]]
+        Indexb =  [-scconfig['SEDModel']['alpha'][2], -scconfig['SEDModel']['alpha'][1]]
         ras = scconfig["MorModel"]['ra'][0]
         rab = [scconfig["MorModel"]['ra'][1], scconfig["MorModel"]['ra'][2]]
         decs = scconfig["MorModel"]['dec'][0]
@@ -393,14 +410,23 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
         if indexb is not None:
             indexel = indexb[0]
             indexeh = indexb[1]
+        else:
+            indexel = Indexb[0]
+            indexeh = Indexb[1]
 
         if sb is not None:
             sbl = sb[0]
             sbh = sb[1]
+        else:
+            sbl = sigmab[0]
+            sbh = sigmab[1]
 
         if kb is not None:
             kbl = kb[0]*Nc
             kbh = kb[1]*Nc
+        else:
+            kbl = Kb[0]*Nc
+            kbh = Kb[1]*Nc
 
         doit=False
         if sigma == 0:
