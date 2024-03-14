@@ -395,16 +395,21 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
         piv = scconfig['Epiv']
         flux = scconfig['SEDModel']["F0"][0]
         Kb = [scconfig['SEDModel']["F0"][1], scconfig['SEDModel']["F0"][2]]
+        kf = scconfig['SEDModel']["F0"][3]
         Nc = scconfig['SEDModel']["F0"][4]
         index =  -scconfig['SEDModel']['alpha'][0]
         Indexb =  [-scconfig['SEDModel']['alpha'][2], -scconfig['SEDModel']['alpha'][1]]
+        indexf = scconfig['SEDModel']['alpha'][3]
         ras = scconfig["MorModel"]['ra'][0]
         rab = [scconfig["MorModel"]['ra'][1], scconfig["MorModel"]['ra'][2]]
+        pf = scconfig["MorModel"]['ra'][3]
         decs = scconfig["MorModel"]['dec'][0]
+        pf = scconfig["MorModel"]['dec'][3]
         decb = [scconfig["MorModel"]['dec'][1], scconfig["MorModel"]['dec'][2]]
         sigma=None
         if scconfig["MorModel"]['type'] == 'Ext_gaus':
             sigma = scconfig["MorModel"]['sigma'][0]
+            sigmaf = scconfig["MorModel"]['sigma'][3]
             sigmab = [scconfig["MorModel"]['sigma'][1], scconfig["MorModel"]['sigma'][2]]
 
         if indexb is not None:
@@ -512,7 +517,7 @@ def model2bayes(model):
             param.set_uninformative_prior(Uniform_prior)
     return model
 
-def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
+def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None):
     """
         进行拟合
 
@@ -536,10 +541,10 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         grid_minimizer = GlobalMinimization("grid")
 
         # Create an instance of a local minimizer, which will be used by GRID
-        local_minimizer = LocalMinimization("minuit")
+        local_minimizer = LocalMinimization("ROOT")
 
         # Define a grid for mu as 10 steps between 2 and 80
-        my_grid = {Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
+        my_grid = grids #{Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
 
         # Setup the global minimization
         # NOTE: the "callbacks" option is useless in a normal 3ML analysis, it is
@@ -556,7 +561,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
 
         import pygmo
 
-        my_algorithm = pygmo.algorithm(pygmo.bee_colony(gen=20))
+        my_algorithm = pygmo.algorithm(pygmo.cmaes(gen = 100, sigma0=0.3)) #pygmo.bee_colony(gen=20)
 
         # Create an instance of a local minimizer
         local_minimizer = LocalMinimization("minuit")
@@ -567,7 +572,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             algorithm=my_algorithm,
             islands=10,
             population_size=10,
-            evolution_cycles=1,
+            evolution_cycles=2,
         )
 
         # Set the minimizer for the JointLikelihood object
@@ -646,7 +651,7 @@ def get_vari_dis(result, var="J0057.Gaussian_on_sphere.sigma"):
     plt.xlim(left=bins.min()-0.2*bins.std())
     plt.ylim(0,nt.max()+0.2*nt.std())
 
-def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False):
+def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None):
     """
         进行联合拟合
 
@@ -674,7 +679,7 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         local_minimizer = LocalMinimization("minuit")
 
         # Define a grid for mu as 10 steps between 2 and 80
-        my_grid = {Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
+        my_grid = grids#{Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
 
         # Setup the global minimization
         # NOTE: the "callbacks" option is useless in a normal 3ML analysis, it is
@@ -926,9 +931,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             sources = get_sources(lm,result)
             sources.pop("Diffuse")
             if detector=="WCDA":
-                map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
             else:
-                map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
             map2 = maskroi(map2, roi)
             fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
             plt.show()
@@ -956,9 +961,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         sources = get_sources(lm,result)
         sources.pop("Diffuse")
         if detector=="WCDA":
-            map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
         else:
-            map2, skymapHeader = hp.read_map("/data/home/cwy/Science/3MLWCDA/data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
         map2 = maskroi(map2, roi)
         fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
         plt.show()
@@ -1003,7 +1008,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             bestmodelname=bestmodelnamec
             bestmodel=bestcache
         else:
-            result = fit(region_name+"_iter", bestmodelname, WCDA, bestmodel, 0, 5,mini="ROOT")
+            result = fit(region_name+"_iter", bestmodelname, WCDA, bestcache, 0, 5,mini="ROOT")
             TS, TSdatafram = getTSall([], region_name+"_iter", bestmodelname, result, WCDA)
             return bestmodel,result
 

@@ -234,7 +234,7 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
 
 
 import math
-def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"):
+def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C", ax=None, label=None):
     """
         画椭圆
 
@@ -261,7 +261,9 @@ def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"
         y.append(new_y)
     if coord=="G":
         x,y = edm2gal(x,y)
-    plt.plot(x,y, color=color, linestyle=linestyle,alpha=alpha)
+    if ax is None:
+        ax=plt.gca()
+    ax.plot(x,y, color=color, linestyle=linestyle,alpha=alpha, label=label)
 
 
 def high_pass_filter(image, cutoff_freq):

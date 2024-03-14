@@ -7,6 +7,7 @@ import MapPalette
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 from Mycatalog import *
+from Mysigmap import *
 
 from tqdm import tqdm
 
@@ -99,6 +100,52 @@ def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array(
         j2000_coords = galactic_coord.transform_to('fk5')
         Glon,Glat = j2000_coords.ra,j2000_coords.dec
         plt.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
+
+def Draw_reg(file="/data/home/cwy/Science/3MLWCDA/Standard/res/J0057/j0057_new_casob7.reg", iflabel=0):
+    """
+        画ds9的region文件
+
+        Parameters:
+            file: reg 文件
+            iflabel: 是否标准label
+
+        Returns:
+            >>> None
+    """ 
+    import pyregion
+    ax = plt.gca()
+    r = pyregion.open(file)
+    mark = r.get_mpl_patches_texts()[1]
+    mark = [it for it in mark if str(type(it))=="<class 'matplotlib.lines.Line2D'>"]
+    pt=0
+    for item in r:
+        name = item.name
+        coord = item.coord_format
+        drawpar = item.attr[1]
+        if name=="circle":
+            ra = item.params[0].v
+            dec = item.params[1].v
+            ra, dec = gal2edm(ra, dec)
+            size = item.params[2].v
+            print(ra, dec, size, drawpar["text"])
+            label=None
+            if iflabel:
+                label=drawpar["text"]
+            Draw_ellipse(ra, dec, size, 0, 0, drawpar["color"], alpha=1, linestyle="--", coord = "C", ax=ax, label=label)
+            ax.annotate(drawpar["text"], (ra, dec+size+0.2), fontsize=10, color=drawpar["color"])
+        elif name=="point":
+            ra = item.params[0].v
+            dec = item.params[1].v
+            ra, dec = gal2edm(ra, dec)
+            marker = mark[pt].get_marker()
+            label=None
+            if iflabel:
+                label=drawpar["text"]
+            ax.scatter(ra, dec, s=10, c=drawpar["color"], marker=marker)
+            pt+=1
+        else:
+            print(name)
+    plt.legend()
 
 def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     """
