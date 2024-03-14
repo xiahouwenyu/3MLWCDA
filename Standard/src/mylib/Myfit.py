@@ -822,7 +822,7 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False):
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9):
     """
         在一个区域搜索新源
 
@@ -836,6 +836,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             cat: 中间图所画的catalog信息
             detector: KM2A还是WCDA!!!!!!
             fixcatall: 是否固定catalog源,如果从catalog开始的话
+            extthereshold: 判定延展的阈值
 
         Returns:
             >>> bestmodel, [jl, result
@@ -969,13 +970,17 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         plt.show()
 
         if not ifnopt:
-            if(TS["TS_all"]>TS_all[-1]):
+            if(TS["TS_all"]-TS_all[-1]>=extthereshold):
+                deltaTS = TS["TS_all"]-TS_all[-1]
+                log.info(f"Ext is better!! deltaTS={deltaTS:.2f}")
                 bestcache=copy.deepcopy(lm)
                 bestmodelnamec=copy.copy(name)
                 TS_all[-1]=TS["TS_all"]
                 exts.append(ext)
                 pts.pop()
             else:
+                deltaTS = TS["TS_all"]-TS_all[-1]
+                log.info(f"pt is better!! deltaTS={deltaTS:.2f}")
                 npt+=1
                 next-=1
                 Modelname=f"{npt}pt+{next}ext"+tDGE
@@ -1005,9 +1010,11 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
                 f.write("\n")
                 
         if(TS_all[N_src+1]-TS_all[N_src]>25):
+            log.info(f"{bestmodelnamec} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}")
             bestmodelname=bestmodelnamec
             bestmodel=bestcache
         else:
+            log.info(f"{bestmodelname} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}, no need for more!")
             result = fit(region_name+"_iter", bestmodelname, WCDA, bestcache, 0, 5,mini="ROOT")
             TS, TSdatafram = getTSall([], region_name+"_iter", bestmodelname, result, WCDA)
             return bestmodel,result
