@@ -700,7 +700,7 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
     getsig1D(S, region_name, Modelname, name)
     return S
 
-def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1, outname,pta,exta, data_radius, binc="all", ifrunllh=True, detector="WCDA"):
+def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1, outname,pta,exta, data_radius, binc="all", ifrunllh=True, detector="WCDA", jc=10, sn=1000):
     """write residual map to skymap root file.
 
         Args:
@@ -824,7 +824,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
     os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
-        runllhskymap(roi, f"../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=int(binc[0]), e=int(binc[-1]))
+        runllhskymap(roi, f"../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=int(binc[0]), e=int(binc[-1]),jc=jc, sn=sn)
     return outname+"_res"
 
 def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
@@ -840,6 +840,7 @@ def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detecto
     import os
     folder_path = f"{libdir}/tools/llh_skymap/sourcetxt/{detector}_{inname}"
     if not os.path.exists(folder_path):
+        log.info(f"Bad path: {folder_path}")
         pass
     name = folder_path.replace("./","")
     all_files = glob.glob(os.path.join(folder_path, '*'))
