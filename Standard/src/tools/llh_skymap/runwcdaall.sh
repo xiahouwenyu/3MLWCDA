@@ -10,6 +10,7 @@ sn=$9
 s=${10}
 e=${11}
 response=${12}
+dirsrc=${13}
 
 rm -rf ./sourcetxt/WCDA_${name}*
 for ((i=0; i<=1000; i++))
@@ -17,5 +18,5 @@ do
     if [ $i -gt $parts ]; then
         break
     fi
-    qsub -v map=$map,ra=$ra,dec=$dec,radius=$radius,name=$name,part=$i,outdir=${outdir},jc=${jc},sn=${sn},s=${s},e=${e},response=${response} -o ./output -e ./output -l nodes=5 ./runwcda.sh
+    qsub -v map=$map,ra=$ra,dec=$dec,radius=$radius,name=$name,part=$i,outdir=${outdir},jc=${jc},sn=${sn},s=${s},e=${e},response=${response},dirsrc=${dirsrc} -o ./output -e ./output -l nodes=5 ./runwcda.sh
 done
