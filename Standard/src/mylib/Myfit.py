@@ -360,7 +360,7 @@ lm.add_source({name})
     return lm
 
 
-def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, releaseall=False, indexb=None, sb=None, kb=None):
+def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, roi=None, releaseall=False, indexb=None, sb=None, kb=None):
     """
         从hsc yaml文件获取模型
 
@@ -388,7 +388,6 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
     import yaml
     config = yaml.load(open(file), Loader=yaml.FullLoader)
     config = dict(config)
-    opf = pf; osf=sf; okf=kf; oindexf=indexf
     for scid in config.keys():
         scconfig = dict(config[scid])
         name = scconfig['Name'].replace("-", "M").replace("+", "P")
@@ -409,7 +408,7 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
         sigma=None
         if scconfig["MorModel"]['type'] == 'Ext_gaus':
             sigma = scconfig["MorModel"]['sigma'][0]
-            sigmaf = scconfig["MorModel"]['sigma'][3]
+            sf = scconfig["MorModel"]['sigma'][3]
             sigmab = [scconfig["MorModel"]['sigma'][1], scconfig["MorModel"]['sigma'][2]]
 
         if indexb is not None:
@@ -439,32 +438,16 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
         if roi is None:
             if (distance(ra1,dec1, ras, decs)<data_radius):
                 log.info(f"{name} in data_radius: {data_radius}")
-                sf = osf 
-                pf = opf
-                kf = okf
-                indexf = oindexf
                 doit=True
             elif (distance(ra1,dec1, ras, decs)<=model_radius):
                 log.info(f"{name} in model_radius: {model_radius}")
-                sf = msf 
-                pf = mpf
-                kf = mkf
-                indexf = mindexf
                 doit=True
                 
         else:
             if (distance(ra1,dec1, ras, decs)<data_radius and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024))):
-                sf = osf 
-                pf = opf
-                kf = okf
-                indexf = oindexf
                 doit=True
                 log.info(f"{name} in roi: {data_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
             elif (distance(ra1,dec1, ras, decs)<=model_radius):
-                sf = msf 
-                pf = mpf
-                kf = mkf
-                indexf = mindexf
                 doit=True
                 log.info(f"{name} in model_radius: {model_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
 
@@ -564,7 +547,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         my_algorithm = pygmo.algorithm(pygmo.cmaes(gen = 100, sigma0=0.3)) #pygmo.bee_colony(gen=20)
 
         # Create an instance of a local minimizer
-        local_minimizer = LocalMinimization("minuit")
+        local_minimizer = LocalMinimization("ROOT")
 
         # Setup the global minimization
         pagmo_minimizer.setup(
@@ -1182,7 +1165,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         Diffusespec.index.bounds = (-4,-1)
     Diffuseshape.K = 1/u.deg**2
     if ifreturnratio:
-        return Diffuse, sa/0.00012671770357488944
+        return Diffuse, [sa/0.00012671770357488944, ss, ss/2.745913003176557],
     else:
         return Diffuse
 

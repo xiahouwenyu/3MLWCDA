@@ -1,6 +1,6 @@
 source activate 3ML
 
-srcdir=/data/home/cwy/Science/3MLWCDA/Standard/src/
+srcdir=../../
 exe=${srcdir}tools/llh_skymap/pixfitting_spec_WCDA.py
 cd $srcdir
 
