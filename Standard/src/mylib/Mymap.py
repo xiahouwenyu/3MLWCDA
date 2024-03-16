@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from Mycoord import *
 
-def settransWCDA(WCDA, ra1, tansit=None):
+def settransWCDA(WCDA, ra1, dec1, tansit=None):
     """
         修改天图tansit
 
@@ -21,13 +21,24 @@ def settransWCDA(WCDA, ra1, tansit=None):
 
         Returns:
             >>> None
-    """ 
+    """
+    tobs=0
     if tansit is None:
         import ROOT as rt
         file = rt.TFile("../../data/20210305_20230731_bkgJ2000.root", "READ")
         hside = file.Get("hSide")
-        tansit = hside.GetBinContent(int(ra1/360*86164))/10
-
+        tsecs = hside.GetNbinsX()
+        wbinside = hside.GetXaxis().GetBinWidth(1)
+        tside0 = hside.GetXaxis().GetBinLowEdge(1)
+        for ii in range(tsecs):
+            tside = tside0+(ii+0.5)*wbinside
+            ha = tside-ra1
+            zen, azi = eql2hcs(np.radians(ha), np.radians(dec1))
+            if (zen>=0 and zen<=55):
+                tobs += hside.GetBinContent(ii+1)
+        # tansit = hside.GetBinContent(int(ra1/360*86164))/10
+        tansit=tobs/864000
+    log.info(f"Set WCDA tansit from: {WCDA._maptree._analysis_bins[str(0)]._n_transits} to {tansit}")
     for i in range(6):           
         WCDA._maptree._analysis_bins[str(i)]._n_transits=tansit
 

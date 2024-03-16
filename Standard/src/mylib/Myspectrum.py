@@ -17,6 +17,8 @@ from Mylightcurve import p2sigma
 
 from Myspec import *
 
+from Mymap import *
+
 def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True, CL=0.95):
     """
         获取参数llh扫描的上限
@@ -83,13 +85,15 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2, iffixtans=False):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
         #return: spectrum.K
     # Instance the plugin
-    WCDA_1 = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
+    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=0.05)
+    if iffixtans:
+        settransWCDA(WCDA_1, roi.ra_dec_center[0], roi.ra_dec_center[1])
     lm2 = copy.deepcopy(lm)
     fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     # Define model
@@ -342,7 +346,7 @@ def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False, threshold=2):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False, threshold=2, iffixtans=False):
     """
         获取某个源的能谱点
 
@@ -381,7 +385,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold, iffixtans=iffixtans)
         # try:
         #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
         # except Exception as e:

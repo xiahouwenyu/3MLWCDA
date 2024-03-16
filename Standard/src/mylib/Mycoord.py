@@ -167,3 +167,29 @@ def hms_to_deg(ra_hours, ra_minutes, ra_seconds, dec_degrees, dec_minutes, dec_s
     dec_degrees *= sign
 
     return ra_degrees, dec_degrees
+
+def eql2hcs(ha, dn):
+    import math
+    first = True
+    latmydet = 29.357656306
+    ch, sh, cd, sd =np. cos(ha),np.sin(ha),np.cos(dn),np.sin(dn)
+    if (first):
+        sinlat = np.sin(np.radians(latmydet))
+        coslat = np.cos(np.radians(latmydet))
+        first = False
+
+    x = -ch*cd*sinlat + sd*coslat
+    y = -sh*cd
+    z =  ch*cd*coslat + sd*sinlat
+
+    r = np.sqrt(x*x+y*y)
+    if (r==0.):
+        az = 0.
+    else:
+        az = math.atan2(y,x)
+
+    if (az<0.):
+        az = az + 2*np.pi
+
+    ze = np.pi/2 - math.atan2(z,r)
+    return ze, az

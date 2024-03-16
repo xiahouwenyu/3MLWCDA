@@ -753,10 +753,14 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
             >>> 总的TS, TSresults(Dataframe)
     """ 
     TS = {}
+    TS_all = WCDA.cal_TS_all()
+    log.info(f"TS_all: {TS_all}")
+    llh = WCDA.get_log_like()
+    log.info(f"llh_all: {llh}")
     for sc in tqdm(TSlist):
         TS[sc]=result[0].compute_TS(sc,result[1][1]).values[0][2]
-    llh = WCDA.get_log_like()
-    TS_all = WCDA.cal_TS_all()
+        log.info(f"TS_{sc}: {TS[sc]}")
+    
     TS["TS_all"] = TS_all
     TS["-log(likelihood)"] = -llh
     TSresults = pd.DataFrame([TS])
