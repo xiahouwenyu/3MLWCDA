@@ -8,7 +8,7 @@ Standard/src/tools/LHAASO_skytrans/skytxt/*pdf
 Standard/src/tools/LHAASO_skytrans/skytxt/*fits
 Standard/src/tools/LHAASO_skytrans/skytxt/*gz
 Standard/src/tools/LHAASO_skytrans/skytxt/*npy
-Standard/src/tools/llh_skymap/output/*
+# Standard/src/tools/llh_skymap/output/*
 Standard/src/tools/llh_skymap/*.gz
 Standard/src/tools/llh_skymap/__pycache__
 Standard/src/tools/skymap/*.gz
