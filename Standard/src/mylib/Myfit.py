@@ -633,7 +633,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
                     if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
                         ratio=10
                     if Model.parameters[it[0]].value<0:
-                        ratio=-ratio
+                        ratio=1/ratio
                     if it[1]==0:
                         Model.parameters[it[0]].bounds = (dl, ul*ratio)
                     elif it[1]==1:
