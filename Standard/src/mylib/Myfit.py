@@ -621,9 +621,9 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         if ifatb:
             for it in boundpar:
                 ratio=2
+                dl = Model.parameters[it[0]].bounds[0]
+                ul = Model.parameters[it[0]].bounds[1]
                 if any([item in  boundpar[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
-                    dl = Model.parameters[it[0]].bounds[0]
-                    ul = Model.parameters[it[0]].bounds[1]
                     if it[1]==0:
                         Model.parameters[it[0]].bounds = (dl, ul+(ul-dl)*ratio)
                     elif it[1]==1:
