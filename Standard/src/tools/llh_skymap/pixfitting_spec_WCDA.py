@@ -51,10 +51,12 @@ if __name__ == "__main__":
                            ra=ra_crab,
                            dec=dec_crab,
                            spectral_shape=spectrum)
-    fluxUnit=1./(u.TeV* u.cm**2 * u.s)
-    spectrum.K=0 *fluxUnit
+    # fluxUnit=1./(u.TeV* u.cm**2 * u.s)
+    fluxUnit=1e-9
+    spectrum.K=1e-13 *fluxUnit
     spectrum.K.fix=False
-    spectrum.K.bounds=(-1e-12*fluxUnit, 1e-12*fluxUnit)
+    spectrum.K.bounds=(-1e-14*fluxUnit, 1e-11*fluxUnit)
+    spectrum.K.delta=1e-16*fluxUnit
     spectrum.piv= 3.*u.TeV
     spectrum.piv.fix=True
     spectrum.index=-2.4
