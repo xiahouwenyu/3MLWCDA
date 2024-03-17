@@ -279,10 +279,10 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
             kbh = kb[1]
         else:
             if detector=="WCDA":
-                kbl = max(1e-15, (flux-rtflux*fluxe)*Nc)
+                kbl = max(1e-15, (flux/100)*Nc) #-rtflux*fluxe
                 kbh = min(1e-11, (flux+rtflux*fluxe)*Nc)
             else:
-                kbl = max(1e-18, (flux-rtflux*fluxe)*Nc)
+                kbl = max(1e-18, (flux/100)*Nc) #-rtflux*fluxe
                 kbh = min(1e-14, (flux+rtflux*fluxe)*Nc)
 
         if Kscale is not None:
@@ -621,14 +621,23 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         if ifatb:
             for it in boundpar:
                 ratio=2
-                if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
-                    ratio=10
-                if Model.parameters[it[0]].value<0:
-                    ratio=-ratio
-                if it[1]==0:
-                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0], Model.parameters[it[0]].bounds[1]*ratio)
-                elif it[1]==1:
-                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0]/ratio, Model.parameters[it[0]].bounds[1])
+                if any([item in  boundpar[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
+                    dl = Model.parameters[it[0]].bounds[0]
+                    ul = Model.parameters[it[0]].bounds[1]
+                    if it[1]==0:
+                        Model.parameters[it[0]].bounds = (dl, ul+(ul-dl)*ratio)
+                    elif it[1]==1:
+                        Model.parameters[it[0]].bounds = (dl-(ul-dl)*ratio, ul)
+                else:
+                    if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
+                        ratio=10
+                    if Model.parameters[it[0]].value<0:
+                        ratio=-ratio
+                    if it[1]==0:
+                        Model.parameters[it[0]].bounds = (dl, ul*ratio)
+                    elif it[1]==1:
+                        Model.parameters[it[0]].bounds = (dl/ratio, ul.bounds[1])
+                log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
             fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
     if ifgeterror:
@@ -772,14 +781,23 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         if ifatb:
             for it in boundpar:
                 ratio=2
-                if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
-                    ratio=10
-                if Model.parameters[it[0]].value<0:
-                    ratio=-ratio
-                if it[1]==0:
-                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0], Model.parameters[it[0]].bounds[1]*ratio)
-                elif it[1]==1:
-                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0]/ratio, Model.parameters[it[0]].bounds[1])
+                if any([item in  boundpar[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
+                    dl = Model.parameters[it[0]].bounds[0]
+                    ul = Model.parameters[it[0]].bounds[1]
+                    if it[1]==0:
+                        Model.parameters[it[0]].bounds = (dl, ul+(ul-dl)*ratio)
+                    elif it[1]==1:
+                        Model.parameters[it[0]].bounds = (dl-(ul-dl)*ratio, ul)
+                else:
+                    if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
+                        ratio=10
+                    if Model.parameters[it[0]].value<0:
+                        ratio=-ratio
+                    if it[1]==0:
+                        Model.parameters[it[0]].bounds = (dl, ul*ratio)
+                    elif it[1]==1:
+                        Model.parameters[it[0]].bounds = (dl/ratio, ul.bounds[1])
+                log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
             fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
     freepars = []

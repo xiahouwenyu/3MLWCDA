@@ -85,17 +85,19 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2, iffixtans=False):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2, iffixtans=False, bondaryrange=100):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
         #return: spectrum.K
     # Instance the plugin
-    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=0.1)
+    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=0.05)
+    WCDA_1.psf_integration_method="exact"
     if iffixtans:
         settransWCDA(WCDA_1, roi.ra_dec_center[0], roi.ra_dec_center[1])
     lm2 = copy.deepcopy(lm)
-    fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    fluxUnit = 1e-9
     # Define model
     sources = lm2.sources.keys()
     if ifpowerlawM:
@@ -124,7 +126,8 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 elif ("SpatialTemplate" not in pa):
                     kparname=newpa
                     # print("change bounds!!!!")
-                    lm2.sources[ss].parameters[newpa].bounds=(-1000*par[pa].value*1e9,1000*par[pa].value*1e9)*fluxUnit
+                    lm2.sources[ss].parameters[newpa].bounds=np.array((-bondaryrange*par[pa].value*1e9,bondaryrange*par[pa].value*1e9))*fluxUnit
+                    lm2.sources[ss].parameters[newpa].delta = 0.1*bondaryrange*par[pa].value
     else:
         #遍历源
         for ss in sources:
@@ -134,7 +137,8 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 if (ss == source and ".K" not in fp) or ss != source:
                     lm2.sources[ss].free_parameters[fp].fix = True
                 elif (ss == source and ".K" in fp and lm.sources[ss].components['main'].shape.name=="PowerlawM"):
-                    lm2.sources[ss].free_parameters[fp].bounds=(-1000*lm2.sources[ss].free_parameters[fp].value*1e9,1000*lm2.sources[ss].free_parameters[fp].value*1e9) * fluxUnit
+                    lm2.sources[ss].free_parameters[fp].bounds=np.array((-bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9,bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9)) * fluxUnit
+                    lm2.sources[ss].free_parameters[fp].delta = 0.1*bondaryrange*lm2.sources[ss].free_parameters[fp].value
                 else:
                     kparname=fp
 
