@@ -88,8 +88,8 @@ def go(args):
         jl.set_minimizer("ROOT")
         try:
             param_df, like_df = jl.fit()
-        except (threeML.minimizer.minimization.CannotComputeCovariance,OverflowError,FitFailed,RuntimeError):
-            sig=hp.UNSEEN
+        except: # (threeML.minimizer.minimization.CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
+            sig=0 #hp.UNSEEN
             errid=pid
             with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/erridlist_%s.txt"%name,"a+") as fs:
                 fs.write(str(errid)+"\n")

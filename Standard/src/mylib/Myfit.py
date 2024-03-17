@@ -47,6 +47,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             
             spec=None,
             spat=None,
+            setdeltabypar=True,
             *other,
             **kw):  # sourcery skip: extract-duplicate-method, low-code-quality
     """Create a Sources.
@@ -61,7 +62,8 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             Source
     """
     
-    fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    fluxUnit = 1e-9
 
     if spec is None:
         if kn is not None:
@@ -138,7 +140,7 @@ if par != None:
     spat.{parname} = par {unit}
     spat.{parname}.fix = parf
 if parb != None:
-    spat.{parname}.bounds = parb {unit}
+    spat.{parname}.bounds = np.array(parb) {unit}
         """
         exec(prompt)
 
@@ -150,20 +152,22 @@ if par != None:
     spec.{parname} = par {unit}
     spec.{parname}.fix = parf
 if parb != None:
-    spec.{parname}.bounds = parb {unit}
+    spec.{parname}.bounds = np.array(parb) {unit}
         """
         exec(prompt)
 
     #### set spectral
     spec.K = k * fluxUnit
     spec.K.fix = kf
+    if setdeltabypar:
+        spec.K.delta = 0.1*k * fluxUnit
     if kn is not None:
         spec.Kn = kn
         spec.Kn.fix = True
-    if kb != None:
-        spec.K.bounds = kb * fluxUnit
+    if kb is not None:
+        spec.K.bounds = np.array(kb) * fluxUnit
 
-    spec.piv = piv * u.TeV
+    spec.piv = piv*1e9 #* u.TeV
     spec.piv.fix = pf
 
     if spec.name == "Log_parabola":
@@ -186,13 +190,13 @@ if parb != None:
         spat.lat0.bounds=(dec-fitrange,dec+fitrange)
 
     if sigma != None:
-        spat.sigma = sigma*u.degree
+        spat.sigma = sigma #*u.degree
         spat.sigma.fix = sf
     if sb != None:
-        spat.sigma.bounds = sb*u.degree
+        spat.sigma.bounds = sb #*u.degree
 
     
-    setspatParameter("rdiff0",rdiff0,rdiff0f,rdiff0b,"* u.degree")
+    setspatParameter("rdiff0",rdiff0,rdiff0f,rdiff0b) #,"* u.degree"
     setspatParameter("delta",delta,deltaf,deltab)
     setspatParameter("uratio",uratio,uratiof,uratiob)
     setspatParameter("b",b,bf,bb)
@@ -204,7 +208,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, rtflux=3, rtindex=3, rtp=3, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, rtflux=3, rtindex=3, rtp=3, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True):
     """
         获取LHAASO catalog模型
 
@@ -345,7 +349,7 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
                 log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f}) fitrange={rtp*pe:.2f}")
                 prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
-        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale})
+        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar})
 lm.add_source({name})
             """
                 exec(prompt)
@@ -353,7 +357,7 @@ lm.add_source({name})
                 log.info(f"Mor: fitrange={rtp*pe:.2f}")
                 prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
-        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale})
+        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar})
 lm.add_source({name})
             """
                 exec(prompt)
@@ -415,22 +419,34 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
             indexel = indexb[0]
             indexeh = indexb[1]
         else:
-            indexel = Indexb[0]
-            indexeh = Indexb[1]
+            if indexf:
+                indexel = None
+                indexeh = None
+            else:
+                indexel = Indexb[0]
+                indexeh = Indexb[1]
 
         if sb is not None:
             sbl = sb[0]
             sbh = sb[1]
         else:
-            sbl = sigmab[0]
-            sbh = sigmab[1]
+            if sf:
+                sbl = None
+                sbh = None
+            else:
+                sbl = sigmab[0]
+                sbh = sigmab[1]
 
         if kb is not None:
             kbl = kb[0]*Nc
             kbh = kb[1]*Nc
         else:
-            kbl = Kb[0]*Nc
-            kbh = Kb[1]*Nc
+            if kf:
+                kbl = None
+                kbh = None
+            else:
+                kbl = Kb[0]*Nc
+                kbh = Kb[1]*Nc
 
         doit=False
         if sigma == 0:
@@ -462,14 +478,26 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
             pf = False
             kf = False
             indexf = False
+
+        sbs = f"({sbl},{sbh})" if sbl is not None else "None"
+
+        kbs = f"({kbl},{kbh})" if kbl is not None else "None"
+
+        indexbs = f"({indexel},{indexeh})" if indexel is not None else "None"
         
         if doit:
-            log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
+            try:
+                log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
+            except:
+                pass
             if sigma is not None:
-                log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f})")
+                try:
+                    log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f})")
+                except:
+                    pass
                 prompt = f"""
-{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
-        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb={sbs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={flux*Nc}, kb={kbs}, index={-index}, indexb={indexbs}, rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
 lm.add_source({name})
             """
                 exec(prompt)
@@ -477,7 +505,7 @@ lm.add_source({name})
                 log.info(f"Mor: ")
                 prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
-        k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
+        k={flux*Nc}, kb={kbs}, index={-index}, indexb={indexbs}, rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
 lm.add_source({name})
             """
                 exec(prompt)
@@ -500,7 +528,30 @@ def model2bayes(model):
             param.set_uninformative_prior(Uniform_prior)
     return model
 
-def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None):
+def check_bondary(optmodel):
+    freepar = optmodel.free_parameters
+    ifatlimit = False
+    boundpar = []
+    for it in freepar.keys():
+        parv = freepar[it].to_dict()["value"]
+        maxv = freepar[it].to_dict()["max_value"]
+        minv = freepar[it].to_dict()["min_value"]
+        if abs((maxv - parv)/parv) < 0.01:
+            activate_warnings()
+            log.warning(f"Parameter {it} is close to the maximum value: {parv:.2e} < {maxv:.2e}")
+            silence_warnings()
+            ifatlimit=True
+            boundpar.append([it,0])
+        if abs((parv - minv)/parv) < 0.01:
+            activate_warnings()
+            log.warning(f"Parameter {it} is close to the minimum value: {parv:.2e} > {minv:.2e}")
+            silence_warnings()
+            ifatlimit=True
+            boundpar.append([it,1])
+    return ifatlimit, boundpar
+    
+
+def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=False):
     """
         进行拟合
 
@@ -565,6 +616,21 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
 
     result = jl.fit()
 
+    ifatb, boundpar = check_bondary(jl.results.optimized_model)
+    if donwtlimit:
+        if ifatb:
+            for it in boundpar:
+                ratio=2
+                if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
+                    ratio=10
+                if Model.parameters[it[0]].value<0:
+                    ratio=-ratio
+                if it[1]==0:
+                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0], Model.parameters[it[0]].bounds[1]*ratio)
+                elif it[1]==1:
+                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0]/ratio, Model.parameters[it[0]].bounds[1])
+            fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
+
     if ifgeterror:
         from IPython.display import display
         display(jl.results.get_data_frame())
@@ -579,6 +645,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             freepars.append("%-45s %35.6g ± %2.6g %s" % (p, par.value, result[0]["error"][p], par._unit))
         else:
             fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+
 
     if savefit:
         time1 = strftime("%m-%d-%H", localtime())
@@ -634,7 +701,7 @@ def get_vari_dis(result, var="J0057.Gaussian_on_sphere.sigma"):
     plt.xlim(left=bins.min()-0.2*bins.std())
     plt.ylim(0,nt.max()+0.2*nt.std())
 
-def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None):
+def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=False):
     """
         进行联合拟合
 
@@ -699,6 +766,21 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         jl.set_minimizer(mini)
 
     result = jl.fit()
+
+    ifatb, boundpar = check_bondary(jl.results.optimized_model)
+    if donwtlimit:
+        if ifatb:
+            for it in boundpar:
+                ratio=2
+                if Model.parameters[it[0]].is_normalization: #".K" in  boundpar[0]
+                    ratio=10
+                if Model.parameters[it[0]].value<0:
+                    ratio=-ratio
+                if it[1]==0:
+                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0], Model.parameters[it[0]].bounds[1]*ratio)
+                elif it[1]==1:
+                    Model.parameters[it[0]].bounds = (Model.parameters[it[0]].bounds[0]/ratio, Model.parameters[it[0]].bounds[1])
+            fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
     freepars = []
     fixedpars = []
@@ -1012,7 +1094,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True):
     """
         自动生成区域弥散模版
 
@@ -1130,7 +1212,8 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         file = f'../../data/{name}_dust_bkg_template.fits'
         log.info(f"diffuse file path: {file}")
         hdu.writeto(file, overwrite=True)
-    fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    fluxUnit = 1e-9
 
     if Kn is not None:
         Diffusespec = PowerlawN()
@@ -1140,10 +1223,13 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         Kb=np.array(Kb)/float(Kn)
         Diffusespec.K = kk * fluxUnit
         Diffusespec.K.fix=Kf
+        if setdeltabypar:
+            Diffusespec.K.delta = 0.1*kk * fluxUnit
+
         if Kb is not None:
-            Diffusespec.K.bounds=Kb * fluxUnit
+            Diffusespec.K.bounds=np.array(Kb) * fluxUnit
         else:
-            Diffusespec.K.bounds=(0.0001*kk,10000*kk) * fluxUnit
+            Diffusespec.K.bounds=np.array((0.0001*kk,10000*kk)) * fluxUnit
         Diffusespec.Kn = Kn
         Diffusespec.Kn.fix = True
     else:
@@ -1152,10 +1238,13 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         Diffuse = ExtendedSource("Diffuse",spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
         Diffusespec.K = K * fluxUnit
         Diffusespec.K.fix=Kf
+        if setdeltabypar:
+            Diffusespec.K.delta = 0.1*K * fluxUnit
         if Kb is not None:
-            Diffusespec.K.bounds=Kb * fluxUnit
+            Diffusespec.K.bounds=np.array(Kb) * fluxUnit
         else:
-            Diffusespec.K.bounds=(0.0001*K,10000*K) * fluxUnit
+            Diffusespec.K.bounds=np.array((0.0001*K,10000*K)) * fluxUnit
+
 
 
     Diffusespec.piv = piv * u.TeV
@@ -1173,7 +1262,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
     else:
         return Diffuse
 
-def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3):
+def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3, setdeltabypar=True):
     """
         读取fits的形态模版
 
@@ -1183,17 +1272,21 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
         Returns:
             弥散源
     """ 
-    fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
+    fluxUnit = 1e-9
     Diffuseshape = SpatialTemplate_2D(fits_file=fits_file)
     Diffusespec = Powerlaw()
     Diffuse = ExtendedSource(name, spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
     Diffusespec.K = K * fluxUnit
     Diffusespec.K.fix=Kf
 
+    if setdeltabypar:
+        Diffusespec.K.delta = 0.1*K * fluxUnit
+
     if Kb:
-        Diffusespec.K.bounds=Kb * fluxUnit
+        Diffusespec.K.bounds=np.array(Kb) * fluxUnit
     else:
-        Diffusespec.K.bounds=(0.001*K,1000*K) * fluxUnit
+        Diffusespec.K.bounds=np.array((0.001*K,1000*K)) * fluxUnit
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
@@ -1202,6 +1295,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     Diffusespec.index.fix = indexf
     Diffusespec.index.bounds = (-4,-1)
     Diffuseshape.K = 1/u.deg**2
+    return
 
 
 def get_sources(lm,result=None):

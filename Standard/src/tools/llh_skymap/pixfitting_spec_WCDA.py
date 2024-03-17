@@ -78,7 +78,7 @@ if __name__ == "__main__":
             source.position.dec.fix=True
             try:
                 param_df, like_df = jl.fit(quiet=True)
-            except (CannotComputeCovariance,OverflowError,FitFailed,RuntimeError):
+            except:  # (CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
                 rr.append([pid, 0]) #hp.UNSEEN
             else:
                 results = jl.results
@@ -92,7 +92,10 @@ if __name__ == "__main__":
                     else:
                         sig=-np.sqrt(ts)
                 else:
-                    sig=0 #hp.UNSEEN
+                    if(K_fitted>=0):
+                        sig=-np.sqrt(-ts)
+                    else:
+                        sig=0 #hp.UNSEEN
                 rr.append([pid, sig])
         return rr
 

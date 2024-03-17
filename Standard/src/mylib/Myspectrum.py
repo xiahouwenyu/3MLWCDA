@@ -91,7 +91,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
         #param2: fixed.spectrum.belta
         #return: spectrum.K
     # Instance the plugin
-    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=0.05)
+    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=0.1)
     if iffixtans:
         settransWCDA(WCDA_1, roi.ra_dec_center[0], roi.ra_dec_center[1])
     lm2 = copy.deepcopy(lm)

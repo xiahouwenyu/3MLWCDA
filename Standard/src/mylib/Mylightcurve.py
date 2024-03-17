@@ -165,7 +165,9 @@ def cwt(data, dt, mother, param, s0, dj, J=None):
     try:
         import pycwt
     except:
+        activate_warnings()
         log.warning("No nodule named pycwt")
+        silence_warnings()
 
     # Make sure we are dealing with a np.array
     data = np.array(data)
