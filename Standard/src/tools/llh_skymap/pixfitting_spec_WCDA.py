@@ -40,12 +40,12 @@ if __name__ == "__main__":
     response = args.rsfile
     ra_crab, dec_crab = args.ra, args.dec
     data_radius = args.radius
-    model_radius = data_radius+3
+    model_radius = data_radius+1
     print(maptree, response, ra_crab, dec_crab, data_radius)
 
     roi = HealpixConeROI(data_radius=data_radius, model_radius=model_radius, ra=ra_crab, dec=dec_crab)
 
-    WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
+    WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.1)
     spectrum=PowLaw()
     source=PointSource("Pixel",
                            ra=ra_crab,
@@ -59,13 +59,13 @@ if __name__ == "__main__":
     spectrum.piv.fix=True
     spectrum.index=-2.4
     spectrum.index.fix=True
-    WCDA.psf_integration_method="fast"
+    WCDA.psf_integration_method="exact"
     model=Model(source)
     quiet_mode()
     WCDA.set_active_measurements(args.s,args.e)
     data = DataList(WCDA)
     jl = JointLikelihood(model, data, verbose=False)
-    jl.set_minimizer("MINUIT")
+    jl.set_minimizer("ROOT")
 
     def getllhskymap(pixels):
         rr = []
@@ -79,7 +79,7 @@ if __name__ == "__main__":
             try:
                 param_df, like_df = jl.fit(quiet=True)
             except:  # (CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
-                rr.append([pid, 0]) #hp.UNSEEN
+                rr.append([pid, hp.UNSEEN]) #
             else:
                 results = jl.results
                 TS=jl.compute_TS("Pixel",like_df)
@@ -92,10 +92,7 @@ if __name__ == "__main__":
                     else:
                         sig=-np.sqrt(ts)
                 else:
-                    if(K_fitted>=0):
-                        sig=-np.sqrt(-ts)
-                    else:
-                        sig=0 #hp.UNSEEN
+                    sig=hp.UNSEEN
                 rr.append([pid, sig])
         return rr
 
