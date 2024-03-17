@@ -551,7 +551,7 @@ def check_bondary(optmodel):
     return ifatlimit, boundpar
     
 
-def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=False):
+def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True):
     """
         进行拟合
 
@@ -701,7 +701,7 @@ def get_vari_dis(result, var="J0057.Gaussian_on_sphere.sigma"):
     plt.xlim(left=bins.min()-0.2*bins.std())
     plt.ylim(0,nt.max()+0.2*nt.std())
 
-def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=False):
+def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=True):
     """
         进行联合拟合
 
