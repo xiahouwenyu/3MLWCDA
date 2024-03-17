@@ -234,6 +234,7 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
         Returns:
             model
     """ 
+    activate_logs()
     lm = Model()
     opf = pf; osf=sf; okf=kf; oindexf=indexf
     for i in range(len(LHAASOCat)):
@@ -295,14 +296,14 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3
             sigma=None
         if roi is None:
             if (distance(ra1,dec1, ras, decs)<data_radius):
-                log.info(f"{name} in data_radius: {data_radius}")
+                log.info(f"{name} in data_radius: {data_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
                 sf = osf 
                 pf = opf
                 kf = okf
                 indexf = oindexf
                 doit=True
             elif (distance(ra1,dec1, ras, decs)<=model_radius):
-                log.info(f"{name} in model_radius: {model_radius}")
+                log.info(f"{name} in model_radius: {model_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
                 sf = msf 
                 pf = mpf
                 kf = mkf
