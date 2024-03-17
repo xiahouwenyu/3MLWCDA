@@ -636,7 +636,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
                     if it[1]==0:
                         Model.parameters[it[0]].bounds = (dl, ul*ratio)
                     elif it[1]==1:
-                        Model.parameters[it[0]].bounds = (dl/ratio, ul.bounds[1])
+                        Model.parameters[it[0]].bounds = (dl/ratio, ul)
                 log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
             fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
