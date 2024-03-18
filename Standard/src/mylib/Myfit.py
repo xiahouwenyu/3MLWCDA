@@ -208,7 +208,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=20, rtindex=10, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=8, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True):
     """
         获取LHAASO catalog模型
 
@@ -534,16 +534,22 @@ def check_bondary(optmodel):
     ifatlimit = False
     boundpar = []
     for it in freepar.keys():
-        parv = freepar[it].to_dict()["value"]
-        maxv = freepar[it].to_dict()["max_value"]
-        minv = freepar[it].to_dict()["min_value"]
+        if freepar[it].is_normalization and freepar[it].to_dict()["min_value"]>0:
+            parv = np.log(freepar[it].to_dict()["value"])
+            maxv = np.log(freepar[it].to_dict()["max_value"])
+            minv = np.log(freepar[it].to_dict()["min_value"])
+        else:
+            parv = freepar[it].to_dict()["value"]
+            maxv = freepar[it].to_dict()["max_value"]
+            minv = freepar[it].to_dict()["min_value"]
+        
         if abs((maxv - parv)/(maxv-minv)) < 0.01:
             activate_warnings()
             log.warning(f"Parameter {it} is close to the maximum value: {parv:.2e} < {maxv:.2e}")
             silence_warnings()
             ifatlimit=True
             boundpar.append([it,0])
-        if abs((parv - minv)/(maxv-minv)) < 0.01:
+        if abs((parv - minv)/(maxv-minv)) < 0.01 and not freepar[it].is_normalization:
             activate_warnings()
             log.warning(f"Parameter {it} is close to the minimum value: {parv:.2e} > {minv:.2e}")
             silence_warnings()
@@ -911,7 +917,7 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, ):
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=8, rtp=8):
     """
         在一个区域搜索新源
 
@@ -946,6 +952,17 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
     
     tDGE=""
 
+    if detector=="WCDA":
+        kbs=(1e-15, 1e-11)
+        indexbs=(-4, -1)
+        kb=(1e-18, 1e-10)
+        indexb=(-4.5, -0.5)
+    else:
+        kbs=(1e-18, 1e-14)
+        indexbs=(-5.5, -1.5)
+        kb=(1e-18, 1e-14)
+        indexb=(-5.5, -0.5)
+
     if startfromfile is not None:
         lm = load_model(startfromfile)
         exts=[]
@@ -963,7 +980,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         npt=lm.get_number_of_point_sources()
     
     if fromcatalog:
-        lm = getcatModel(ra1, dec1, data_radius, model_radius, rtsigma=2, fixall=fixcatall, detector=detector)
+        lm = getcatModel(ra1, dec1, data_radius, model_radius, fixall=fixcatall, detector=detector,  rtsigma=rtsigma, rtflux=rtflux, rtindex=rtindex, rtp=rtp)
         next = lm.get_number_of_extended_sources()
         if 'Diffuse' in lm.sources.keys():
             next-=1
@@ -974,8 +991,8 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             tDGE="_DGE_free"
             Diffuse = set_diffusebkg(
                             ra1, dec1, model_radius, model_radius,
-                            Kf=False, indexf=False,
-                            name = region_name
+                            Kf=False, indexf=False, indexb=indexb,
+                            name = region_name, Kb=kb
                             )
         else:
             tDGE="_DGE_fix"
@@ -1008,7 +1025,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             name=f"pt{npt}"
             bestmodelnamec=copy.copy(name)
             pt = setsorce(name,lon_array[N_src],lat_array[N_src], 
-                        indexb=(-4,-1),kb=(1e-16, 1e-10),
+                        indexb=indexbs,kb=kbs,
                         fitrange=data_radius)
             lm.add_source(pt)
             bestcache=copy.deepcopy(lm)
@@ -1038,11 +1055,11 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         Modelname=f"{npt}pt+{next}ext"+tDGE
         if ifAsymm:
             ext = setsorce(name,lon_array[N_src],lat_array[N_src], a=0.1, ae=(0,5), e=0.1, eb=(0,1), theta=10, thetab=(-90,90),
-                        indexb=(-4,-1),kb=(1e-16, 1e-10),
+                        indexb=indexbs,kb=kbs,
                         fitrange=data_radius, spat="Asymm")
         else:
-            ext = setsorce(name,lon_array[N_src],lat_array[N_src], sigma=0.1, sb=(0,5),
-                        indexb=(-4,-1),kb=(1e-16, 1e-10),
+            ext = setsorce(name,lon_array[N_src],lat_array[N_src], sigma=0.1, sb=(0,3),
+                        indexb=indexbs,kb=kbs,
                         fitrange=data_radius)
         lm.add_source(ext)
         source.append(ext)
@@ -1117,7 +1134,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=50):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=1000):
     """
         自动生成区域弥散模版
 
@@ -1151,7 +1168,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
         lranges = lr
         branges = br
         l,b = edm2gal(ra1,dec1)
-        l=int(l); b=int(b)
+        # l=int(l); b=int(b)
         ll = np.arange(l-lranges,l+lranges,X_size)
         bb =  np.arange(-branges,branges,Y_size)
         # L,B = np.meshgrid(ll,bb)
