@@ -208,7 +208,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=3, rtflux=3, rtindex=3, rtp=3, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=20, rtindex=10, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True):
     """
         获取LHAASO catalog模型
 
@@ -537,13 +537,13 @@ def check_bondary(optmodel):
         parv = freepar[it].to_dict()["value"]
         maxv = freepar[it].to_dict()["max_value"]
         minv = freepar[it].to_dict()["min_value"]
-        if abs((maxv - parv)/parv) < 0.01:
+        if abs((maxv - parv)/(maxv-minv)) < 0.01:
             activate_warnings()
             log.warning(f"Parameter {it} is close to the maximum value: {parv:.2e} < {maxv:.2e}")
             silence_warnings()
             ifatlimit=True
             boundpar.append([it,0])
-        if abs((parv - minv)/parv) < 0.01:
+        if abs((parv - minv)/(maxv-minv)) < 0.01:
             activate_warnings()
             log.warning(f"Parameter {it} is close to the minimum value: {parv:.2e} > {minv:.2e}")
             silence_warnings()
@@ -625,6 +625,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
                 dl = Model.parameters[it[0]].bounds[0]
                 ul = Model.parameters[it[0]].bounds[1]
                 if any([item in  boundpar[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
+                    ratio=1
                     if it[1]==0:
                         Model.parameters[it[0]].bounds = (dl, ul+(ul-dl)*ratio)
                     elif it[1]==1:
@@ -910,7 +911,7 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9):
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, ):
     """
         在一个区域搜索新源
 
@@ -1012,6 +1013,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             lm.add_source(pt)
             bestcache=copy.deepcopy(lm)
             Modelname=f"{npt}pt+{next}ext"+tDGE
+            lm.display()
             result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
             TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
             TS_all.append(TS["TS_all"])
@@ -1044,6 +1046,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
                         fitrange=data_radius)
         lm.add_source(ext)
         source.append(ext)
+        lm.display()
         result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
         TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
 
@@ -1103,6 +1106,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             bestmodel=bestcache
         else:
             log.info(f"{bestmodelname} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}, no need for more!")
+            lm.display()
             result = fit(region_name+"_iter", bestmodelname, WCDA, bestcache, 0, 5,mini="ROOT")
             TS, TSdatafram = getTSall([], region_name+"_iter", bestmodelname, result, WCDA)
             return bestmodel,result
@@ -1113,7 +1117,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=50):
     """
         自动生成区域弥散模版
 
@@ -1305,7 +1309,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     if Kb:
         Diffusespec.K.bounds=np.array(Kb) * fluxUnit
     else:
-        Diffusespec.K.bounds=np.array((0.001*K,1000*K)) * fluxUnit
+        Diffusespec.K.bounds=np.array((K/kbratio,kbratio*K)) * fluxUnit
 
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
