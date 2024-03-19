@@ -574,6 +574,12 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             >>> [jl,result]
     """ 
     activate_progress_bars()
+    if not os.path.exists(f'../res/{regionname}/'):
+        os.system(f'mkdir ../res/{regionname}/')
+    if not os.path.exists(f'../res/{regionname}/{modelname}/'):
+        os.system(f'mkdir ../res/{regionname}/{modelname}/')
+
+    Model.save(f"../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
     Detector.set_active_measurements(s,e)
     datalist = DataList(Detector)
     jl = JointLikelihood(Model, datalist, verbose=verbose)
@@ -620,7 +626,6 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         jl.set_minimizer(pagmo_minimizer)
     else:
         jl.set_minimizer(mini)
-
     result = jl.fit()
 
     ifatb, boundpar = check_bondary(jl.results.optimized_model)
@@ -630,7 +635,7 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
                 ratio=2
                 dl = Model.parameters[it[0]].bounds[0]
                 ul = Model.parameters[it[0]].bounds[1]
-                if any([item in  boundpar[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
+                if any([item in it[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
                     ratio=1
                     if it[1]==0:
                         Model.parameters[it[0]].bounds = (dl, ul+(ul-dl)*ratio)
@@ -734,6 +739,11 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
             >>> [jl,result]
     """ 
     activate_progress_bars()
+    if not os.path.exists(f'../res/{regionname}/'):
+        os.system(f'mkdir ../res/{regionname}/')
+    if not os.path.exists(f'../res/{regionname}/{modelname}/'):
+        os.system(f'mkdir ../res/{regionname}/{modelname}/')
+    Model.save(f"../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
     for i in range(len(Detector)):
         Detector[i].set_active_measurements(s[i],e[i])
     datalist = DataList(*Detector)
@@ -789,7 +799,7 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         if ifatb:
             for it in boundpar:
                 ratio=2
-                if any([item in  boundpar[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
+                if any([item in it[0] for item in ["lon0", "lat0", "ra", "dec", "sigma", "index"]]):
                     dl = Model.parameters[it[0]].bounds[0]
                     ul = Model.parameters[it[0]].bounds[1]
                     if it[1]==0:
