@@ -19,6 +19,9 @@ try:
     LHAASOCat = pd.read_csv(f"{libdir}/../../data/LHAASO_Catalog_Table1.csv")
     LHAASOCat=LHAASOCat[LHAASOCat[" Ra"]!=' ']
 
+    LHAASOCat2 = pd.read_csv(f"{libdir}/../../data/LHAASO_Catalog_Table2.csv")
+    LHAASOCat2=LHAASOCat2[LHAASOCat2[" Ra"]!=' ']
+
     data = np.recfromtxt(f"{libdir}/../../data/RRL_table3.txt")
     data = np.array(data, dtype='U13')
     FASTHIIcat = pd.DataFrame(data[1:], columns=data[0])
@@ -27,6 +30,9 @@ try:
     fits_file = f"{libdir}/../../data/J_MNRAS_493_351_table1.dat.fits"
     hdul = fits.open(fits_file)
     MCcat = pd.DataFrame(hdul[1].data) 
+    MCcat["Omega"]=180*np.arctan(MCcat["r"]/MCcat["d0"])/np.pi
+
+    WISEHII = pd.read_csv(f"{libdir}/../../data/wise_hii_V2.2.csv")
 except:
     print(f"not a good position for data, no {libdir}/../../data/")
 
@@ -372,7 +378,8 @@ def GetLHAASOcat(xmin,xmax,ymin,ymax, showrepeatkm2a=True):
             本程序catalog标准格式 
             >>> list(zip(ra,dec,name,sizes))
     """
-    LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
+    # LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
+    LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table2.csv")
     xa=[]
     ya=[]
     assoca=[]
@@ -529,7 +536,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
                     ax.add_artist(error_ellipse)
             iflabel+=1
 
-def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=500, sizelhaaso=200, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=True, zmax=30, catname=None, yrange=None):
+def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=0.01, sizelhaaso=0.01, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, sizecut=0.5, sizediscut=1/3,  bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=True, zmax=30, catname=None, yrange=None, sizeunit=1, considersize=True):
     """
         画图并比较 LHAASOCat 以及任何 Dataframe格式的cat
 
@@ -548,22 +555,30 @@ def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:b
             筛选后的Dataframe
     """
     #load LHAASO
-    LHAASOCat=LHAASOCat[LHAASOCat[" Ra"].values!=' ']
-    lhra = LHAASOCat[" Ra"].values; lhra=lhra[lhra!=' ']; lhra=lhra.astype(np.float)
-    lhdec = LHAASOCat[" Dec"].values; lhdec=lhdec[lhdec!=' ']; lhdec=lhdec.astype(np.float)
-    name = LHAASOCat["Source name"].values
-    lhl, lhb = edm2gal(lhra, lhdec)
+    if catinfo1 is None:
+        LHAASOCat=LHAASOCat[LHAASOCat[" Ra"].values!=' ']
+        lhra = LHAASOCat[" Ra"].values; lhra=lhra[lhra!=' ']; lhra=lhra.astype(np.float)
+        lhdec = LHAASOCat[" Dec"].values; lhdec=lhdec[lhdec!=' ']; lhdec=lhdec.astype(np.float)
+        lhsize = LHAASOCat[" r39"].values; lhsize=lhsize[lhsize!=' ']; lhsize=lhsize.astype(np.float)
+        name = LHAASOCat["Source name"].values
+        lhl, lhb = edm2gal(lhra, lhdec)
+    else:
+        lhra = LHAASOCat[catinfo1["RA"]].values; lhra=lhra.astype(np.float)
+        lhdec = LHAASOCat[catinfo1["DEC"]].values; lhdec=lhdec.astype(np.float)
+        lhsize = LHAASOCat[catinfo1["size"]].values; lhsize=lhsize.astype(np.float)
+        name = LHAASOCat[catinfo1["name"]].values
+        lhl, lhb = edm2gal(lhra, lhdec)
 
     #load anycat
     name = anycat[catinfo["name"]].values
     RA = np.array(anycat[catinfo["RA"]].values, dtype="float")
     DEC = np.array(anycat[catinfo["DEC"]].values, dtype="float")
     if "color" in catinfo.keys():
-        color = np.array(anycat[catinfo["color"]].values, dtype="float")
+        color = np.array(anycat[catinfo["color"]].values, dtype="float")/np.max(np.array(anycat[catinfo["color"]].values, dtype="float"))
     else:
         color = coloranycat
     if "size" in catinfo.keys():
-        size = np.array(anycat[catinfo["size"]].values, dtype="float")
+        size = np.array(anycat[catinfo["size"]].values, dtype="float")/sizeunit
     else:
         size = sizecat*np.ones(len(RA))
     l,b=RA,DEC
@@ -573,10 +588,15 @@ def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:b
     #compute dist
     RA1, RA2 = np.meshgrid(l, lhl)
     DEC1, DEC2 = np.meshgrid(b, lhb)
+    sz1, sz2 = np.meshgrid(size, lhsize)
     distant = skyangle(RA1,DEC1,RA2,DEC2)
+    if considersize:
+        cut = ( (distant<distcut+sizediscut*np.sqrt(sz1**2+sz2**2)) & (abs(sz1-sz2)/np.max([sz1, sz2], axis=0)<sizecut) )
+    else:
+        cut = distant<distcut
     if ifcut:
-        indexlhaaso = np.where(distant<distcut)[0]
-        indexanycat = np.where(distant<distcut)[1]
+        indexlhaaso = np.where(cut)[0]
+        indexanycat = np.where(cut)[1]
     else:
         indexlhaaso = np.where(distant<100000)[0]
         indexanycat = np.where(distant<100000)[1]
@@ -589,23 +609,45 @@ def drawcatsimple(LHAASOCat, anycat, colorlhaaso = "tab:cyan",coloranycat="tab:b
         Mymap.hpDraw("region_name", "Modelname", map2,0,0,skyrange=skyrange,
             colorlabel="Significance", contours=[1000], save=False, cat={}, color="Fermi", zmax=zmax, xsize=2048)
     else:
-        size=size/10
-        sizelhaaso=sizelhaaso/10
+        # size=size/10
+        # sizelhaaso=sizelhaaso/10
         plt.figure(figsize=(10,3),dpi=300)
     if not catname:
         catname=catinfo["name"]
-    plt.scatter(l[indexanycat], b[indexanycat], s=size[indexanycat], c=color[indexanycat], alpha=0.8,label=catname)
-    plt.colorbar(label=catinfo["color"])
-    plt.scatter(lhl[indexlhaaso], lhb[indexlhaaso], s=sizelhaaso, c=colorlhaaso,label="LHAASOcat", alpha=0.5)
+    ax = plt.gca()
+    import matplotlib.cm as cm
+    from matplotlib.colors import to_hex
+    from matplotlib.patches import Ellipse
+
+    cmap = cm.get_cmap('viridis')  
+    sm = plt.cm.ScalarMappable(cmap=cmap)
+    color_rgba = sm.to_rgba(color[indexanycat][0])
+    color_hex = to_hex(color_rgba)
+    error_ellipse = Ellipse((l[indexanycat][0], b[indexanycat][0]), width=2*size[indexanycat][0]/np.cos(np.radians(b[indexanycat][0])), height=2*size[indexanycat][0], edgecolor=to_hex(color_hex), facecolor=to_hex(color_hex), fill=False, linestyle="-",  alpha=1, linewidth=2, label=catname)
+    ax.add_artist(error_ellipse)
+    for i in tqdm(range(len(l[indexanycat]))):
+        color_rgba = sm.to_rgba(color[indexanycat][i])
+        color_hex = to_hex(color_rgba)
+        # plt.scatter(l[indexanycat], b[indexanycat], s=size[indexanycat], c=color[indexanycat], alpha=0.8,label=catname)
+        error_ellipse = Ellipse((l[indexanycat][i], b[indexanycat][i]), width=2*size[indexanycat][i]/np.cos(np.radians(b[indexanycat][i])), height=2*size[indexanycat][i], edgecolor=to_hex(color_hex), facecolor=to_hex(color_hex), fill=False,linestyle="-", linewidth=2,  alpha=1)
+        ax.add_artist(error_ellipse)
+    # plt.colorbar(label=catinfo["color"])
+
+    error_ellipse = Ellipse((lhl[indexlhaaso][0], lhb[indexlhaaso][0]), width=2*lhsize[indexlhaaso][0]/np.cos(np.radians(lhb[indexlhaaso][0])), height=2*lhsize[indexlhaaso][0], edgecolor=colorlhaaso, facecolor=colorlhaaso, fill=False,linestyle="-", alpha=1, linewidth=2, label="LHAASOcat")
+    ax.add_artist(error_ellipse)
+    for i in tqdm(range(len(lhl[indexlhaaso]))):
+        error_ellipse = Ellipse((lhl[indexlhaaso][i], lhb[indexlhaaso][i]), width=2*lhsize[indexlhaaso][i]/np.cos(np.radians(lhb[indexlhaaso][i])), height=2*lhsize[indexlhaaso][i], edgecolor=colorlhaaso, facecolor=colorlhaaso, fill=False,linestyle="-", linewidth=2, alpha=1)
+        ax.add_artist(error_ellipse)
+    # plt.scatter(lhl[indexlhaaso], lhb[indexlhaaso], s=sizelhaaso, c=colorlhaaso,label="LHAASOcat", alpha=0.5)
     plt.xlabel(r"$l^{o}$")
     plt.ylabel(r"$b^{o}$")
     if yrange:
         plt.ylim(yrange[0], yrange[1])
     plt.legend()
 
-    for i in tqdm(range(len(np.where(distant<0.2)[0]))):
-        indexlhaaso = np.where(distant<0.2)[0][i]
-        indexYMC = np.where(distant<0.2)[1][i]
+    for i in tqdm(range(len(np.where(cut)[0]))):
+        indexlhaaso = np.where(cut)[0][i]
+        indexYMC = np.where(cut)[1][i]
         # print(indexlhaaso, indexYMC, distant[indexlhaaso][indexYMC], anycat.iloc[indexYMC][catinfo["name"]])
         if i!=0:
             resultsup=results

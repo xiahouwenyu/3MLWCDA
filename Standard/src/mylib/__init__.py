@@ -2,7 +2,7 @@ import sys
 import time
 from tqdm import tqdm
 
-progress_bar = tqdm(total=37, desc="Start!!!", position=0, leave=True)
+progress_bar = tqdm(total=38, desc="Start!!!", position=0, leave=True)
 
 
 sys.path.append(__file__[:-12])
@@ -31,6 +31,8 @@ progress_bar.update(1); progress_bar.set_description("Load Mylcmodel")
 import Mylcmodel
 progress_bar.update(1); progress_bar.set_description("Load Myspeedup")
 import Myspeedup
+progress_bar.update(1); progress_bar.set_description("Load Mystat")
+import Mystat
 
 progress_bar.update(1); progress_bar.set_description("Load importlib")
 import importlib
@@ -59,6 +61,8 @@ progress_bar.update(1); progress_bar.set_description("ReLoad Mylcmodel")
 importlib.reload(Mylcmodel)
 progress_bar.update(1); progress_bar.set_description("ReLoad Myspeedup")
 importlib.reload(Myspeedup)
+progress_bar.update(1); progress_bar.set_description("ReLoad Mystat")
+importlib.reload(Mystat)
 
 progress_bar.update(1); progress_bar.set_description("Load sub from Mycoord")
 from Mycoord import *
@@ -84,5 +88,7 @@ progress_bar.update(1); progress_bar.set_description("Load sub from Mylcmodel")
 from Mylcmodel import *
 progress_bar.update(1); progress_bar.set_description("Load sub from Myspeedup")
 from Myspeedup import *
+progress_bar.update(1); progress_bar.set_description("Load sub from Mystat")
+from Mystat import *
 
 print("Yourlib init successfully!!!")

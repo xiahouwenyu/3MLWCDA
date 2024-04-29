@@ -3,12 +3,11 @@ import matplotlib.pyplot as plt
 import healpy as hp
 import numpy as np
 
-import MapPalette
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 from Mycatalog import *
 from Mysigmap import *
-
+import MapPalette
 from tqdm import tqdm
 
 from Mycoord import *
@@ -220,7 +219,14 @@ def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-
     if ifcolorbar:
         plt.colorbar()
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename=""):
+
+def smooth_array(arr):
+    zero_indices = np.where(arr == 0)[0]
+    for i in zero_indices:
+        arr[i] = np.mean([arr[max(0, i-1)], arr[min(len(arr), i+1)]])
+    return arr
+
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False):
     """Draw healpixmap.
 
         Args:
@@ -230,6 +236,7 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
         Returns:
             fig
     """
+    map = smooth_array(map)
     if skyrange==None:
         ymax = dec+rady/2
         ymin = dec-rady/2
@@ -273,8 +280,8 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     fig = plt.figure(dpi=300, figsize=figsize)
     plt.imshow(img, origin="lower",extent=[xmin,xmax,ymin,ymax],vmin=dMin,vmax=dMax, cmap=colormap) #
 
-
-    plt.grid(linestyle="--")
+    if grid:
+        plt.grid(linestyle="--")
     cbar = plt.colorbar(format='%.2f',orientation="horizontal",shrink=0.6,
                             fraction=0.1,
                             #aspect=25,

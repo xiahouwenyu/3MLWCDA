@@ -33,6 +33,8 @@ Standard/src/*.txt
 Standard/src/*.yaml
 Standard/src/*.root
 Standard/src/temp
+Standard/src/temp2
+Standard/src/GRB221009A
 !Standard/src/Justdraw.ipynb
 !Standard/src/tools/llh_skymap/sourcetxt/*ipynb
 !Standard/src/3MLnew_Crab.ipynb

@@ -51,8 +51,8 @@ def SSQPL(x,par):
 def gaussian(x, amplitude, mean, stddev):
     return amplitude * np.exp(-((x - mean) / 2 / stddev)**2)
 
-def poly(x, a, b, c):
-    return a*x**2 + b*x + c
+def poly(x, a, b, c, d):
+    return d*x**3 + c*x**2 + b*x + a
 
 # Tools 
 def raw2array(data):
@@ -563,9 +563,9 @@ class lc(object):
         if self.linebkg is not None:
             self.bkgp = self.linebkg[self.ebin].GetParameters()
         return self.bkgp
-    def drawlc(self, t1 = 230, t2 = 334.8576):
+    def drawlc(self, t1 = 230, t2 = 334.8576, drawbkg = False):
         ax = plt.axes([0.1, 0.75, 0.65, 0.2])
-        if self.bkg is not None:
+        if self.bkg is not None and not drawbkg:
             self.counts_nt = self.counts-np.array(self.bkg)
         else:
             self.counts_nt = self.counts
@@ -613,7 +613,7 @@ class lc(object):
         if plot:
             plt.plot(self.time[rs:re], self.bkg[rs:re])
             for i, par in enumerate(params):
-                ll+=f"par1: {par:.2f} ± {np.sqrt(covariance[i][i]):.2f} . "
+                ll+=f"par{i}: {par:.2e} ± {np.sqrt(covariance[i][i]):.2e} . "
             plt.plot(xx, func(xx, *params), label=ll)
             plt.legend()
         if asbkg:

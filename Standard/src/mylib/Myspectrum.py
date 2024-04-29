@@ -418,7 +418,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
     activate_logs()
     return Flux_WCDA, results
 
-def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None):
+def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None, scale=1):
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
     """
         从能谱点矩阵画能谱点
@@ -453,6 +453,12 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
         npd = Flux_WCDA[:,3]/Flux_WCDA[:,6]>=threshold
     else:
         npd = Flux_WCDA[:,7]>=threshold
+
+    Flux_WCDA[:,3] = Flux_WCDA[:,3]*scale
+    Flux_WCDA[:,4] = Flux_WCDA[:,4]*scale
+    Flux_WCDA[:,5] = Flux_WCDA[:,5]*scale
+    Flux_WCDA[:,6] = Flux_WCDA[:,6]*scale
+    
     if not usexerr:
         if aserror:
             ax.errorbar(Flux_WCDA[:,0][npd],1e9*Flux_WCDA[:,3][npd]*Flux_WCDA[:,0][npd]**2,\
@@ -703,6 +709,6 @@ def spec2naima(dir, data0057):
     dataforlb[5] = data0057[3]
     dataforlb[6] = data0057[4]
     dataforlb[7] = data0057[5]
-    header = "E(TeV) E_68s E_68e flux(TeV/cm**2/s) fluxe fluxel fluxeu TS"
+    header = "E(TeV) E_68s E_68e flux(TeV/cm**2/s) fluxe fluxel fluxeu Significance"
     np.savetxt(dir,dataforlb.T, fmt='%.4e', header=header)
     return dataforlb

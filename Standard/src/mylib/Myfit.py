@@ -208,7 +208,7 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=8, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=8, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False):
     """
         获取LHAASO catalog模型
 
@@ -234,7 +234,10 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
         Returns:
             model
     """ 
+    from Mycatalog import LHAASOCat
     activate_logs()
+    if ifext_mt_2:
+        LHAASOCat=LHAASOCat2
     lm = Model()
     opf = pf; osf=sf; okf=kf; oindexf=indexf
     for i in range(len(LHAASOCat)):
@@ -543,6 +546,9 @@ def check_bondary(optmodel):
             maxv = freepar[it].to_dict()["max_value"]
             minv = freepar[it].to_dict()["min_value"]
         
+        if minv is None or maxv is None:
+            continue
+
         if abs((maxv - parv)/(maxv-minv)) < 0.01:
             activate_warnings()
             log.warning(f"Parameter {it} is close to the maximum value: {parv:.2e} < {maxv:.2e}")
@@ -558,7 +564,7 @@ def check_bondary(optmodel):
     return ifatlimit, boundpar
     
 
-def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True):
+def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True):
     """
         进行拟合
 
@@ -580,15 +586,16 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
         os.system(f'mkdir ../res/{regionname}/{modelname}/')
 
     Model.save(f"../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
-    Detector.set_active_measurements(s,e)
+    if s is not None and e is not None:
+        Detector.set_active_measurements(s,e)
     datalist = DataList(Detector)
     jl = JointLikelihood(Model, datalist, verbose=verbose)
-    if mini == "grid":
+    if mini == "grid" or grids is not None:
         # Create an instance of the GRID minimizer
         grid_minimizer = GlobalMinimization("grid")
 
         # Create an instance of a local minimizer, which will be used by GRID
-        local_minimizer = LocalMinimization("ROOT")
+        local_minimizer = LocalMinimization(mini)
 
         # Define a grid for mu as 10 steps between 2 and 80
         my_grid = grids #{Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
@@ -675,8 +682,12 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             os.system(f'mkdir ../res/{regionname}/')
         if not os.path.exists(f'../res/{regionname}/{modelname}/'):
             os.system(f'mkdir ../res/{regionname}/{modelname}/')
-        fig = Detector.display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True)
-        fig.savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+        
+        try:
+            fig = Detector.display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True)
+            fig.savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+        except:
+            pass
         Model.save(f"../res/{regionname}/{modelname}/Model.yml", overwrite=True)
         jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
         jl.results.optimized_model.save(f"../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
@@ -687,6 +698,10 @@ def fit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False,
             f.write("\nFixed parameters:\n")
             for l in fixedpars:
                 f.write("%s\n" % l)
+            f.write("\nStatistical measures:\n")
+            f.write(str(result[1].iloc[0])+"\n")
+            f.write(str(jl.results.get_statistic_measure_frame().to_dict()))
+            
         result[0].to_html(f"../res/{regionname}/{modelname}/Results_detail.html")
         result[0].to_csv(f"../res/{regionname}/{modelname}/Results_detail.csv")
         # new_model_reloaded = load_model("./%s/Model.yml"%(time1))
@@ -816,7 +831,7 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
                     elif it[1]==1:
                         Model.parameters[it[0]].bounds = (dl/ratio, ul.bounds[1])
                 log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
-            fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
+            jointfit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
     freepars = []
     fixedpars = []
@@ -859,6 +874,29 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         # results_reloaded = load_analysis_results("./%s/Results.fits"%(time1))
 
     return [jl,result]
+
+def reload_modelname(modelpath):
+    activate_warnings()
+    try:
+        results = load_analysis_results(modelpath+"/Results.fits")
+    except:
+        log.warning("No results found")
+        results = None
+
+    try:
+        lmini = load_model(modelpath+"/Model_init.yml")
+    except:
+        log.warning("No initial model found")
+        lmini = None
+
+    try:
+        lmopt = load_model(modelpath+"/Model_opt.yml")
+    except:
+        log.warning("No optimized model found")
+        lmopt = None
+
+    silence_warnings()
+    return results, lmini, lmopt
 
 def getTSall(TSlist, region_name, Modelname, result, WCDA):
     """

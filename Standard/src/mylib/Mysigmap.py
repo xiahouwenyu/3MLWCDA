@@ -234,7 +234,7 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
 
 
 import math
-def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C", ax=None, label=None):
+def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C", ax=None, label=None, lw=None):
     """
         画椭圆
 
@@ -263,7 +263,7 @@ def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C"
         x,y = edm2gal(x,y)
     if ax is None:
         ax=plt.gca()
-    ax.plot(x,y, color=color, linestyle=linestyle,alpha=alpha, label=label)
+    ax.plot(x,y, color=color, linestyle=linestyle,alpha=alpha, label=label, linewidth=lw)
 
 
 def high_pass_filter(image, cutoff_freq):
@@ -499,7 +499,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
         fits.writeto(name, np.array(array), wcs2.to_header(), overwrite=True)
 
 def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "markercolor": "grey", "labelcolor": "black", "angle": 60, "catext": 1}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
-    colors=MapPalette.colorall 
+    colors=None, grid=False
         ):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
@@ -516,9 +516,12 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad,
-            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color, Drawdiff=Drawdiff
+            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color, Drawdiff=Drawdiff, grid=grid
             )
     ax = plt.gca()
+    if colors is None:
+        import MapPalette
+        colors = MapPalette.colorall 
     # colors=list(mcolors.TABLEAU_COLORS.keys()) #CSS4_COLORS
     # colors=['tab:red',
     #         'tab:blue',
