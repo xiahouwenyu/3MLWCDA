@@ -290,7 +290,6 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     cbar.set_label(colorlabel)
     if np.max(img)<4:
         tiks = np.concatenate(([np.min(img)],[np.mean(img)],[np.max(img)]))
-        
     elif np.max(img)<6:
         tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[np.max(img)]))
     elif np.max(img)<20:
@@ -300,9 +299,17 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     else:
         tiks = np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)]))
     if zmax !=None:
-        tiks[tiks>=zmax]=zmax
+        if tiks[tiks>=zmax] != []:
+            tiks[-1]=zmax
+        else:
+            tiks=np.concatenate((tiks,[zmax]))
     if zmin !=None:
-        tiks[tiks<=zmin]=zmin
+        if tiks[tiks<=zmin] != []:
+            tiks[0]=zmin
+        else:
+            tiks= np.concatenate(([zmin],tiks))
+
+        
 
     cbar.set_ticks(tiks)
 

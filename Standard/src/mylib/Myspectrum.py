@@ -85,7 +85,7 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2, iffixtans=False, bondaryrange=100):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -150,7 +150,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
     if not nCL:
         if ifpowerlawM:
             lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)    
-            if int(i) >= 10 and TSflux<threshold**2:
+            if int(i) >= scanbin and TSflux<threshold**2:
                 ub, mewmini = get_upperlimit(result2[0], kparname, CL=CL)
                 if mewmini is not None:
                     result2[1][0].iloc[0,0] = mewmini
@@ -350,7 +350,7 @@ def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False, threshold=2, iffixtans=False):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False):
     """
         获取某个源的能谱点
 
@@ -389,7 +389,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold, iffixtans=iffixtans)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans)
         # try:
         #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
         # except Exception as e:
@@ -511,7 +511,7 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
             ax.scatter(Flux_WCDA[:,0][~npd],1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,6][~npd])*Flux_WCDA[:,0][~npd]**2,marker=".",c=color)
         
 
-def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1, usexerr = False, ncut=False, scale=1, subplot=None, index=-2):
+def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res/J0248/cdiff2D+2pt+freeDGE_0-5/Spectrum_J0248_data.txt", label="", color="red", aserror=False, ifsimpleTS=False, threshold=2, alpha=1, usexerr = False, ncut=False, scale=1, subplot=None, index=-2, marker=".", upperscale=None):
     """
         从之前Draw_sepctrum_points 保存在res文件夹中的能谱点txt文件画能谱, 参数和Draw_sepctrum_points类似
 
@@ -546,6 +546,10 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     data[3] = data[3]*scale*data[0]**(-index-2)
     data[4] = data[4]*scale*data[0]**(-index-2)
 
+    if upperscale is not None:
+        data[2][~npd] = upperscale*(data[1][~npd]+1.96*data[3][~npd])
+        data[4][~npd] = upperscale*(data[1][~npd]+1.96*data[3][~npd])
+
     if not usexerr:
         if aserror:
             ax.errorbar(data[0][npd],data[1][npd],
@@ -559,7 +563,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=alpha)
-            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=marker,c=color, alpha=alpha)
         else:
             try: 
                 ax.errorbar(data[0][npd],data[1][npd],data[4][npd],fmt="go", label=label, color=color, alpha=alpha)
@@ -579,7 +583,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
                                 markeredgecolor=color, markerfacecolor=color,
                                 linewidth=2.5, linestyle="None", alpha=alpha)
                 
-            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=marker,c=color, alpha=alpha)
     else:
         if aserror:
             ax.errorbar(data[0][npd],data[1][npd],
@@ -595,7 +599,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,
                             linewidth=2.5, linestyle="None", alpha=alpha)
-            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[3][~npd],marker=marker,c=color, alpha=alpha)
         else:
             try: 
                 ax.errorbar(data[0][npd],data[1][npd],
@@ -622,7 +626,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
                                 markeredgecolor=color, markerfacecolor=color,
                                 linewidth=2.5, linestyle="None", alpha=alpha)
                 
-            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=".",c=color, alpha=alpha)
+            ax.scatter(data[0][~npd],data[1][~npd]+1.96*data[2][~npd],marker=marker,c=color, alpha=alpha)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
