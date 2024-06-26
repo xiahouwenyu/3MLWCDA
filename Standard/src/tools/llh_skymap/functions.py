@@ -1692,7 +1692,7 @@ class Band_Calderone(Function1D, metaclass=FunctionMeta):
         return norm * flux
 
 
-class Log_parabola(Function1D, metaclass=FunctionMeta):
+class Log_parabola(Function1D, metaclass=FunctionMeta):  #            transformation : log10
     r"""
     description :
 
@@ -1709,8 +1709,7 @@ class Log_parabola(Function1D, metaclass=FunctionMeta):
             desc : Normalization
             initial value : 1.0
             is_normalization : True
-            transformation : log10
-            min : 1e-30
+            min : -1e5
             max : 1e5
 
         piv :

@@ -22,20 +22,31 @@ def go(args):
     response = args.rsfile#"/home/lhaaso/tangruiyi/analysis/cocoonstuff/maptreeinc/DR_crabPSF_newmap_pinc_neomc_1pe_bin1to4-6_bin2to78_bin12to9-11_bin13to6-11.root"
     #ra_Cocoon, dec_Cocoon = 307.17, 41.17
     # ra_crab, dec_crab = 83.694, 21.98  #crab
-    data_radius = 9.0  # in degree 
-    model_radius = 10.0
+    data_radius = 6.5  # in degree 
+    model_radius = 7
     #Splitiing the sky into 768 equal-solid-angle areas as the pixels ranged in nested healpix map with nside=8
     no=args.area
     #vec_center=hp.pix2vec(2**3,no,nest=True)
     clat_c,lon_c=hp.pix2ang(2**3,no,nest=True)
     dec_c=90-clat_c*180/np.pi
     ra_c=lon_c*180/np.pi
-    roi = HealpixConeROI(data_radius=data_radius, model_radius=model_radius, ra=ra_c, dec=dec_c)
+    print(ra_c, dec_c)
+    # if dec_c<=-20:
+    #     dec_c=-15
+    #     data_radius = 15.0  # in degree 
+    #     model_radius = 17.0
+    # if dec_c>=80:
+    #     dec_c=75
+    #     data_radius = 15.0  # in degree 
+    #     model_radius = 17.0
+    
     name=args.name
-    #roi=HealpixMapROI(ra=ra_Cocoon,dec=dec_Cocoon,data_radius=data_radius,model_radius=model_radius, roifile='/home/lhaaso/tangruiyi/analysis/cocoonstuff/roi.fits')
+    # roi=HealpixMapROI(ra=ra_Cocoon,dec=dec_Cocoon,data_radius=data_radius,model_radius=model_radius, roifile='/home/lhaaso/tangruiyi/analysis/cocoonstuff/roi.fits')
+    roi = HealpixConeROI(data_radius=data_radius, model_radius=model_radius, ra=ra_c, dec=dec_c)
     WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
+    WCDA.set_active_measurements(0,6)
     # Use from bin 1 to bin 9
-    WCDA.set_active_measurements(0,5)
+    
     # WCDA.set_active_measurements(2,7)
 
 #    pixid=roi.active_pixels(roi._original_nside)
@@ -56,15 +67,16 @@ def go(args):
        # source.position.ra.fix=True
         #source.position.dec=dec_pix
       #  source.position.dec.fix=True 
-    spectrum.K=1e-15*fluxUnit
+    spectrum.K=1e-12*fluxUnit
     spectrum.K.fix=False
-    spectrum.K.bounds=(-1e-13*fluxUnit, 1e-13*fluxUnit)
+    spectrum.K.bounds=(-1e-13*fluxUnit, 1e-10*fluxUnit)
     spectrum.piv= 3.*u.TeV
     spectrum.piv.fix=True
     spectrum.index=-2.6
     spectrum.index.fix=True
-    WCDA.psf_integration_method="fast"
+    
     model=Model(source)
+    WCDA.psf_integration_method="fast"
 
 #        actbin=args.actBin
     for i in range(len(pixid)):
@@ -72,47 +84,59 @@ def go(args):
         print(i)
         pid=pixid[i]
         ra_pix , dec_pix = hp.pix2ang(1024,pid,lonlat=True)
-        if(dec_pix<-20. or dec_pix>80.):
+        if(dec_pix<=-20. or dec_pix>=80.):
             sig=hp.UNSEEN
-            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
-                fs.write(str(pid)+" "+str(sig)+"\n")
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/sig_no%i.txt"%no,"a+") as fs:
+                fs.write(str(pid)+" "+str(sig)+" "+str(hp.UNSEEN)+"\n")
             continue
+        if dec_c<=-13.5:
+            roi = HealpixConeROI(data_radius=np.max([1.5,dec_pix+19.5]), model_radius=np.max([2,dec_pix+19.5]), ra=ra_pix, dec=dec_pix)
+            WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
+            WCDA.set_active_measurements(0,6)
+            WCDA.psf_integration_method="exact"
+        elif dec_c>=73.5:
+            roi = HealpixConeROI(data_radius=np.max([1.5,79.5-dec_pix]), model_radius=np.max([2,79.5-dec_pix]), ra=ra_pix, dec=dec_pix)
+            WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
+            WCDA.set_active_measurements(0,6)
+            WCDA.psf_integration_method="exact"
         source.position.ra=ra_pix
         source.position.ra.fix=True
         source.position.dec=dec_pix
         source.position.dec.fix=True
-        WCDA.set_active_measurements(0,5)
+        WCDA.set_active_measurements(0,6)
         # WCDA.set_active_measurements(2,7)
         data = DataList(WCDA)
         jl = JointLikelihood(model, data, verbose=False)
         jl.set_minimizer("ROOT")
         try:
             param_df, like_df = jl.fit()
-        except: # (threeML.minimizer.minimization.CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
+        except Exception as e: # (threeML.minimizer.minimization.CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
+            print(no, pid, e, ra_pix, dec_pix)
             sig=0 #hp.UNSEEN
+            K_fitted=0
             errid=pid
-            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/erridlist_%s.txt"%name,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/erridlist_%s.txt"%name,"a+") as fs:
                 fs.write(str(errid)+"\n")
         else:
             results = jl.results
             # #WCDA.get_log_like()
-            # TS=jl.compute_TS("Pixel",like_df)
-            # ts=TS.values[0][2]
+            TS=jl.compute_TS("Pixel",like_df)
+            ts=TS.values[0][2]
             # print("TS:",ts)
-            # #ts_list.append(ts)
+            # ts_list.append(ts)
             K_fitted=results.optimized_model.Pixel.spectrum.main.Powerlaw.K.value
-            sig = K_fitted
-            # if(ts>=0):
-            #     if(K_fitted>=0):
-            #         sig=np.sqrt(ts)
-            #     else:
-            #         sig=-np.sqrt(ts)
-            # else:
-            #     sig=0
+            # sig = K_fitted
+            if(ts>=0):
+                if(K_fitted>=0):
+                    sig=np.sqrt(ts)
+                else:
+                    sig=-np.sqrt(ts)
+            else:
+                sig=0
             
           #  sig_list.append(sig)
-        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
-            fs.write(str(pid)+" "+str(sig)+"\n")
+        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/sig_no%i.txt"%no,"a+") as fs:
+            fs.write(str(pid)+" "+str(sig)+" "+str(K_fitted)+"\n")
         
 #    np.savetxt(r'siglist_%s.txt'%name,sig_list)
 #    np.savetxt(r'erridlist_%s.txt'%name,errid_list,fmt='%i')

@@ -472,7 +472,7 @@ class lc(object):
     funcfile=""
     ffunc=None
     upfile=None
-    bins=12
+    bins=16
     ebin=0
     time=np.array([])
     counts=np.array([])
@@ -514,6 +514,11 @@ class lc(object):
                 else:
                     self.time = self.upfile[f"mjd{ebin};1"].axis().centers()
                     self.counts = self.upfile[f"mjd{ebin};1"].values()
+                    if bkgfile is not None:
+                        bkgr = uproot.open(bkgfile)
+                        self.bkg = bkgr[f"mjd{ebin};1"].values()
+                        if bkgscale is not None:
+                            self.bkg = self.bkg * bkgscale
 
                 if funcfile is not None:
                     self.funcfile = funcfile
@@ -541,7 +546,7 @@ class lc(object):
             self.te=self.t0+self.nt*self.dt
 
     def __add__(self, others):
-        newclass = lc()
+        newclass = self
         if len(self.time) > len(others.time):
             newclass.time = self.time
         else:
@@ -552,7 +557,7 @@ class lc(object):
         if self.bkg is not None:
             newclass.bkg = self.bkg
         for i, tt in enumerate(tqdm(others.time)):
-            indices = np.where(np.isclose(self.time, tt, rtol=tolerance, atol=tolerance))[0]
+            indices = np.where(np.isclose(self.time, tt, rtol=tolerance, atol=tolerance))[0][0]
             newclass.counts[indices] = self.counts[indices]+others.counts[i]
             if others.bkg is not None:
                 newclass.bkg[indices] = self.bkg[indices]+others.bkg[i]
@@ -564,6 +569,7 @@ class lc(object):
             self.bkgp = self.linebkg[self.ebin].GetParameters()
         return self.bkgp
     def drawlc(self, t1 = 230, t2 = 334.8576, drawbkg = False):
+        plt.figure()
         ax = plt.axes([0.1, 0.75, 0.65, 0.2])
         if self.bkg is not None and not drawbkg:
             self.counts_nt = self.counts-np.array(self.bkg)
@@ -603,17 +609,19 @@ class lc(object):
         plt.plot(xx, func(xx, *params), label=ll)
         plt.legend()
 
-    def fitbkg(self, func, t1, t2, p0=None, asbkg=True, plot=False):
+    def fitbkg(self, func, t1, t2, p0=None, asbkg=True, plot=False, rebin=1):
         from scipy.optimize import curve_fit
         rs = int((t1-self.t0)/self.dt)
         re = int((t2-self.t0)/self.dt)
-        params, covariance = curve_fit(func, self.time[rs:re], self.bkg[rs:re], p0=p0)
+        params, covariance = curve_fit(func, nprebinmean(self.time[rs:re], rebin), nprebin(self.bkg[rs:re], rebin)/rebin, p0=p0)
+        # print(rs, re, self.dt, self.time[rs:re], self.bkg[rs:re])
         xx = np.arange(t1,t2,0.1)
         ll=""
         if plot:
-            plt.plot(self.time[rs:re], self.bkg[rs:re])
+            plt.figure()
             for i, par in enumerate(params):
                 ll+=f"par{i}: {par:.2e} ± {np.sqrt(covariance[i][i]):.2e} . "
+            plt.plot(nprebinmean(self.time[rs:re], rebin), nprebin(self.bkg[rs:re], rebin)/rebin)
             plt.plot(xx, func(xx, *params), label=ll)
             plt.legend()
         if asbkg:

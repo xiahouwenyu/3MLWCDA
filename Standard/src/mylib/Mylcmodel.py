@@ -91,6 +91,60 @@ class SBPL(Function1D, metaclass=FunctionMeta):
             result[x<t0]=0
             return result
         
+class TPLM(Function1D, metaclass=FunctionMeta): ##An alternative way to describe the GRB X-ray afterglow is a two-component phenomenological model proposed by O’Brien et al. (2006)andWillingale et al. (2007).
+        r"""
+        description :
+            A  TPLM
+        latex : $  F0 * pow(pow((x - t0) / tb, -omega * alpha1) + pow((x - t0) / tb, -omega * alpha2), -1 / omega) $
+        parameters :
+            Fc :
+                desc : Normalization
+                initial value : 1000.0
+                is_normalization : True
+                min : 1e-5
+                max : 1e20
+                delta : 0.1
+
+            alpha_c :
+                desc : index 1
+                initial value : 2
+
+            Tc :
+                desc : break time
+                initial value : 100
+
+            tc :
+                desc : start
+                initial value : 20
+            
+            t0 :
+                desc : start time
+                initial value : 226
+        """
+
+
+        def _set_units(self, x_unit, y_unit):
+            # The index is always dimensionless
+            self.Fc.unit = u.dimensionless_unscaled
+            self.alpha_c.unit =  u.dimensionless_unscaled
+
+            # The pivot energy has always the same dimension as the x variable
+            # The normalization has the same units as the y
+
+            self.Tc.unit = u.s
+            self.tc.unit = u.s
+            self.t0.unit = u.s
+
+        
+        def evaluate(self, x, Fc, alpha_c, Tc, tc, t0):
+            results = np.zeros(len(x))
+            x=x-t0
+            Tc=Tc+t0
+            results[x < Tc] = Fc * np.exp(alpha_c - (x[x < Tc] * alpha_c / Tc)) * np.exp(-tc / x[x < Tc])
+            results[x >= Tc] = Fc * (x[x >= Tc] / Tc) ** -alpha_c * np.exp(-tc / x[x >= Tc])
+            results[x<=0]=0
+            return results
+        
 from astromodels.functions.function import Function1D, FunctionMeta, ModelAssertionViolation
 import astropy.units as u
 

@@ -1,0 +1,25 @@
+,0
+Source name,1LHAASO J1825-1418 
+ components, WCDA 
+ Ra,276.29
+ Dec,-14.32
+ positional error,0.19
+ r39,0.81
+ r39 error,0.05
+ TS,210.2
+ N0,39.2
+ N0 error,2.3
+ index,2.98
+ index error,0.05
+ TS100, 
+ Assoc.(Sep.),   HESS J1825-137        (0.56)
+SNR,G17.4−2.7
+GLong[°],17.41
+GLat[°],-2.18
+RA J2000 (deg),277.8783
+DEC J2000 (deg),-14.7936
+Extent GLong[°],0.5416666666666666
+Extent GLat[°],63.0
+S_1335 (Jy),
+Notes,
+Dist2LHAASO,1.3830404641023497

@@ -19,6 +19,9 @@ from Myspec import *
 
 from Mymap import *
 
+def fun_ECPL(x, K, index, piv, xc):
+    return K*(x/piv)**(index)*np.exp(-(x/xc))
+
 def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True, CL=0.95):
     """
         获取参数llh扫描的上限
@@ -28,44 +31,54 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
         Returns:
             >>> 上限, 新minimum
     """ 
-    jl.restore_best_fit()
-    (
-    current_value,
-    current_delta,
-    current_min,
-    current_max,
-    ) = jl.minimizer._internal_parameters[par]
-    # orgllh = [current_value, jl.minus_log_like_profile(current_value)]
-    if current_value<0:
-        current_value=1e-24
-    trials = np.logspace(-30, np.log10(current_value)+2, num)
-    deltaTS=[]
-    for trial in trials:
-        deltaTS.append(2*(jl.minus_log_like_profile(trial)-jl.minus_log_like_profile(trials[0])))
-    deltaTS = np.array(deltaTS)
-    TSneed = p2sigma(1-(2*CL-1))**2
-    indices = np.where(deltaTS == min(deltaTS))[0]
-    newmini = trials[indices]
-    if np.any(current_value!=newmini):
-        log.info("Find new minimun!!")
-        if not isinstance(newmini, np.ndarray):
-            current_value=newmini
-            deltaTS = deltaTS-deltaTS[indices]
+    i=2
+    ifcontinue=True
+    while ifcontinue:
+        jl.restore_best_fit()
+        (
+        current_value,
+        current_delta,
+        current_min,
+        current_max,
+        ) = jl.minimizer._internal_parameters[par]
+        # orgllh = [current_value, jl.minus_log_like_profile(current_value)]
+        if current_value<0:
+            current_value=1e-24
+        trials = np.logspace(-26, np.log10(current_value)+i, num)
+        deltaTS=[]
+        for trial in trials:
+            deltaTS.append(2*(jl.minus_log_like_profile(trial)-jl.minus_log_like_profile(trials[0])))
+        deltaTS = np.array(deltaTS)
+        TSneed = p2sigma(1-(2*CL-1))**2
+        indices = np.where(deltaTS == min(deltaTS))[0]
+        newmini = trials[indices]
+        if np.any(current_value!=newmini):
+            log.info("Find new minimun!!")
+            if not isinstance(newmini, np.ndarray):
+                current_value=newmini
+                deltaTS = deltaTS-deltaTS[indices]
+            else:
+                current_value=newmini.max()
+                newmini=newmini.max()
+                deltaTS = deltaTS-deltaTS[indices[0]]
         else:
-            current_value=newmini.max()
-            newmini=newmini.max()
-            deltaTS = deltaTS-deltaTS[indices[0]]
-    else:
-        newmini = None
+            newmini = None
 
+        ifcontinue=False
+        try:
+            upper = trials[(deltaTS>=TSneed) & (trials>=current_value)][0]
+            sigma1 = trials[deltaTS>=1 & (trials>=current_value)][0]
+            sigma2 = trials[deltaTS>=4 & (trials>=current_value)][0]
+            sigma3 = trials[deltaTS>=9 & (trials>=current_value)][0]
+        except:
+            ifcontinue=True
+            upper=0; sigma1=0; sigma2=0; sigma3=0
+            i=i*4
+            if i>50:
+                log.warning("Can't find upper limit!")
+                ifcontinue=False
+                break
 
-    try:
-        upper = trials[(deltaTS>=TSneed) & (trials>=current_value)][0]
-        sigma1 = trials[deltaTS>=1 & (trials>=current_value)][0]
-        sigma2 = trials[deltaTS>=4 & (trials>=current_value)][0]
-        sigma3 = trials[deltaTS>=9 & (trials>=current_value)][0]
-    except:
-        upper=0; sigma1=0; sigma2=0; sigma3=0
     if plot:
         plt.figure()
         try:
@@ -85,7 +98,7 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -109,14 +122,14 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
             if ss==source:
                 lm2.remove_source(ss)
                 if str(oldscs[ss].source_type) == "point source":
-                    lm2.add_source(PointSource(ss, 0, 0, spectral_shape=PowerlawM()))
+                    lm2.add_source(PointSource(ss, 0, 0, spectral_shape=spec))
                 elif str(oldscs[ss].source_type) == "extended source":
-                    lm2.add_source(ExtendedSource(ss, spatial_shape=oldscs[ss].spatial_shape, spectral_shape=PowerlawM()))
+                    lm2.add_source(ExtendedSource(ss, spatial_shape=oldscs[ss].spatial_shape, spectral_shape=spec))
             #遍历参数
             for pa in par.keys():
                 newpa=pa
                 if ss==source:
-                    newpa = pa.replace("Powerlaw","PowerlawM")
+                    newpa = pa.replace(spec.name.replace("M",""),spec.name)
                 if (".K" not in pa):
                     lm2.sources[ss].parameters[newpa].value = par[pa].value
                     lm2.sources[ss].parameters[newpa].fix = True
@@ -136,7 +149,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
             for fp in freep:
                 if (ss == source and ".K" not in fp) or ss != source:
                     lm2.sources[ss].free_parameters[fp].fix = True
-                elif (ss == source and ".K" in fp and lm.sources[ss].components['main'].shape.name=="PowerlawM"):
+                elif (ss == source and ".K" in fp and lm.sources[ss].components['main'].shape.name==spec.name):
                     lm2.sources[ss].free_parameters[fp].bounds=np.array((-bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9,bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9)) * fluxUnit
                     lm2.sources[ss].free_parameters[fp].delta = 0.1*bondaryrange*lm2.sources[ss].free_parameters[fp].value
                 else:
@@ -166,9 +179,9 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
             if result2[1][0].loc[kparname,"value"]<0:
                 TSflux=-TSflux
         else:
-            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace("PowerlawM","Powerlaw")], cl=2*CL-1)
+            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace(spec.name.replace("M",""),spec.name)], cl=2*CL-1)
             if int(i) >= 10  and TSflux<threshold**2:
-                ub, mewmini = get_upperlimit(result2[0], kparname.replace("PowerlawM","Powerlaw"), CL=CL)
+                ub, mewmini = get_upperlimit(result2[0], kparname.replace(spec.name.replace("M",""),spec.name), CL=CL)
                 if mewmini is not None:
                     result2[1][0].iloc[0,0] = mewmini
             if (ub-result2[1][0].iloc[0,0])>0 and TSflux<threshold**2:
@@ -206,8 +219,12 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
         if ".beta" in pp:
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
+        if ".xc" in pp:
+            func = fun_ECPL
+            xc = lm.sources[source].parameters[pp].value/1e9
         if ("lat0"in pp) or ("dec" in pp):
             dec = lm.sources[source].parameters[pp].value
+
     try:
         resp = WCDA._response.get_response_dec_bin(dec) #resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
     except:
@@ -226,6 +243,8 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
             fitflux = sp.integrate.quad(func,binl,binu,args=(K,alpha,beta,piv))[0]
         elif func == fun_Powerlaw:
             fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv))[0]
+        elif func == fun_ECPL:
+            fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv,xc))[0]
         _flux = signal*fitflux/simflux
         th1.SetBinContent(j+1,_flux)
     x = ctypes.c_double(1.)
@@ -290,7 +309,7 @@ def getexposure(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
     # return th1.GetSum()
     return th1.Integral(1,nbins-1)/sp.integrate.quad(xfunc,0.1,20,args=(K*1e9,index,piv))[0]
 
-def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
+def reweightxall(WCDA, lm, func = fun_Powerlaw,source="J0248"):
     """
         获取整个探测器在拟合能谱下的能量及其误差范围
 
@@ -350,7 +369,7 @@ def reweightxall(WCDA, lm, func = fun_Logparabola,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100):
     """
         获取某个源的能谱点
 
@@ -382,6 +401,9 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if ".beta" in pp:
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
+        if ".xc" in pp:
+            func = fun_ECPL
+            xc = lm.sources[source].parameters[pp].value/1e9
     imin=100
     results = []
     silence_logs()
@@ -389,7 +411,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange)
         # try:
         #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
         # except Exception as e:
@@ -408,6 +430,8 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
             Flux_WCDA[int(i)-imin][3]=func(pow(10.,np.double(xx[0])),flux1, alpha,beta,piv)
         elif func == fun_Powerlaw:
             Flux_WCDA[int(i)-imin][3]=func(pow(10.,np.double(xx[0])),flux1, index, piv)
+        elif func == fun_ECPL:
+            Flux_WCDA[int(i)-imin][3]=func(pow(10.,np.double(xx[0])),flux1, index, piv, xc)
         Flux_WCDA[int(i)-imin][4]=Flux_WCDA[int(i)-imin][3]*(errorl/flux1)
         Flux_WCDA[int(i)-imin][5]=Flux_WCDA[int(i)-imin][3]*(erroru/flux1)
         Flux_WCDA[int(i)-imin][6]=Flux_WCDA[int(i)-imin][3]*(error1/flux1)
@@ -632,7 +656,7 @@ def Draw_spectrum_fromfile(file="/data/home/cwy/Science/3MLWCDA0.91/Standard/res
     ax.set_yscale("log")
     return data
 
-def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624, logx=1, logy=1, xbias=0, ybias=0, upthereshold=None):
+def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e-6, fixy=0.624, logx=1, logy=1, xbias=0, ybias=0, upthereshold=None, cutratio=0.1, capsize=None, usexerr=False):
     """
         对WebPlotDigitizer-4.6的点画图
 
@@ -650,10 +674,15 @@ def drawDig(file='./Coma_detect.csv',size=5, color="tab:blue", label="", fixx=1e
     y2=y2.reshape([int(len(id2)/size),size])
     if upthereshold is not None:
         cut = np.abs(y2[:,0])/np.abs(y2[:,1]-y2[:,0])<upthereshold
-    cut = np.abs(y2[:,1]-y2[:,0])/y2[:,0]<0.1
+    cut = np.abs(y2[:,1]-y2[:,0])/y2[:,0]<cutratio
     # print(cut)
-    plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt=".", xerr=np.array([x2[:,0][cut]-x2[:,3][cut], x2[:,4][cut]-x2[:,0][cut]]), color=color, uplims=True, label=label, capsize=3,) #
-    plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut], xerr=np.array([x2[:,0][~cut]-x2[:,3][~cut], x2[:,4][~cut]-x2[:,0][~cut]]), fmt="o", color=color, capsize=3,)
+    if usexerr:
+        xerr=np.array([x2[:,0][cut]-x2[:,3][cut], x2[:,4][cut]-x2[:,0][cut]])
+    else:
+        xerr=None
+        plt.errorbar(x2[:,0][~cut],y2[:,0][~cut],y2[:,1][~cut]-y2[:,0][~cut], xerr=xerr, fmt="go", color=color, capsize=capsize, label=label)
+        plt.errorbar(x2[:,0][cut],y2[:,0][cut],0.5*y2[:,0][cut],fmt=".", xerr=xerr, color=color, uplims=True, capsize=capsize) #
+    
     if logy:
         plt.yscale("log")
     if logx:

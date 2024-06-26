@@ -35,6 +35,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             k=1.3e-13,kf=False,kb=None,piv=3,pf=True,index=-2.6,indexf=False,indexb=None,alpha=-2.6,alphaf=False,alphab=None,beta=0,betaf=False,betab=None,
             kn=None,
             fitrange=None,
+            xc=None, xcf=None, xcb=None,
             ################################ Continuous_injection_diffusion
             rdiff0=None, rdiff0f=False, rdiff0b=None, delta=None, deltaf=False, deltab=None,
             uratio=None, uratiof=False, uratiob=None,                          ##Continuous_injection_diffusion_legacy
@@ -173,6 +174,11 @@ if parb != None:
     if spec.name == "Log_parabola":
         setspecParameter("alpha",alpha,alphaf,alphab)
         setspecParameter("beta",beta,betaf,betab)
+    elif spec.name == "Cutoff_powerlaw":
+        xc=xc*1e9
+        xcb=(xcb[0]*1e9, xcb[1]*1e9)
+        setspecParameter("index",index,indexf,indexb)
+        setspecParameter("xc",xc,xcf,xcb)
     elif spec.name == "Powerlaw" or spec.name == "PowerlawM" or spec.name == "PowerlawN":
         setspecParameter("index",index,indexf,indexb)
     #### set spatial
@@ -829,7 +835,7 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
                     if it[1]==0:
                         Model.parameters[it[0]].bounds = (dl, ul*ratio)
                     elif it[1]==1:
-                        Model.parameters[it[0]].bounds = (dl/ratio, ul.bounds[1])
+                        Model.parameters[it[0]].bounds = (dl/ratio, ul) #.bounds[1]
                 log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
             jointfit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
@@ -1182,7 +1188,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-2.733, indexf = True, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=1000):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =-2.733, indexf = False, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=1000):
     """
         自动生成区域弥散模版
 
@@ -1350,7 +1356,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = True, Kb=None, index =-
     else:
         return Diffuse
 
-def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3, setdeltabypar=True):
+def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3, setdeltabypar=True, kbratio=1000):
     """
         读取fits的形态模版
 
@@ -1383,7 +1389,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     Diffusespec.index.fix = indexf
     Diffusespec.index.bounds = (-4,-1)
     Diffuseshape.K = 1/u.deg**2
-    return
+    return Diffuse
 
 
 def get_sources(lm,result=None):

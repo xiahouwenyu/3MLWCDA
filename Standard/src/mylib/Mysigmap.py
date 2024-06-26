@@ -453,7 +453,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     extracted_data[np.isnan(extracted_data)]=0
 
     if ifplot:
-        plt.imshow(extracted_data.data, extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto')
+        plt.imshow(extracted_data.data, extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto', vmin=np.min(extracted_data.data), vmax=np.max(extracted_data.data))
         plt.gca().invert_xaxis()
         plt.colorbar()
 
@@ -473,7 +473,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
         # 将提取的数据保存到FITS文件
         fits.writeto(name+"_CAR.fits", np.array(extracted_data), header, overwrite=True)
 
-    if projection is "CAR":
+    if projection == "CAR":
         fits.writeto(name, np.array(extracted_data), header, overwrite=True)
 
     if projection is not "CAR":
@@ -499,7 +499,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
         fits.writeto(name, np.array(array), wcs2.to_header(), overwrite=True)
 
 def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, zmin=None, zmax=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "markercolor": "grey", "labelcolor": "black", "angle": 60, "catext": 1}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
-    colors=None, grid=False
+    colors=None, grid=False, dpi=300
         ):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
@@ -516,7 +516,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad, zmin=zmin, zmax=zmax,
-            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color, Drawdiff=Drawdiff, grid=grid
+            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color, Drawdiff=Drawdiff, grid=grid, dpi=dpi
             )
     ax = plt.gca()
     if colors is None:
@@ -591,10 +591,10 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
         plt.legend()
     if save or savename:
         if savename==None:
-            plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.png",dpi=dpi)
             plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.pdf")
         else:
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.png",dpi=dpi)
             plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.pdf")
 
     return fig

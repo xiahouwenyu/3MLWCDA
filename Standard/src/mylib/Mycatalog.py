@@ -121,9 +121,12 @@ def GetYMC(xmin,xmax,ymin,ymax):
     # Milky Way global survey of star clusters. V. (Kharchenko+, 2016) 2MASS
     return GetAnyCat(xmin,xmax,ymin,ymax, getYMC(), 1, 4, 5, coor="G")
 
-def getGYMC():
+def getGYMC(cut=7):
     # Milky Way global survey of star clusters ML GAIA
-    return getViziercat("J/A+A/640/A1", cut={"AgeNN": np.log10(3e7)})
+    if cut is not None:
+        return getViziercat("J/A+A/640/A1", cut={"AgeNN": np.log10(3*10**cut)})
+    else:
+        return getViziercat("J/A+A/640/A1", cut={})
 
 def GetGYMC(xmin,xmax,ymin,ymax):
     # Milky Way global survey of star clusters ML GAIA
@@ -319,6 +322,7 @@ def GetSNRcat(xmin,xmax,ymin,ymax):
     Vizier.TIMEOUT = 180 # 设置超时时间
     xa=[]
     ya=[]
+    sizes=[]
     assoca=[]
     # 获取ATNF pulsar目录的数据
     green_catalog = Vizier.get_catalogs('VII/284')[0] #VII/278
@@ -333,10 +337,15 @@ def GetSNRcat(xmin,xmax,ymin,ymax):
             continue
         if assoc in assoca:
             continue
+        try:
+            size = green_catalog.to_pandas()["MajDiamax"][i]/60
+        except:
+            size = 0
         xa.append(ras)			
-        ya.append(decs)			
+        ya.append(decs)		
+        sizes.append(size)	
         assoca.append(assoc)
-    sources_tmp = list(zip(xa,ya,assoca))
+    sources_tmp = list(zip(xa,ya,assoca,sizes))
     sources_tmp.sort(key=lambda source: source[0])
     return sources_tmp
 
@@ -536,7 +545,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
                     ax.add_artist(error_ellipse)
             iflabel+=1
 
-def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=0.01, sizelhaaso=0.01, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, sizecut=0.5, sizediscut=1/3,  bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=True, zmax=30, catname=None, yrange=None, sizeunit=1, considersize=True):
+def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=0.01, sizelhaaso=0.01, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, sizecut=0.6, sizediscut=1/3,  bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=False, zmax=30, catname=None, yrange=None, sizeunit=1, considersize=False):
     """
         画图并比较 LHAASOCat 以及任何 Dataframe格式的cat
 
@@ -594,6 +603,7 @@ def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",c
         cut = ( (distant<distcut+sizediscut*np.sqrt(sz1**2+sz2**2)) & (abs(sz1-sz2)/np.max([sz1, sz2], axis=0)<sizecut) )
     else:
         cut = distant<distcut
+
     if ifcut:
         indexlhaaso = np.where(cut)[0]
         indexanycat = np.where(cut)[1]
@@ -618,6 +628,10 @@ def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",c
     import matplotlib.cm as cm
     from matplotlib.colors import to_hex
     from matplotlib.patches import Ellipse
+
+    if len(indexanycat)==0:
+        print("Can't find any source association!", indexanycat, distant, distcut+sizediscut*np.sqrt(sz1**2+sz2**2))
+        return False
 
     cmap = cm.get_cmap('viridis')  
     sm = plt.cm.ScalarMappable(cmap=cmap)

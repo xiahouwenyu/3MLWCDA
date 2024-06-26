@@ -226,7 +226,7 @@ def smooth_array(arr):
         arr[i] = np.mean([arr[max(0, i-1)], arr[min(len(arr), i+1)]])
     return arr
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False):
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False, dpi=300):
     """Draw healpixmap.
 
         Args:
@@ -272,12 +272,12 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
         textcolor, colormap = MapPalette.setupGammaColormap(10000)
 
     if plotmol:
-        plt.figure(dpi=300)
+        plt.figure(dpi=dpi)
         hp.mollview(map, cmap=colormap, min=dMin, max=dMax, title="LHAASO full sky", xsize=2048)
         hp.graticule()
-        plt.savefig(f"fullskymol+{savename}.pdf", dpi=300)\
+        plt.savefig(f"fullskymol+{savename}.pdf", dpi=dpi)\
         
-    fig = plt.figure(dpi=300, figsize=figsize)
+    fig = plt.figure(dpi=dpi, figsize=figsize)
     plt.imshow(img, origin="lower",extent=[xmin,xmax,ymin,ymax],vmin=dMin,vmax=dMax, cmap=colormap) #
 
     if grid:
@@ -361,10 +361,10 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
 
     if save:
         if plotres:
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_res.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_res.png",dpi=dpi)
             plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_res.pdf")
         else:
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh.png",dpi=dpi)
             plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh.pdf")
 
     return fig

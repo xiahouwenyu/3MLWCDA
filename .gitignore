@@ -2,6 +2,14 @@ Standard/src/tools/llh_skymap/skytxt/*.fits
 Standard/src/tools/llh_skymap/skytxt/*.gz
 Standard/src/tools/llh_skymap/skytxt/*.pdf
 Standard/src/tools/llh_skymap/skytxt/*.txt
+Standard/src/tools/llh_skymap/skytxt2/*.fits
+Standard/src/tools/llh_skymap/skytxt2/*.gz
+Standard/src/tools/llh_skymap/skytxt2/*.pdf
+Standard/src/tools/llh_skymap/skytxt2/*.txt
+Standard/src/tools/llh_skymap/skytxt3/*.fits
+Standard/src/tools/llh_skymap/skytxt3/*.gz
+Standard/src/tools/llh_skymap/skytxt3/*.pdf
+Standard/src/tools/llh_skymap/skytxt3/*.txt
 Standard/src/tools/llh_skymap/sourcetxt/*
 Standard/src/tools/LHAASO_skytrans/skytxt/*txt
 Standard/src/tools/LHAASO_skytrans/skytxt/*pdf
