@@ -178,9 +178,9 @@ def GetFermicat(xmin,xmax,ymin,ymax,cat="3FHL"):
     header = []
     data = []
     if cat == "4FGL":
-        file = '../../data/gll_psc_v33.fit'
+        file = f'{libdir}/../../data/gll_psc_v33.fit'
     elif cat == "3FHL":
-        file = '../../data/gll_psch_v13.fit'
+        file = f'{libdir}/../../data/gll_psch_v13.fit'
     with fits.open(file) as hdul:
         # 输出文件信息
         # hdul.info()
@@ -388,7 +388,7 @@ def GetLHAASOcat(xmin,xmax,ymin,ymax, showrepeatkm2a=True):
             >>> list(zip(ra,dec,name,sizes))
     """
     # LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table1.csv")
-    LHAASOCat = pd.read_csv("../../data/LHAASO_Catalog_Table2.csv")
+    LHAASOCat = pd.read_csv(f"{libdir}/../../data/LHAASO_Catalog_Table2.csv")
     xa=[]
     ya=[]
     assoca=[]

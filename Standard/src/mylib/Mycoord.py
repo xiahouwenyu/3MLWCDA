@@ -193,3 +193,116 @@ def eql2hcs(ha, dn):
 
     ze = np.pi/2 - math.atan2(z,r)
     return ze, az
+
+def angle_to_kpc(angle, distance_mpc, unit='arcsec'):
+    """
+    将张角转换为千秒差距 (kpc)。
+
+    参数:
+    angle (float): 角度值，可以是弧度、弧度秒或度。
+    distance_mpc (float): 目标天体的距离，单位是兆秒差距（Mpc）。
+    unit (str): 角度单位，'arcsec' 表示弧度秒，'degree' 表示度，'radian' 表示弧度。默认是 'arcsec'。
+
+    返回:
+    float: 张角对应的kpc值。
+    """
+    if unit == 'arcsec':
+        # 将弧度秒转换为弧度
+        angle_rad = np.deg2rad(angle / 3600.0)
+    elif unit == 'degree':
+        # 将度转换为弧度
+        angle_rad = np.deg2rad(angle)
+    elif unit == 'radian':
+        angle_rad = angle
+    else:
+        raise ValueError("unit 必须是 'arcsec', 'degree', 或 'radian'")
+
+    # 将弧度转换为kpc
+    distance_kpc = distance_mpc * 1e3
+    kpc = distance_kpc * np.tan(angle_rad)
+
+    return kpc
+
+def kpc_to_angle(kpc, distance_mpc, unit='arcsec'):
+    """
+    将千秒差距 (kpc) 转换为张角。
+
+    参数:
+    kpc (float): 千秒差距值 (kpc)。
+    distance_mpc (float): 目标天体的距离，单位是兆秒差距（Mpc）。
+    unit (str): 输出角度的单位，'arcsec' 表示弧度秒，'degree' 表示度，'radian' 表示弧度。默认是 'arcsec'。
+
+    返回:
+    float: kpc对应的张角值，单位由unit参数指定。
+    """
+    # 将距离转换为千秒差距 (kpc)
+    distance_kpc = distance_mpc * 1e3
+    
+    # 计算弧度
+    angle_rad = np.arctan(kpc / distance_kpc)
+    
+    # 根据指定的单位进行转换
+    if unit == 'arcsec':
+        angle = np.rad2deg(angle_rad) * 3600.0  # 弧度转换为弧度秒
+    elif unit == 'degree':
+        angle = np.rad2deg(angle_rad)  # 弧度转换为度
+    elif unit == 'radian':
+        angle = angle_rad  # 保持弧度
+    else:
+        raise ValueError("unit 必须是 'arcsec', 'degree', 或 'radian'")
+    
+    return angle
+
+def redshift_to_mpc(z, H0=70.0):
+    """
+    将红移z转换为以Mpc为单位的距离。
+
+    参数:
+    z (float): 红移值
+    H0 (float): 哈勃常数，单位为 km/s/Mpc。默认值为 70 km/s/Mpc。
+
+    返回:
+    float: 距离，单位为 Mpc。
+    """
+    # 光速，单位为 km/s
+    c = 299792.458
+    
+    # 使用哈勃定律计算距离
+    distance_mpc = c * z / H0
+    
+    return distance_mpc
+
+from astropy.cosmology import Planck18 as cosmo  # 使用Planck18宇宙学模型
+from astropy.cosmology import z_at_value  # 导入 z_at_value 函数
+import astropy.units as u  # 导入 astropy.units
+
+def Mpc_to_redshift(distance_mpc):
+    """
+    将距离（Mpc）转换为红移（redshift）。
+    
+    参数:
+    - distance_mpc: 距离，以Mpc为单位
+    
+    返回:
+    - 红移值
+    """
+    # 确保距离具有Mpc的单位
+    distance = distance_mpc * u.Mpc
+    
+    # 计算红移
+    redshift = z_at_value(cosmo.comoving_distance, distance)
+    return redshift
+
+def redshift_to_Mpc(redshift):
+    """
+    将红移（redshift）转换为距离（Mpc）。
+    
+    参数:
+    - redshift: 红移值
+    
+    返回:
+    - 距离，以Mpc为单位
+    """
+    # 计算共动距离并转换为Mpc
+    distance_mpc = cosmo.comoving_distance(redshift).to(u.Mpc).value
+    return distance_mpc

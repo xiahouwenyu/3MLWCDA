@@ -22,7 +22,7 @@ def _afterglow(x, params):
     result[x<t0]=0
     return result
 
-def FRP(x,par):
+def _FRP(x,par):
     result = []
     if type(x)==int: 
         if x>=par[9]:
@@ -42,7 +42,7 @@ def FRP(x,par):
                 result.append(0)
         return np.array(result)
 
-def SSQPL(x,par):
+def _SSQPL(x,par):
     x = np.array(x)
     part1 = pow(FRP(x, par), -par[6])
     part2 = pow(FRP(par[7], par) * pow(x / par[7],par[8]), -par[6])
@@ -456,6 +456,14 @@ def plot_spectrum_with_background(spectrum_results, low_bound, median, hi_bound,
 
     return figure
 
+from decimal import Decimal
+
+def decimal_places(num):
+    # 将数字转换为 Decimal 类型
+    num_dec = Decimal(str(num))
+    
+    # 获取小数点后的位数
+    return abs(num_dec.as_tuple().exponent)
 
 ########################### . LC class
 
@@ -546,28 +554,70 @@ class lc(object):
             self.te=self.t0+self.nt*self.dt
 
     def __add__(self, others):
-        newclass = self
-        if len(self.time) > len(others.time):
-            newclass.time = self.time
-        else:
-            newclass.time = others.time
+        import copy
+        newclass = copy.deepcopy(self)
+        # if len(self.time) > len(others.time):
+        #     newclass.time = self.time
+        # else:
+        #     newclass.time = others.time
+        perce = decimal_places(self.dt)
 
-        tolerance=0.00000005
-        newclass.counts=self.counts
+        # 转换为集合
+        set1 = set(np.around(self.time, decimals=perce))
+        set2 = set(np.around(others.time, decimals=perce))
+
+        # 计算交集
+        intersection = np.sort(np.array(list(set1 & set2)))
+        newclass.time = intersection
+        
+
+        tolerance=10**(-perce-4)
+        newclass.counts=np.ones(len(intersection))
+
+        newclass.t0=newclass.time[0]-newclass.dt
+        newclass.nt=len(newclass.time)
+        newclass.te=newclass.t0+newclass.nt*newclass.dt
+        if newclass.te != newclass.time[-1]:
+            print(len(intersection), newclass.te, newclass.time[-1])
+        # print(intersection)
         if self.bkg is not None:
-            newclass.bkg = self.bkg
-        for i, tt in enumerate(tqdm(others.time)):
+            newclass.bkg = np.ones(len(intersection)) #self.bkg
+
+        for i, tt in enumerate(tqdm(intersection)):
             indices = np.where(np.isclose(self.time, tt, rtol=tolerance, atol=tolerance))[0][0]
-            newclass.counts[indices] = self.counts[indices]+others.counts[i]
+            indices2 = np.where(np.isclose(others.time, tt, rtol=tolerance, atol=tolerance))[0][0]
+            newclass.counts[i] = self.counts[indices]+others.counts[indices2]
             if others.bkg is not None:
-                newclass.bkg[indices] = self.bkg[indices]+others.bkg[i]
+                newclass.bkg[i] = self.bkg[indices]+others.bkg[indices2]
         return newclass
+    
+    # def __add__(self, others):
+    #     # newclass = self
+    #     import copy
+    #     newclass = copy.deepcopy(self)
+    #     if len(self.time) > len(others.time):
+    #         newclass.time = self.time
+    #     else:
+    #         newclass.time = others.time
+
+    #     tolerance=0.00000005
+    #     newclass.counts=self.counts
+    #     if self.bkg is not None:
+    #         newclass.bkg = self.bkg
+    #     for i, tt in enumerate(tqdm(others.time)):
+    #         indices = np.where(np.isclose(self.time, tt, rtol=tolerance, atol=tolerance))[0][0]
+    #         newclass.counts[indices] = self.counts[indices]+others.counts[i]
+    #         if others.bkg is not None:
+    #             newclass.bkg[indices] = self.bkg[indices]+others.bkg[i]
+    #     return newclass
     
     @property
     def bkgpar(self):
         if self.linebkg is not None:
             self.bkgp = self.linebkg[self.ebin].GetParameters()
         return self.bkgp
+    
+
     def drawlc(self, t1 = 230, t2 = 334.8576, drawbkg = False):
         plt.figure()
         ax = plt.axes([0.1, 0.75, 0.65, 0.2])

@@ -436,7 +436,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     header["CRVAL1"] = ra.mean()
     header["CRVAL2"] = 0
     header["CRPIX1"] = header["NAXIS1"] / 2 #(180-ra.mean())/xsize + 
-    header["CRPIX2"] = (0-dec.mean())/xsize + header["NAXIS2"] / 2 # - xsize/2
+    header["CRPIX2"] = (0-dec.mean())/ysize + header["NAXIS2"] / 2 # - xsize/2
     header["CD1_1"] = xsize #*np.cos(np.radians(header["CRVAL2"]))
     header["CD2_2"] = ysize
     if flip:
@@ -513,6 +513,11 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
             ----------
             >>> fig
     """
+    import os
+    if not os.path.exists(f'{libdir}/../res/{region_name}/'):
+        os.system(f'mkdir {libdir}/../res/{region_name}/')
+    if not os.path.exists(f'{libdir}/../res/{region_name}/{Modelname}/'):
+        os.system(f'mkdir {libdir}/../res/{region_name}/{Modelname}/')
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad, zmin=zmin, zmax=zmax,
@@ -591,11 +596,11 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
         plt.legend()
     if save or savename:
         if savename==None:
-            plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.png",dpi=dpi)
-            plt.savefig(f"../res/{region_name}/{Modelname}/???_sig_llh_model.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/???_sig_llh_model.png",dpi=dpi)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/???_sig_llh_model.pdf")
         else:
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.png",dpi=dpi)
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/{savename}.png",dpi=dpi)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/{savename}.pdf")
 
     return fig
 
@@ -876,3 +881,244 @@ def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detecto
         plt.figure()
         heal2fits(skymap, f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
     return skymap
+
+
+# import numpy as np
+from astropy.io import fits
+from astropy.wcs import WCS
+# import healpy as hp
+def healpix_to_fits_pixels(healpix_pixels, nside, wcs):
+    """
+    将Healpix像素转换为FITS文件中的像素坐标 (x, y)。
+
+    Parameters:
+        healpix_pixels (list of int): Healpix格式的像素列表
+        nside (int): Healpix的nside参数
+        wcs (WCS): FITS文件的WCS信息
+
+    Returns:
+        list of tuple: 对应的FITS像素坐标列表
+    """
+    # 将Healpix像素转换为天球坐标 (RA, Dec)
+    theta, phi = hp.pix2ang(nside, healpix_pixels)
+    ra = np.degrees(phi)
+    dec = 90 - np.degrees(theta)
+
+    # 将天球坐标 (RA, Dec) 转换为FITS像素坐标 (x, y)
+    x, y = wcs.wcs_world2pix(ra, dec, 0)
+
+    return list(zip(x.astype(int), y.astype(int)))
+
+# def calculate_pixel_solid_angle(wcs, x, y):
+#     """计算FITS文件中给定像素的立体角（以弧度为单位）。"""
+#     # 获取像素四个角的天球坐标 (RA, Dec)
+#     ra_dec_corners = wcs.pixel_to_world([[x-0.5, y-0.5],
+#                                          [x+0.5, y-0.5],
+#                                          [x+0.5, y+0.5],
+#                                          [x-0.5, y+0.5]])
+
+#     # 将天球坐标转换为球坐标 (theta, phi)
+#     theta = np.radians(90 - ra_dec_corners.dec.value)
+#     phi = np.radians(ra_dec_corners.ra.value)
+
+#     # 使用球面多边形来估算像素的立体角
+#     solid_angle = hp.pixelfunc.query_polygon(nside=8192, vertices=np.vstack([theta, phi]).T, inclusive=False)
+    
+#     return np.sum(solid_angle) * hp.pixelfunc.nside2pixarea(8192)
+
+def calculate_pixel_solid_angle(wcs, x, y):
+    """计算FITS文件中给定像素的立体角（以弧度为单位）。"""
+    # 获取像素中心的天球坐标 (RA, Dec)
+    ra_dec_center = wcs.pixel_to_world(x, y)
+
+    # print(ra_dec_center)
+
+    # 计算RA和Dec方向上像素的角大小（假设它们是小量）
+    pixel_scale = wcs.pixel_scale_matrix
+    delta_ra = np.abs(pixel_scale[0, 0])  # RA方向像素的角大小，单位：度
+    delta_dec = np.abs(pixel_scale[1, 1])  # Dec方向像素的角大小，单位：度
+
+    # 转换为弧度
+    delta_ra_rad = np.radians(delta_ra)
+    delta_dec_rad = np.radians(delta_dec)
+    
+    # 使用cos(dec)因子计算立体角
+    solid_angle = delta_ra_rad * delta_dec_rad * np.cos(np.radians(ra_dec_center.dec.value))
+
+    if solid_angle==0:
+        print(delta_ra_rad, delta_dec_rad, ra_dec_center.dec.value, np.cos(np.radians(ra_dec_center.dec.value)))
+    
+    return solid_angle
+
+def fits_pixel_to_healpix(ra, dec, nside):
+    """将FITS像素的天球坐标 (RA, Dec) 转换为Healpix像素索引。"""
+    # theta = np.radians(90 - dec)
+    # phi = np.radians(ra)
+    return hp.ang2pix(nside, ra, dec, lonlat=True)
+
+def normalize_fits_within_healpix_roi(fits_file, healpix_pixels, nside, output_file):
+    """
+    对给定ROI内的FITS像素进行按立体角积分归一化,并保存为新的FITS文件,同时屏蔽掉ROI以外的像素。
+
+    Parameters:
+        fits_file (str): 输入的FITS文件路径
+        healpix_pixels (set of int): Healpix格式的ROI像素集合
+        nside (int): Healpix的nside参数
+        output_file (str): 输出的FITS文件路径
+
+    Returns:
+        None
+    """
+    from decimal import Decimal
+    # 读取FITS文件和数据
+    hdu = fits.open(fits_file)
+    data = hdu[0].data
+    header = hdu[0].header
+
+    # 获取WCS信息
+    wcs = WCS(header)
+
+    # 创建mask并初始化为True
+    mask = np.ones(data.shape, dtype=bool)
+
+    # 初始化归一化参数
+    total_flux = 0.0
+    total_solid_angle = 0.0
+
+    S = np.zeros(data.shape, dtype=bool)
+    # 遍历FITS文件的每一个像素
+    pixel_solid_angles = []
+    total_fluxs = []
+    for y in range(data.shape[0]):
+        for x in range(data.shape[1]):
+            # 将FITS像素转换为天球坐标 (RA, Dec)
+            ra, dec = wcs.wcs_pix2world(x, y, 0)
+
+            # 将天球坐标转换为对应的Healpix像素索引
+            healpix_index = fits_pixel_to_healpix(ra, dec, nside)
+
+            # 判断该Healpix像素是否在ROI内
+            if healpix_index in healpix_pixels:
+                # 计算当前FITS像素的立体角
+                pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+
+                # 计算该像素的贡献
+                # print(pixel_solid_angle)
+                flux = data[y, x]
+                if np.isnan(pixel_solid_angle):
+                    print("solid_angle_nan")
+                if pixel_solid_angle==0:
+                    print("solid_angle_zero")
+                if np.isnan(flux):
+                    continue
+                S[y,x] = pixel_solid_angle
+                pixel_solid_angles.append(pixel_solid_angle)
+                total_fluxs.append(flux * pixel_solid_angle)
+                # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
+                # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
+                mask[y, x] = False  # 在ROI内的像素不被mask
+    total_flux = math.fsum(total_fluxs)
+    total_solid_angle = math.fsum(pixel_solid_angles)
+
+    # if total_solid_angle == 0:
+    #     print(total_solid_angle)
+    #     raise ValueError("总立体角为0,可能ROI像素列表为空。")
+
+    normalization_factor = total_flux #/ total_solid_angle
+    print(normalization_factor)
+
+    # 对ROI内的像素进行归一化处理
+    normalized_data = data.copy()
+    normalized_data[~mask] /= normalization_factor
+
+    # 将ROI以外的像素屏蔽掉
+    normalized_data[mask] = 0
+
+    # 保存为新的FITS文件
+    hdu[0].data = normalized_data
+    hdu.writeto(output_file, overwrite=True)
+    print(f"归一化后的FITS文件已保存为 {output_file}")
+
+
+def crop_fits_by_coords(input_fits_path, output_fits_path, ra_min, ra_max, dec_min, dec_max):
+    # 打开FITS文件
+    with fits.open(input_fits_path) as hdul:
+        # 获取第一个扩展的WCS信息和图像数据
+        wcs = WCS(hdul[0].header)
+        data = hdul[0].data
+        
+        # 将天文坐标转换为像素坐标
+        # (ra_min, dec_min) 对应的像素坐标
+        x_min, y_min = wcs.all_world2pix(ra_min, dec_min, 0)
+        # (ra_max, dec_max) 对应的像素坐标
+        x_max, y_max = wcs.all_world2pix(ra_max, dec_max, 0)
+        
+        # 转换为整数像素索引并确保索引在有效范围内
+        x_min, x_max = int(np.floor(x_min)), int(np.ceil(x_max))
+        y_min, y_max = int(np.floor(y_min)), int(np.ceil(y_max))
+        
+        # 裁剪图像数据
+        cropped_data = data[y_min:y_max, x_min:x_max]
+        
+        # 更新裁剪后的WCS信息
+        new_header = wcs[y_min:y_max, x_min:x_max].to_header()
+        
+        # 创建新的FITS文件，并保存裁剪后的数据和新的WCS信息
+        hdu = fits.PrimaryHDU(cropped_data, header=new_header)
+        hdu.writeto(output_fits_path, overwrite=True)
+
+    print(f"Cropped FITS file saved to {output_fits_path}")
+
+def get_fits_roi_bounds(fits_file):
+    # Step 1: Load the FITS file and extract WCS and data
+    with fits.open(fits_file) as hdul:
+        hdu = hdul[0]
+        wcs = WCS(hdu.header)
+        data = hdu.data
+    
+    # Step 2: Find the bounds of the non-zero (or non-NaN) data in FITS
+    non_zero_y, non_zero_x = np.where(data > 0)  # or np.isfinite(data) for NaN check
+
+    # Step 3: Get the min and max pixel coordinates where the data is valid
+    xmin, xmax = non_zero_x.min(), non_zero_x.max()
+    ymin, ymax = non_zero_y.min(), non_zero_y.max()
+
+    # Step 4: Convert these pixel coordinates to sky coordinates (RA, Dec)
+    ra_min, dec_min = wcs.pixel_to_world_values(xmin, ymin)
+    ra_max, dec_max = wcs.pixel_to_world_values(xmax, ymax)
+    
+    # Return the sky bounds in terms of RA and Dec
+    return (ra_min, ra_max, dec_min, dec_max)
+
+def healpix_to_fits(fits_file, nside):
+    # Get the ROI bounds from the FITS file
+    ra_min, ra_max, dec_min, dec_max = get_fits_roi_bounds(fits_file)
+    
+    # Step 1: Load the FITS file and extract WCS and data
+    with fits.open(fits_file) as hdul:
+        hdu = hdul[0]
+        wcs = WCS(hdu.header)
+        data = hdu.data
+    
+    # Step 2: Initialize an empty Healpix map
+    npix = hp.nside2npix(nside)
+    healpix_map = np.zeros(npix, dtype=np.float64)
+    
+    # Step 3: Loop through each pixel in the Healpix map
+    for pix in range(npix):
+        # Convert the Healpix pixel index to (theta, phi) in radians
+        theta, phi = hp.pix2ang(nside, pix)
+        ra = np.degrees(phi)  # Convert to degrees
+        dec = 90.0 - np.degrees(theta)  # Convert theta to Dec
+        
+        # Step 4: Check if the (RA, Dec) falls within the ROI bounds
+        if ra_min <= ra <= ra_max and dec_min <= dec <= dec_max:
+            # Convert the (RA, Dec) to FITS pixel coordinates
+            x, y = wcs.world_to_pixel_values(ra, dec)
+            
+            # Step 5: Check if the pixel is within the FITS bounds and assign the value
+            if 0 <= x < data.shape[1] and 0 <= y < data.shape[0]:
+                fits_value = data[int(y), int(x)]  # Ensure integer indexing for pixel
+                healpix_map[pix] = fits_value
+    
+    return healpix_map

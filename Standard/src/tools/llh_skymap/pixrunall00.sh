@@ -2,7 +2,7 @@
 # rm -rf ./skytxt3/*txt
 
 # 目标文件
-file_path="/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt2/list00.txt"
+file_path="/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/list00.txt"
 
 # 逐行读取文件
 while IFS= read -r line

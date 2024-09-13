@@ -59,7 +59,7 @@ if __name__ == "__main__":
     spectrum.K.delta=1e-16*fluxUnit
     spectrum.piv= 3.*u.TeV
     spectrum.piv.fix=True
-    spectrum.index=-2.4
+    spectrum.index=-2.6
     spectrum.index.fix=True
     WCDA.psf_integration_method="exact"
     model=Model(source)

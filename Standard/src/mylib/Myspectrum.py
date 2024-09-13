@@ -22,7 +22,7 @@ from Mymap import *
 def fun_ECPL(x, K, index, piv, xc):
     return K*(x/piv)**(index)*np.exp(-(x/xc))
 
-def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True, CL=0.95):
+def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=500, plot=True, CL=0.95):
     """
         获取参数llh扫描的上限
 
@@ -98,13 +98,13 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=200, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, scannum=200):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
         #return: spectrum.K
     # Instance the plugin
-    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=0.05)
+    WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=pixelsize)
     WCDA_1.psf_integration_method="exact"
     if iffixtans:
         settransWCDA(WCDA_1, roi.ra_dec_center[0], roi.ra_dec_center[1])
@@ -129,7 +129,8 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
             for pa in par.keys():
                 newpa=pa
                 if ss==source:
-                    newpa = pa.replace(spec.name.replace("M",""),spec.name)
+                    if not "M." in pa:
+                        newpa = pa.replace(spec.name.replace("M",""),spec.name)
                 if (".K" not in pa):
                     lm2.sources[ss].parameters[newpa].value = par[pa].value
                     lm2.sources[ss].parameters[newpa].fix = True
@@ -139,8 +140,12 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 elif ("SpatialTemplate" not in pa):
                     kparname=newpa
                     # print("change bounds!!!!")
-                    lm2.sources[ss].parameters[newpa].bounds=np.array((-bondaryrange*par[pa].value*1e9,bondaryrange*par[pa].value*1e9))*fluxUnit
-                    lm2.sources[ss].parameters[newpa].delta = 0.1*bondaryrange*par[pa].value
+                    print(par[pa].value*1e9)
+                    value = par[pa].value
+                    if value<0:
+                        value=abs(value)
+                    lm2.sources[ss].parameters[newpa].bounds=np.array((-bondaryrange*value*1e9,bondaryrange*value*1e9))*fluxUnit
+                    lm2.sources[ss].parameters[newpa].delta = 0.1*par[pa].value
     else:
         #遍历源
         for ss in sources:
@@ -164,7 +169,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
         if ifpowerlawM:
             lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)    
             if int(i) >= scanbin and TSflux<threshold**2:
-                ub, mewmini = get_upperlimit(result2[0], kparname, CL=CL)
+                ub, mewmini = get_upperlimit(result2[0], kparname, CL=CL, num=scannum)
                 if mewmini is not None:
                     result2[1][0].iloc[0,0] = mewmini
             if (ub-result2[1][0].iloc[0,0])>0 and TSflux<threshold**2:
@@ -179,9 +184,9 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
             if result2[1][0].loc[kparname,"value"]<0:
                 TSflux=-TSflux
         else:
-            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace(spec.name.replace("M",""),spec.name)], cl=2*CL-1)
-            if int(i) >= 10  and TSflux<threshold**2:
-                ub, mewmini = get_upperlimit(result2[0], kparname.replace(spec.name.replace("M",""),spec.name), CL=CL)
+            lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace(spec.name,spec.name.replace("M",""))], cl=2*CL-1)
+            if int(i) >= scanbin and TSflux<threshold**2:
+                ub, mewmini = get_upperlimit(result2[0], kparname.replace(spec.name,spec.name.replace("M","")), CL=CL, scannum=scannum)
                 if mewmini is not None:
                     result2[1][0].iloc[0,0] = mewmini
             if (ub-result2[1][0].iloc[0,0])>0 and TSflux<threshold**2:
@@ -196,7 +201,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
 
     return result2, TSflux
 
-def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
+def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248", acc=False):
     """
         获取拟合能谱下每个bin的能量以及其误差
 
@@ -216,48 +221,111 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
         if ".alpha" in pp:
             func = fun_Logparabola
             alpha = lm.sources[source].parameters[pp].value
-        if ".beta" in pp:
+        if ".beta" in pp and "Beta_function.beta" not in pp:
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
         if ".xc" in pp:
-            func = fun_ECPL
+            func = fun_ECPL 
             xc = lm.sources[source].parameters[pp].value/1e9
         if ("lat0"in pp) or ("dec" in pp):
             dec = lm.sources[source].parameters[pp].value
+    if not acc:
+        try:
+            resp = WCDA._response.get_response_dec_bin(dec) #resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
+        except:
+            if WCDA._roi.ra_dec_center[1]<=-19 or WCDA._roi.ra_dec_center[1]>=79:
+                resp = WCDA._response.get_response_dec_bin(30)
+            else:
+                resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
 
-    try:
-        resp = WCDA._response.get_response_dec_bin(dec) #resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
-    except:
-        resp = WCDA._response.get_response_dec_bin(WCDA._roi.ra_dec_center[1])
-    sbl=resp[i]
-    binlow = sbl.sim_energy_bin_low[0]
-    nbins = len(sbl.sim_signal_events_per_bin)
-    binhigh = sbl.sim_energy_bin_hi[nbins-1]
-    th1=ROOT.TH1D("","",nbins,np.log10(binlow),np.log10(binhigh))
-    for j in range(nbins):
-        signal = sbl.sim_signal_events_per_bin[j]
-        binl = sbl.sim_energy_bin_low[j]
-        binu = sbl.sim_energy_bin_hi[j]
-        simflux = sbl.sim_differential_photon_fluxes[j]*(binu-binl)
-        if func == fun_Logparabola:
-            fitflux = sp.integrate.quad(func,binl,binu,args=(K,alpha,beta,piv))[0]
-        elif func == fun_Powerlaw:
-            fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv))[0]
-        elif func == fun_ECPL:
-            fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv,xc))[0]
-        _flux = signal*fitflux/simflux
-        th1.SetBinContent(j+1,_flux)
-    x = ctypes.c_double(1.)
-    x_lo = ctypes.c_double(1.)
-    x_hi = ctypes.c_double(1.)
+        sbl=resp[i]
+        binlow = sbl.sim_energy_bin_low[0]
+        nbins = len(sbl.sim_signal_events_per_bin)
+        binhigh = sbl.sim_energy_bin_hi[nbins-1]
+        th1=ROOT.TH1D("","",nbins,np.log10(binlow),np.log10(binhigh))
+        for j in range(nbins):
+            signal = sbl.sim_signal_events_per_bin[j]
+            binl = sbl.sim_energy_bin_low[j]
+            binu = sbl.sim_energy_bin_hi[j]
+            simflux = sbl.sim_differential_photon_fluxes[j]*(binu-binl)
+            if func == fun_Logparabola:
+                fitflux = sp.integrate.quad(func,binl,binu,args=(K,alpha,beta,piv))[0]
+            elif func == fun_Powerlaw:
+                fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv))[0]
+            elif func == fun_ECPL:
+                fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv,xc))[0]
+            _flux = signal*fitflux/simflux
+            th1.SetBinContent(j+1,_flux)
+        x = ctypes.c_double(1.)
+        x_lo = ctypes.c_double(1.)
+        x_hi = ctypes.c_double(1.)
 
-    y = ctypes.c_double(0.5)
-    y_lo = ctypes.c_double(0.17)
-    y_hi = ctypes.c_double(0.84)
-    th1.GetQuantiles(1,x,y)
-    th1.GetQuantiles(1,x_lo,y_lo)
-    th1.GetQuantiles(1,x_hi,y_hi)
-    return x,x_lo,x_hi
+        y = ctypes.c_double(0.5)
+        y_lo = ctypes.c_double(0.17)
+        y_hi = ctypes.c_double(0.84)
+        th1.GetQuantiles(1,x,y)
+        th1.GetQuantiles(1,x_lo,y_lo)
+        th1.GetQuantiles(1,x_hi,y_hi)
+        return x,x_lo,x_hi
+        
+    else:
+        pixs = WCDA._roi.active_pixels(1024)
+        source = copy.deepcopy(lm.sources[source])
+        resp = WCDA._response.get_response_dec_bin(30)
+        sbl=resp[i]
+        binlow = sbl.sim_energy_bin_low[0]
+        nbins = len(sbl.sim_signal_events_per_bin)
+        binhigh = sbl.sim_energy_bin_hi[nbins-1]
+        binls = sbl.sim_energy_bin_low
+        binus = sbl.sim_energy_bin_hi
+        th1=ROOT.TH1D("","",nbins,np.log10(binlow),np.log10(binhigh))
+        fflux=[]
+        for j in range(nbins):
+            binu=binus[j]
+            binl=binls[j]
+            if func == fun_Logparabola:
+                fitflux = sp.integrate.quad(func,binl,binu,args=(K,alpha,beta,piv))[0]
+            elif func == fun_Powerlaw:
+                fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv))[0]
+            elif func == fun_ECPL:
+                fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv,xc))[0]
+            
+            fflux.append(fitflux)
+        fflux = np.array(fflux)
+        rais, decis = hp.pix2ang(1024, pixs, lonlat=True)
+        weights = source.spatial_shape(rais, decis)
+        # dec_bins = np.arange(-20, 81, 1)
+        # hist, bin_edges = np.histogram(decis, bins=dec_bins)
+
+        for decrange in tqdm(np.arange(np.floor(np.min(decis)), np.ceil(np.max(decis)), 1)):
+            weight = weights[np.where((decis>=decrange) & (decis<decrange+1))].mean()
+            num = len(decis[(decis>=decrange) & (decis<decrange+1)])
+            
+            resp = WCDA._response.get_response_dec_bin(decrange+0.5)
+            sbl=resp[i]
+            # print(rai, deci)
+            # weight = source.spatial_shape(rai, deci)
+            
+            for j in range(nbins):
+                signal = sbl.sim_signal_events_per_bin[j]
+                binu=binus[j]
+                binl=binls[j]
+                simflux = sbl.sim_differential_photon_fluxes[j]*(binu-binl)
+                _flux = signal*num*float(weight)*fflux[j]/simflux
+                th1.Fill(j+1,_flux)
+        x = ctypes.c_double(1.)
+        x_lo = ctypes.c_double(1.)
+        x_hi = ctypes.c_double(1.)
+
+        y = ctypes.c_double(0.5)
+        y_lo = ctypes.c_double(0.17)
+        y_hi = ctypes.c_double(0.84)
+        th1.GetQuantiles(1,x,y)
+        th1.GetQuantiles(1,x_lo,y_lo)
+        th1.GetQuantiles(1,x_hi,y_hi)
+        return x,x_lo,x_hi
+
+
 
 def getexposure(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
     """
@@ -279,7 +347,7 @@ def getexposure(lm,WCDA,i,func = fun_Logparabola,source="J0248"):
         if ".alpha" in pp:
             func = fun_Logparabola
             alpha = lm.sources[source].parameters[pp].value
-        if ".beta" in pp:
+        if ".beta" in pp and "Beta_function.beta" not in pp:
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
         if ("lat0"in pp) or ("dec" in pp):
@@ -329,7 +397,7 @@ def reweightxall(WCDA, lm, func = fun_Powerlaw,source="J0248"):
         if ".alpha" in pp:
             func = fun_Logparabola
             alpha = lm.sources[source].parameters[pp].value
-        if ".beta" in pp:
+        if ".beta" in pp and "Beta_function.beta" not in pp:
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
         if ("lat0"in pp) or ("dec" in pp):
@@ -369,7 +437,7 @@ def reweightxall(WCDA, lm, func = fun_Powerlaw,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, acc=False, scannum=200):
     """
         获取某个源的能谱点
 
@@ -398,7 +466,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if ".alpha" in pp:
             func = fun_Logparabola
             alpha = lm.sources[source].parameters[pp].value
-        if ".beta" in pp:
+        if ".beta" in pp and "Beta_function.beta" not in pp:
             func = fun_Logparabola
             beta = lm.sources[source].parameters[pp].value
         if ".xc" in pp:
@@ -408,10 +476,11 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
     results = []
     silence_logs()
     for i in tqdm(Detector._active_planes):
+        log.info(f"Processing plane {i}")
         if int(i) <= imin:
             imin = int(i)
-        xx = reweightx(lm,Detector, i,source=source,func=func)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange)
+        xx = reweightx(lm, Detector, i, source=source, func=func, acc=acc)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange, pixelsize=pixelsize, scannum=scannum)
         # try:
         #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
         # except Exception as e:
@@ -423,6 +492,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         errorl = abs(result2[1][0].values[0][1])
         erroru = result2[1][0].values[0][2]
         error1 = result2[1][0].values[0][3]
+        print(xx)
         Flux_WCDA[int(i)-imin][0]=np.double(pow(10.,np.double(xx[0])))
         Flux_WCDA[int(i)-imin][1]=np.double(pow(10.,np.double(xx[1])))
         Flux_WCDA[int(i)-imin][2]=np.double(pow(10.,np.double(xx[2])))
@@ -490,7 +560,7 @@ def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data",
             #  xerr=[Flux_WCDA[:,1],Flux_WCDA[:,2]],\
             fmt='go',label=label,c=color)
             
-            ax.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2, 1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2],
+            ax.errorbar(Flux_WCDA[:,0][~npd], 1e9*(Flux_WCDA[:,3][~npd]+1.96*Flux_WCDA[:,5][~npd])*Flux_WCDA[:,0][~npd]**2, yerr=[abs(1e9*Flux_WCDA[:,4][~npd]*Flux_WCDA[:,0][~npd]**2), abs(1e9*Flux_WCDA[:,5][~npd]*Flux_WCDA[:,0][~npd]**2)],
                             uplims=True,
                             marker="None", color=color,
                             markeredgecolor=color, markerfacecolor=color,

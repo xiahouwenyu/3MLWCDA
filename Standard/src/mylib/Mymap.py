@@ -178,7 +178,7 @@ def interpimg(hp_map,xmin,xmax,ymin,ymax,xsize):
     # plt.colorbar()
     return rotimg
 
-def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-4, ifimg=False, ifGAL=False, iflog=False, ifcolorbar=False):
+def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-4, ifimg=False, ifGAL=False, iflog=False, ifcolorbar=False, ax=None, sigma=1):
     """
         画区域的银河diffuse模版 countour
 
@@ -190,6 +190,9 @@ def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-
     import ROOT
     import root_numpy as rt
     from matplotlib.colors import Normalize
+
+    num=len(levels)
+
     root_file=ROOT.TFile.Open(("../../data/gll_dust.root"),"read")
     root_th2d=root_file.Get("gll_region")
     X_nbins=root_th2d.GetNbinsX()
@@ -203,6 +206,8 @@ def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-
     # print(X_min,X_max,X_nbins, X_size)
     # print(Y_min,Y_max,Y_nbins, Y_size)
     data = rt.hist2array(root_th2d).T
+    from scipy.ndimage import gaussian_filter
+    data = gaussian_filter(data, sigma=sigma)
     if iflog:
         data=np.log(data)
         levels=np.log(levels)
@@ -211,22 +216,28 @@ def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-
     RA, DEC = np.meshgrid(ra, dec)
     if not ifGAL:
         RA, DEC = gal2edm(RA, DEC)
+    if ax is None:
+        # plt.figure()
+        ax = plt.gca()
     if ifimg:
         # plt.imshow(np.log(data),aspect="auto",extent=[X_min,X_max,Y_min,Y_max],origin='lower', alpha=0.7)
-        plt.contourf(RA,DEC,data, alpha=0.3)
-    plt.contour(RA,DEC,data,num,cmap="Greys",alpha=0.7, linestyles=[':', ':', '-.', '-.', '--', '-', '-', '-', '-'],
-                    linewidths=[0.1, 0.2, 0.5, 0.7, 1, 1.2, 1.4, 1.6, 1.8], levels=levels) #levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22,norm=Normalize(vmin=0.2e22,vmax=1e22)
+        ax.contourf(RA,DEC,data, alpha=0.3)
+    lw = [0.1, 0.2, 0.5, 0.7, 1, 1.2, 1.4, 1.6, 1.8]
+    ls = [':', ':', '-.', '-.', '--', '-', '-', '-', '-']
+    ax.contour(RA,DEC,data,num,cmap="Greys",alpha=0.7, linestyles=ls[-num:],
+                    linewidths=lw[-num:], levels=levels) #levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22,norm=Normalize(vmin=0.2e22,vmax=1e22)
     if ifcolorbar:
-        plt.colorbar()
+        ax.colorbar()
 
 
 def smooth_array(arr):
     zero_indices = np.where(arr == 0)[0]
     for i in zero_indices:
-        arr[i] = np.mean([arr[max(0, i-1)], arr[min(len(arr), i+1)]])
+        if i+1 < len(arr)-1:
+            arr[i] = np.mean([arr[max(0, i-1)], arr[min(len(arr), i+1)]])
     return arr
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False, dpi=300):
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False, dpi=300, threshold=3):
     """Draw healpixmap.
 
         Args:
@@ -267,7 +278,7 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     if zmin !=None:
         dMin=zmin
     if color == "Milagro":
-        textcolor, colormap = MapPalette.setupMilagroColormap(dMin-1, dMax+1, 3, 1000)
+        textcolor, colormap = MapPalette.setupMilagroColormap(dMin-1, dMax+1, threshold, 1000)
     elif color == "Fermi":
         textcolor, colormap = MapPalette.setupGammaColormap(10000)
 
@@ -445,6 +456,7 @@ def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, 
     nside = 1024
     npix=hp.nside2npix(nside)
     pixel_areas = 4 * np.pi / npix
+    pixel_areas = 129600 / npix
 
  
     data_disc = np.zeros(n) #define the excess_disc number in each disc
@@ -526,7 +538,108 @@ def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, 
         if ifsave:
             plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
             plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
-    return psfdata
+    return psfdata, pixel_areas
+
+def Draw_lateral_distribution_deg2(region_name, Modelname, map, ra, dec, num, width, ifdraw=False, ifsave=True):
+    """ Draw_lateral_distribution.
+
+        Args:
+            num: num of bins
+            width: width of one bin
+        Returns:
+            >>> np.array([psi, data_ring, errord,  bkg_ring, errorb, model_ring, errorm, excess_ring, res_ring])
+    """
+    colat_crab = np.radians(90-float(dec))
+    lon_crab = np.radians(float(ra))
+    vec_crab = hp.ang2vec(colat_crab,lon_crab)
+    n = num#number of rings
+    w = width#width of rings in degrees
+    nside = 1024
+    npix=hp.nside2npix(nside)
+    pixel_areas = 4 * np.pi / npix
+    pixel_areas = 129600 / npix
+
+ 
+    data_disc = np.zeros(n) #define the excess_disc number in each disc
+    data_ring = np.zeros(n) #define the excess_disc number in each ring
+    bkg_disc = np.zeros(n) #define the excess_disc number in each disc
+    bkg_ring = np.zeros(n) #define the excess_disc number in each ring
+    model_disc = np.zeros(n) #define the excess_disc number in each disc
+    model_ring = np.zeros(n) #define the excess_disc number in each ring
+    excess_ring = np.zeros(n) #define the excess_disc number in each ring
+    res_ring = np.zeros(n) #define the excess_disc number in each ring
+
+    npx_disc = np.zeros(n)   #define the number of pixels in each disc
+    npx_ring = np.zeros(n) #define the number of pixels in each ring
+
+    disc = list(np.zeros(n))
+    for i in tqdm(range(1,n+1), desc="get disc pixnum"):
+        disc[i-1] = hp.query_disc(nside,vec_crab,np.radians(np.sqrt(w*i)))
+        npx_disc[i-1] = disc[i-1].shape[0]
+
+    npx_ring[0] = npx_disc[0]
+    for i in tqdm(range(1,n), desc="get ring pixnum"):
+        npx_ring[i] = npx_disc[i]-npx_disc[i-1]
+
+    psi = np.arange(w/2,n*w,w) #horizontal coordinates
+
+    data=map[0]
+    bkg=map[1]
+    model=map[2]
+
+    for i in tqdm(range(n),desc="compute disk"):
+        data_disc[i] = sum(data[disc[i]])
+        bkg_disc[i] = sum(bkg[disc[i]])
+        model_disc[i] = sum(model[disc[i]])
+
+    data_ring[0] = data_disc[0]
+    bkg_ring[0] = bkg_disc[0] 
+    model_ring[0] = model_disc[0]
+    errord = np.zeros(n) #poissonian error    
+    errord[0] = np.sqrt(sum(data[disc[0]]))
+    errorb = np.zeros(n) #poissonian error    
+    errorb[0] = np.sqrt(sum(bkg[disc[0]]))
+    errorm = np.zeros(n) #poissonian error    
+    errorm[0] = np.sqrt(sum(model[disc[0]]))
+    for i in tqdm(range(1,n),desc="compute ring"):
+        data_ring[i] = data_disc[i]-data_disc[i-1]
+        errord[i] = np.sqrt(data_ring[i])
+        bkg_ring[i] = bkg_disc[i]-bkg_disc[i-1]
+        errorb[i] = np.sqrt(bkg_ring[i])
+        model_ring[i] = model_disc[i]-model_disc[i-1]
+        errorm[i] = np.sqrt(model_ring[i])
+    data_ring/=npx_ring
+    bkg_ring/=npx_ring
+    model_ring/=npx_ring
+    excess_ring = data_ring-bkg_ring
+    res_ring = data_ring-model_ring
+    errord/=npx_ring
+    errorb/=npx_ring
+    errorm/=npx_ring
+
+    psfdata = np.array([psi, data_ring, errord,  bkg_ring, errorb, model_ring, errorm, excess_ring, res_ring])
+
+    if ifdraw:
+        fig1 = plt.figure()
+        plt.errorbar(psfdata[0],psfdata[1],psfdata[2],fmt='o', label="data", c="tab:blue")
+        plt.errorbar(psfdata[0],psfdata[5],psfdata[6],fmt='o',label="model", c="tab:red")
+        plt.errorbar(psfdata[0],psfdata[3],psfdata[4],fmt='o',label="bkg", c="black")
+        plt.xlabel(r"$\phi^{\circ}$")
+        plt.ylabel(r"$\frac{excess}{N_{pix}}$")
+        plt.legend()
+        if ifsave:
+            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.pdf")
+        fig2 = plt.figure()
+        plt.errorbar(psfdata[0],psfdata[7],psfdata[2],fmt='o',label="excess", c="black")
+        plt.errorbar(psfdata[0],psfdata[8],psfdata[2],fmt='o',label="residual", c="tab:red")
+        plt.xlabel(r"$\phi^{\circ}$")
+        plt.ylabel(r"$\frac{excess}{N_{pix}}$")
+        plt.legend()
+        if ifsave:
+            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
+    return psfdata, pixel_areas
 
 def getmaskedroi(ra1, dec1, data_radius, maskp=[]):
     """
@@ -551,3 +664,4 @@ def getmaskedroi(ra1, dec1, data_radius, maskp=[]):
         mask = mask | maskdisk
     roimap[mask]=0
     return roimap
+

@@ -65,7 +65,9 @@ source_type_names = {1:  'HBL',
                      41: 'PWN/TeV Halo',
                      42: 'Giant Molecular Cloud',
                      43: 'SNR',
-                     44: 'Nova'}
+                     44: 'Nova',
+                     45: 'TeV Halo Candidate',
+                     46: 'LLAGN'}
 
 def p(a, b):
     return a[0:b]

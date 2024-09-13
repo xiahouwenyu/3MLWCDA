@@ -41,8 +41,8 @@ class PowerlawM(Function1D, metaclass=FunctionMeta):
             initial value : 1.0
             is_normalization : True
 
-            min : -1e3
-            max : 1e3
+            min : -1e5
+            max : 1e5
             delta : 0.1
 
         piv :
@@ -258,3 +258,34 @@ class Log_parabolaM(Function1D, metaclass=FunctionMeta):  #            transform
             10, old_div(((2 + self.alpha.value) * np.log(10)),
                         (2 * self.beta.value))
         )
+
+class Line_ratio(Function1D, metaclass=FunctionMeta):
+    r"""
+    description :
+
+        A linear function
+
+    latex : $ b * x + a $
+
+    parameters :
+
+        a :
+
+            desc :  intercept
+            initial value : 0
+
+        b :
+
+            desc : coeff
+            initial value : 1
+
+    """
+    def _set_units(self, x_unit, y_unit):
+        # a has units of y_unit / x_unit, so that a*x has units of y_unit
+        self.a.unit = y_unit
+
+        # b has units of y
+        self.b.unit = y_unit / x_unit
+
+    def evaluate(self, x, a, b):
+        return a*(b * x + 1)

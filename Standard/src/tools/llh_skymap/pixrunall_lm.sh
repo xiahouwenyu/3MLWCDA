@@ -1,4 +1,4 @@
-rm -rf ./skytxt2/*txt
+# rm -rf ./skytxt2/*txt
 # rm -rf ./output/*.sh*
 for i in {0..768}
 do

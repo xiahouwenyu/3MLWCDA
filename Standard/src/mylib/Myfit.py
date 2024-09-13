@@ -45,6 +45,12 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
 
             ################################ Asymm Gaussian on sphere
             a=None, af=False, ab=None, e=None, ef=False, eb=None, theta=None, thetaf=False, thetab=None,
+
+            ################################ Beta
+            rc1=None, rc1f=False, rc1b=None, beta1=None, beta1f=False, beta1b=None, rc2=None, rc2f=False, rc2b=None, beta2=None, beta2f=False, beta2b=None,
+
+            ################################ EBL
+            redshift=None, ebl_model="franceschini",
             
             spec=None,
             spat=None,
@@ -107,6 +113,10 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             spat.radius.fix = rf
             if rb != None:
                 spat.radius.bounds = rb
+    elif spat == "Beta":
+        spat = Beta_function()
+    elif spat == "DBeta":
+        spat = Double_Beta_function()
     elif spat == "Asymm":
         spat=Asymm_Gaussian_on_sphere()
     elif spat == "Ellipse":
@@ -116,8 +126,14 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
 
     #  log.info(spat.name)
 
-    if sigma is None and rdiff0 is None and radius is None and a is None:
-        source = PointSource(name,ra,dec,spectral_shape=spec)
+    if sigma is None and rdiff0 is None and radius is None and a is None and rc1 is None and rc2 is None:
+        if redshift is not None:
+            eblfunc = EBLattenuation()
+            eblfunc.redshift=redshift*u.dimensionless_unscaled
+            eblfunc.ebl_model = ebl_model
+            source = PointSource(name,ra,dec,spectral_shape=spec*eblfunc)
+        else:
+            source = PointSource(name,ra,dec,spectral_shape=spec)
         source.position.ra.free=True
         source.position.dec.free=True
         source.position.ra.fix = raf
@@ -130,7 +146,14 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             source.position.ra.bounds=(ra-fitrange,ra+fitrange)
             source.position.dec.bounds=(dec-fitrange,dec+fitrange)
     else:
-        source = ExtendedSource(name, spatial_shape=spat, spectral_shape=spec)
+        if redshift is not None:
+            eblfunc = EBLattenuation()
+            eblfunc.redshift=redshift*u.dimensionless_unscaled
+            eblfunc.ebl_model = ebl_model
+            source = ExtendedSource(name, spatial_shape=spat, spectral_shape=spec*eblfunc)
+        else:
+            source = ExtendedSource(name, spatial_shape=spat, spectral_shape=spec)
+       
 
 
     def setspatParameter(parname,par,parf,parb,unit=""):
@@ -211,6 +234,10 @@ if parb != None:
     setspatParameter("a",a,af,ab)
     setspatParameter("theta",theta,thetaf,thetab)
     setspatParameter("e",e,ef,eb)
+    setspatParameter("rc1",rc1,rc1f,rc1b)
+    setspatParameter("rc2",rc2,rc2f,rc2b)
+    setspatParameter("beta1",beta1,beta1f,beta1b)
+    setspatParameter("beta2",beta2,beta2f,beta2b)
 
     return source
 
@@ -570,7 +597,7 @@ def check_bondary(optmodel):
     return ifatlimit, boundpar
     
 
-def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True):
+def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True, quiet=False):
     """
         进行拟合
 
@@ -639,7 +666,7 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verb
         jl.set_minimizer(pagmo_minimizer)
     else:
         jl.set_minimizer(mini)
-    result = jl.fit()
+    result = jl.fit(quiet=quiet)
 
     ifatb, boundpar = check_bondary(jl.results.optimized_model)
     if donwtlimit:
@@ -675,11 +702,14 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verb
     freepars = []
     fixedpars = []
     for p in Model.parameters:
-        par = Model.parameters[p]
-        if par.free:
-            freepars.append("%-45s %35.6g ± %2.6g %s" % (p, par.value, result[0]["error"][p], par._unit))
-        else:
-            fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+        try:
+            par = Model.parameters[p]
+            if par.free:
+                freepars.append("%-45s %35.6g ± %2.6g %s" % (p, par.value, result[0]["error"][p], par._unit))
+            else:
+                fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+        except:
+            continue
 
 
     if savefit:
@@ -744,7 +774,7 @@ def get_vari_dis(result, var="J0057.Gaussian_on_sphere.sigma"):
     plt.xlim(left=bins.min()-0.2*bins.std())
     plt.ylim(0,nt.max()+0.2*nt.std())
 
-def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=True):
+def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=True, quiet=False):
     """
         进行联合拟合
 
@@ -764,9 +794,11 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         os.system(f'mkdir ../res/{regionname}/')
     if not os.path.exists(f'../res/{regionname}/{modelname}/'):
         os.system(f'mkdir ../res/{regionname}/{modelname}/')
+
     Model.save(f"../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
-    for i in range(len(Detector)):
-        Detector[i].set_active_measurements(s[i],e[i])
+    if s is not None and e is not None:
+        for i in range(len(Detector)):
+            Detector[i].set_active_measurements(s[i],e[i])
     datalist = DataList(*Detector)
     jl = JointLikelihood(Model, datalist, verbose=verbose)
     if mini == "grid":
@@ -813,7 +845,7 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
     else:
         jl.set_minimizer(mini)
 
-    result = jl.fit()
+    result = jl.fit(quiet=quiet)
 
     ifatb, boundpar = check_bondary(jl.results.optimized_model)
     if donwtlimit:
@@ -862,8 +894,11 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
             os.system(f'mkdir ../res/{regionname}/{modelname}/')
         fig=[]
         for i in range(len(Detector)):
-            fig.append(Detector[i].display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True))
-            fig[i].savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+            try:
+                fig.append(Detector[i].display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True))
+                fig[i].savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+            except:
+                pass
         Model.save(f"../res/{regionname}/{modelname}/Model.yml", overwrite=True)
         jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
         jl.results.optimized_model.save(f"../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
@@ -880,6 +915,29 @@ def jointfit(regionname, modelname, Detector,Model,s,e,mini = "minuit",verbose=F
         # results_reloaded = load_analysis_results("./%s/Results.fits"%(time1))
 
     return [jl,result]
+
+def get_profile_likelihood(region_name, Modelname, data, model, par, min=None, max=None, steps=100, log=False, ifplot=False):
+    if min is None:
+        min = model[par].min_value
+    if max is None:
+        max = model[par].max_value
+    if log:
+        mu = np.logspace(np.log10(min), np.log10(max), steps)
+    else:
+        mu = np.linspace(min, max, steps)
+
+    L = []
+    quiet_mode()
+    for m in tqdm(mu):
+        model[par].value = m
+        model[par].fix = True
+        result2 = fit(region_name, Modelname, data, model, mini="ROOT", donwtlimit=False, quiet=True)
+        L.append(result2[0].current_minimum)
+    if ifplot:
+        plt.plot(mu, L)
+        plt.xlabel("dt")
+        plt.ylabel("llh")
+    return mu, L    
 
 def reload_modelname(modelpath):
     activate_warnings()
@@ -969,6 +1027,77 @@ def getressimple(WCDA, lm):
     off = bkg+model
     resu = (on-off)/np.sqrt(on+off)
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
+    return resu
+
+def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5):
+    """
+        获取简单慢速的拟合残差显著性天图,LIMA显著性
+
+        Parameters:
+
+
+        Returns:
+            残差healpix
+    """ 
+    WCDA.set_model(lm)
+    data=np.zeros(1024*1024*12)
+    bkg =np.zeros(1024*1024*12)
+    model=np.zeros(1024*1024*12)
+
+    next = lm.get_number_of_extended_sources()
+    npt=lm.get_number_of_point_sources()
+    for i, plane_id in enumerate(WCDA._active_planes):
+        data_analysis_bin = WCDA._maptree[plane_id]
+        # try:
+        this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next).as_dense()
+        # except:
+        #     this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next-1).as_dense()
+        bkg_subtracted, data_map, background_map = WCDA._get_excess(data_analysis_bin, all_maps=True)
+        model += this_model_map_hpx
+        bkg   += background_map
+        data  += data_map
+    
+    nside=1024
+    theta, phi = hp.pix2ang(nside, np.arange(0, 1024*1024*12, 1))
+    theta = np.pi/2 - theta
+    if alpha is None:
+        alpha=2*smooth_sigma*1.51/60./np.sin(theta)
+
+
+    data[np.isnan(data)]=hp.UNSEEN
+    bkg[np.isnan(bkg)]=hp.UNSEEN
+    model[np.isnan(model)]=hp.UNSEEN
+    data=hp.ma(data)
+    bkg=hp.ma(bkg)
+    model=hp.ma(model)
+    # resu=data-bkg-model
+    on = data
+    off = bkg+model
+
+    nside=2**10
+    npix=hp.nside2npix(nside)
+    pixarea = 4 * np.pi/npix
+    on1 = hp.sphtfunc.smoothing(on,sigma=np.radians(smooth_sigma))
+    on2 = 1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(on,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
+    off1 = hp.sphtfunc.smoothing(off,sigma=np.radians(smooth_sigma))
+    off2 = 1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(off,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
+
+    
+    # resu2=hp.sphtfunc.smoothing(resu,sigma=np.radians(smooth_sigma))
+    # resu3=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(resu,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
+    scale=(on1+off1)/(on2+off2)
+    ON=on1*scale
+    BK=off1*scale
+    if signif==5:
+        resu=(ON-BK)/np.sqrt(ON+alpha*BK)
+    elif signif==9:
+        resu=(ON-BK)/np.sqrt(ON*alpha+BK)
+    elif signif==17:
+        resu=np.sqrt(2.)*np.sqrt(ON*np.log((1.+alpha)/alpha*ON/(ON+BK/alpha))+BK/alpha*np.log((1.+alpha)*BK/alpha/(ON+BK/alpha)))
+        resu[ON<BK] *= -1
+    else:
+        resu=(ON-BK)/np.sqrt(BK)
+    # resu = (ON-BK)/np.sqrt(ON)
     return resu
 
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=8, rtp=8):
@@ -1356,7 +1485,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
     else:
         return Diffuse
 
-def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3, setdeltabypar=True, kbratio=1000):
+def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3, setdeltabypar=True, kbratio=1000, ratio=None, spec = Powerlaw()):
     """
         读取fits的形态模版
 
@@ -1369,8 +1498,11 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     fluxUnit = 1e-9
     Diffuseshape = SpatialTemplate_2D(fits_file=fits_file)
-    Diffusespec = Powerlaw()
-    Diffuse = ExtendedSource(name, spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
+    Diffusespec = spec
+    if ratio is not None:
+        Diffuse = ExtendedSource(name, spatial_shape=Diffuseshape,spectral_shape=ratio*Diffusespec)
+    else:
+        Diffuse = ExtendedSource(name, spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
     Diffusespec.K = K * fluxUnit
     Diffusespec.K.fix=Kf
 

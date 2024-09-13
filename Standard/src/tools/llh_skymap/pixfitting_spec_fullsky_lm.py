@@ -25,8 +25,8 @@ def go(args):
     response2 = args.rsfile2#"/home/lhaaso/tangruiyi/analysis/cocoonstuff/maptreeinc/
     #ra_Cocoon, dec_Cocoon = 307.17, 41.17
     # ra_crab, dec_crab = 83.694, 21.98  #crab
-    data_radius = 6.5  # in degree 
-    model_radius = 7.0
+    data_radius = 9  # in degree 
+    model_radius = 10
     #Splitiing the sky into 768 equal-solid-angle areas as the pixels ranged in nested healpix map with nside=8
     no=args.area
     #vec_center=hp.pix2vec(2**3,no,nest=True)
@@ -61,23 +61,46 @@ def go(args):
        # source.position.ra.fix=True
         #source.position.dec=dec_pix
       #  source.position.dec.fix=True 
-    spectrum.K=1e-12*fluxUnit
+    spectrum.K=1e-16 *fluxUnit
     spectrum.K.fix=False
-    spectrum.K.bounds=(-1e-13*fluxUnit, 1e-9*fluxUnit)
+    spectrum.K.bounds=(-1e-14*fluxUnit, 1e-10*fluxUnit)
+    spectrum.K.delta=1e-14*fluxUnit
     spectrum.piv= 20.*u.TeV
     spectrum.piv.fix=True
-    spectrum.alpha=-2.6
+    spectrum.alpha=-3
+    spectrum.alpha.fix=True
     spectrum.beta=1
     # spectrum.index.fix=True
     WCDA.psf_integration_method="fast"
     KM2A.psf_integration_method="fast"
     model=Model(source)
 
+    nside=1024
+    npix=hp.nside2npix(nside)
+    skymap=np.zeros(npix)
+    for i in range(768):
+        try:
+            data=np.loadtxt(f"./skytxt3/sig_no{i}.txt")
+        except Exception as e:
+            print(i, e)
+            continue
+        for j in range(len(data)):
+            try:
+                skymap[int(data[j][0])]=float(data[j][1])
+            except Exception as e:
+                print(i, e)
+                continue
+    skymap=hp.ma(skymap)
+    indexdone = np.nonzero(skymap)
+
 #        actbin=args.actBin
     for i in range(len(pixid)):
 #    for pid in range(args.StartPix,args.StopPix):    
         print(i)
         pid=pixid[i]
+        if pid in indexdone:
+            continue
+        
         ra_pix , dec_pix = hp.pix2ang(1024,pid,lonlat=True)
         if(dec_pix<=-20. or dec_pix>=80.):
             sig=hp.UNSEEN
@@ -88,14 +111,14 @@ def go(args):
             roi = HealpixConeROI(data_radius=np.max([1.5,dec_pix+19.5]), model_radius=np.max([2,dec_pix+19.5]), ra=ra_pix, dec=dec_pix)
             WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.2)
             KM2A = HAL("KM2A", maptree2, response2, roi, flat_sky_pixels_size=0.2)
-            WCDA.psf_integration_method="exact"
-            KM2A.psf_integration_method="exact"
+            WCDA.psf_integration_method="fast"
+            KM2A.psf_integration_method="fast"
         elif dec_c>=73.5:
             roi = HealpixConeROI(data_radius=np.max([1.5,79.5-dec_pix]), model_radius=np.max([2,79.5-dec_pix]), ra=ra_pix, dec=dec_pix)
             WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.2)
             KM2A = HAL("KM2A", maptree2, response2, roi, flat_sky_pixels_size=0.2)
-            WCDA.psf_integration_method="exact"
-            KM2A.psf_integration_method="exact"
+            WCDA.psf_integration_method="fast"
+            KM2A.psf_integration_method="fast"
             
         source.position.ra=ra_pix
         source.position.ra.fix=True
