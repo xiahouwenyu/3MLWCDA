@@ -25,6 +25,8 @@ try:
 except:
     pass
 
+from Mylightcurve import p2sigma
+
 log = setup_logger(__name__)
 log.propagate = False
 
@@ -691,7 +693,7 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verb
                     elif it[1]==1:
                         Model.parameters[it[0]].bounds = (dl/ratio, ul)
                 log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
-            fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
+            return fit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
     if ifgeterror:
         from IPython.display import display
@@ -869,7 +871,7 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
                     elif it[1]==1:
                         Model.parameters[it[0]].bounds = (dl/ratio, ul) #.bounds[1]
                 log.info(f"Parameter {it[0]} is close to the boundary, extend the boundary to {Model.parameters[it[0]].bounds}.")
-            jointfit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
+            return jointfit(regionname, modelname, Detector,Model,s,e,mini,verbose, savefit, ifgeterror, grids, donwtlimit)
 
     freepars = []
     fixedpars = []
@@ -916,6 +918,44 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
 
     return [jl,result]
 
+def parscan(WCDA, result, par, min=1e-29, max=1e-22, steps=100, log=[False]):
+    jjj = result[0]
+    rrr=jjj.results
+
+    smresults = jjj.get_contours(par,  min, max, steps, log=log)
+
+    plt.figure()
+    CL = 0.95
+    plt.plot(smresults[0], 2*(smresults[2]-np.min(smresults[2])))
+    deltaTS = 2*(smresults[2]-np.min(smresults[2]))
+    trials = smresults[0]
+    TSneed = p2sigma(1-(2*CL-1))**2
+    indices = np.where(smresults[2] == np.min(smresults[2]))[0]
+    newmini = smresults[0][indices]
+    try:
+        plt.scatter(newmini, 0, marker="*", c="tab:blue", zorder=4, s=100)
+    except:
+        plt.scatter(newmini, 0, marker="*", c="tab:blue", zorder=4, s=100)
+
+    upper = trials[(deltaTS>=TSneed) & (trials>=newmini)][0]
+    sigma1 = trials[(deltaTS>=1) & (trials>=newmini)][0]
+    sigma2 = trials[(deltaTS>=4) & (trials>=newmini)][0]
+    sigma3 = trials[(deltaTS>=9) & (trials>=newmini)][0]
+    plt.axhline(TSneed,color="black", linestyle="--", label=f"95% upperlimit: {upper:.2e}")
+    plt.axvline(upper,color="black", linestyle="--")
+    plt.axhline(1,color="tab:green", linestyle="--", label=f"1 sigma: {sigma1:.2e}")
+    plt.axhline(4,color="tab:orange", linestyle="--", label=f"2 sigma: {sigma2:.2e}")
+    plt.axhline(9,color="tab:red", linestyle="--", label=f"3 sigma: {sigma3:.2e}")
+    TS = -2*(np.min(smresults[2])-(-WCDA.get_log_like(return_null=True)))
+    plt.axhline(TS,color="cyan", linestyle="--", label=f"Model TS: {TS:.2e}")
+    if log[0]:
+        plt.xscale("log")
+    plt.legend()
+    plt.ylabel(r"$\Delta TS$")
+    # plt.xlabel(par)
+    plt.show()
+    return upper, sigma1, sigma2, sigma3, TS
+
 def get_profile_likelihood(region_name, Modelname, data, model, par, min=None, max=None, steps=100, log=False, ifplot=False):
     if min is None:
         min = model[par].min_value
@@ -935,8 +975,10 @@ def get_profile_likelihood(region_name, Modelname, data, model, par, min=None, m
         L.append(result2[0].current_minimum)
     if ifplot:
         plt.plot(mu, L)
-        plt.xlabel("dt")
+        plt.xlabel(f"{par}")
         plt.ylabel("llh")
+        if log:
+            plt.xscale("log")
     return mu, L    
 
 def reload_modelname(modelpath):

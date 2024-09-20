@@ -404,5 +404,5 @@ tabcolor = mcolors.TABLEAU_COLORS
 csscolor = mcolors.CSS4_COLORS
 colorall = color1+color2+color3+color4+color6+color6+color8+list(tabcolor.values())+list(csscolor.values())
 
-
+"cnm"
 
