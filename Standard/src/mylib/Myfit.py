@@ -57,6 +57,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             spec=None,
             spat=None,
             setdeltabypar=True,
+            ratio=None,
             *other,
             **kw):  # sourcery skip: extract-duplicate-method, low-code-quality
     """Create a Sources.
@@ -133,7 +134,10 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             eblfunc = EBLattenuation()
             eblfunc.redshift=redshift*u.dimensionless_unscaled
             eblfunc.ebl_model = ebl_model
-            source = PointSource(name,ra,dec,spectral_shape=spec*eblfunc)
+            if ratio is not None:
+                source = PointSource(name,ra,dec,spectral_shape=ratio*spec*eblfunc)
+            else:
+                source = PointSource(name,ra,dec,spectral_shape=spec*eblfunc)
         else:
             source = PointSource(name,ra,dec,spectral_shape=spec)
         source.position.ra.free=True

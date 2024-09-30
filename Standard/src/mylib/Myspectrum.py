@@ -807,7 +807,9 @@ def spec2naima(dir, data0057):
     dataforlb[0] = data0057[0]
     dataforlb[1] = data0057[6]
     dataforlb[2] = data0057[7]
-    dataforlb[3] = data0057[1]
+    cut = data0057[5]>=2
+    dataforlb[3][cut] = data0057[1][cut]
+    dataforlb[3][~cut] = data0057[1][~cut]+1.96*data0057[4][~cut]
     dataforlb[4] = data0057[2]
     dataforlb[5] = data0057[3]
     dataforlb[6] = data0057[4]
