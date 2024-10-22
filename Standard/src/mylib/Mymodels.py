@@ -7,6 +7,17 @@ from astromodels.utils.angular_distance import angular_distance
 import astropy.units as u
 from scipy.integrate import quad
 
+from astropy import wcs
+from astropy.coordinates import ICRS, BaseCoordinateFrame, SkyCoord
+from astropy.io import fits
+
+import hashlib
+
+from astromodels.utils.logging import setup_logger
+
+log = setup_logger(__name__)
+
+
 class Continuous_injection_diffusion_ellipse2D(Function2D, metaclass=FunctionMeta):
     r"""
         description :
@@ -523,3 +534,172 @@ class Double_Beta_function(Function2D, metaclass=FunctionMeta):
         if isinstance( z, u.Quantity):
             z = z.value
         return np.ones_like( z )
+    
+
+# class SpatialTemplate_2D(Function2D, metaclass=FunctionMeta):
+#     r"""
+#         description :
+        
+#             User input Spatial Template.  Expected to be normalized to 1/sr
+        
+#         latex : $ hi $
+        
+#         parameters :
+        
+#             K :
+        
+#                 desc : normalization
+#                 initial value : 1
+#                 fix : yes
+#             hash :
+                
+#                 desc: hash of model map [needed for memoization]
+#                 initial value: 1
+#                 fix: yes
+#             ihdu:
+#                 desc: header unit index of fits file
+#                 initial value: 0
+#                 fix: True 
+#                 min: 0
+        
+#         properties:
+#             fits_file:
+#                 desc: fits file to load
+#                 defer: True
+#                 function: _load_file
+#             frame:
+#                 desc: coordinate frame
+#                 initial value: icrs
+#                 allowed values:
+#                     - icrs
+#                     - galactic
+#                     - fk5
+#                     - fk4
+#                     - fk4_no_e
+#     """
+    
+#     def _set_units(self, x_unit, y_unit, z_unit):
+        
+#         self.K.unit = z_unit
+    
+#     # This is optional, and it is only needed if we need more setup after the
+#     # constructor provided by the meta class
+    
+#     # def _setup(self):
+        
+#         # self._frame = "icrs"
+#         # self._fitsfile = None
+#         # self._map = None
+    
+#     def _load_file(self):
+
+#         self._fitsfile=self.fits_file.value
+        
+#         with fits.open(self._fitsfile) as f:
+    
+#             self._wcs = wcs.WCS( header = f[int(self.ihdu.value)].header )
+#             self._map = f[int(self.ihdu.value)].data
+              
+#             self._nX = f[int(self.ihdu.value)].header['NAXIS1']
+#             self._nY = f[int(self.ihdu.value)].header['NAXIS2']
+
+#             #note: map coordinates are switched compared to header. NAXIS1 is coordinate 1, not 0. 
+#             #see http://docs.astropy.org/en/stable/io/fits/#working-with-image-data
+#             assert self._map.shape[1] == self._nX, "NAXIS1 = %d in fits header, but %d in map" % (self._nX, self._map.shape[1])
+#             assert self._map.shape[0] == self._nY, "NAXIS2 = %d in fits header, but %d in map" % (self._nY, self._map.shape[0])
+            
+#             #test if the map is normalized as expected
+#             area = wcs.utils.proj_plane_pixel_area( self._wcs )
+#             dOmega = (area*u.deg*u.deg).to(u.sr).value
+#             total = self._map.sum() * dOmega
+
+#             if not np.isclose( total, 1,  rtol=1e-2):
+#                 log.warning("2D template read from {} is normalized to {} (expected: 1)".format(self._fitsfile, total) )
+            
+#             #hash sum uniquely identifying the template function (defined by its 2D map array and coordinate system)
+#             #this is needed so that the memoization won't confuse different SpatialTemplate_2D objects.
+#             h = hashlib.sha224()
+#             h.update( self._map)
+#             h.update( repr(self._wcs).encode('utf-8') )
+#             self.hash = int(h.hexdigest(), 16)
+            
+
+#     # def to_dict(self, minimal=False):
+
+#     #      data = super(Function2D, self).to_dict(minimal)
+
+#     #      if not minimal:
+         
+#     #         data['extra_setup'] = {"_fitsfile": self._fitsfile, "_frame": self._frame }
+  
+#     #      return data
+        
+    
+#     # def set_frame(self, new_frame):
+#     #     """
+#     #         Set a new frame for the coordinates (the default is ICRS J2000)
+            
+#     #         :param new_frame: a coordinate frame from astropy
+#     #         :return: (none)
+#     #         """
+#     #     assert new_frame.lower() in ['icrs', 'galactic', 'fk5', 'fk4', 'fk4_no_e' ]
+                
+#     #     self._frame = new_frame
+    
+#     def evaluate(self, x, y, K, hash, ihdu):
+                  
+#         # We assume x and y are R.A. and Dec
+#         coord = SkyCoord(ra=x, dec=y, frame=self.frame.value, unit="deg")
+        
+#         #transform input coordinates to pixel coordinates; 
+#         #SkyCoord takes care of necessary coordinate frame transformations.
+#         Xpix, Ypix = coord.to_pixel(self._wcs)
+        
+#         Xpix = np.atleast_1d(Xpix.astype(int))
+#         Ypix = np.atleast_1d(Ypix.astype(int))
+        
+#         # find pixels that are in the template ROI, otherwise return zero
+#         #iz = np.where((Xpix<self._nX) & (Xpix>=0) & (Ypix<self._nY) & (Ypix>=0))[0]
+#         iz = (Xpix<self._nX) & (Xpix>=0) & (Ypix<self._nY) & (Ypix>=0)
+#         out = np.zeros_like(Xpix).astype(float)
+#         out[iz] = self._map[Ypix[iz], Xpix[iz]]
+        
+#         return np.multiply(K, out)
+
+#     def get_boundaries(self):
+    
+#         # if self._map is None:
+            
+#         #     self.load_file(self._fitsfile)
+          
+#         #We use the max/min RA/Dec of the image corners to define the boundaries.
+#         #Use the 'outside' of the pixel corners, i.e. from pixel 0 to nX in 0-indexed accounting.
+    
+#         Xcorners = np.linspace(0, self._nX+1, 1000) #np.array( [0, 0,        self._nX, self._nX] )
+#         Ycorners = np.linspace(0, self._nY+1, 1000) #np.array( [0, self._nY, 0,        self._nY] )
+#         Xcorners = np.concatenate((Xcorners, np.array( [0, 0,        self._nX, self._nX] )))
+#         Ycorners = np.concatenate((Ycorners, np.array( [0, self._nY, 0,        self._nY] )))
+
+#         corners = SkyCoord.from_pixel( Xcorners, Ycorners, wcs=self._wcs, origin = 0).transform_to(self.frame.value)  
+     
+#         min_lon = min(corners.ra.degree)
+#         max_lon = max(corners.ra.degree)
+        
+#         min_lat = min(corners.dec.degree)
+#         max_lat = max(corners.dec.degree)
+        
+#         return (min_lon, max_lon), (min_lat, max_lat)
+
+
+
+#     def get_total_spatial_integral(self, z=None):  
+#         """
+#         Returns the total integral (for 2D functions) or the integral over the spatial components (for 3D functions).
+#         needs to be implemented in subclasses.
+
+#         :return: an array of values of the integral (same dimension as z).
+#         """
+
+#         if isinstance( z, u.Quantity):
+#             z = z.value
+#         return np.multiply(self.K.value,np.ones_like( z ) )

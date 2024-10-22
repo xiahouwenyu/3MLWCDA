@@ -30,6 +30,8 @@ from Mylightcurve import p2sigma
 log = setup_logger(__name__)
 log.propagate = False
 
+deltatime = 3
+
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             sigma=None,sf=False,sb=None,radius=None,rf=False,rb=None,
@@ -190,7 +192,7 @@ if parb != None:
     spec.K = k * fluxUnit
     spec.K.fix = kf
     if setdeltabypar:
-        spec.K.delta = 0.1*k * fluxUnit
+        spec.K.delta = deltatime*k * fluxUnit
     if kn is not None:
         spec.Kn = kn
         spec.Kn.fix = True
@@ -247,7 +249,14 @@ if parb != None:
 
     return source
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=8, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False):
+def copy_free_parameters(source_model, target_model):
+    for param_name, source_param in source_model.free_parameters.items():
+        if param_name in target_model.free_parameters:
+            target_model.free_parameters[param_name].value = source_param.value
+        else:
+            print(f"Parameter {param_name} not found in target model")
+
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=8, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False, releaseroi=None):
     """
         获取LHAASO catalog模型
 
@@ -304,11 +313,11 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
             indexeh = indexb[1]
         else:
             if detector=="WCDA":
-                indexel = max(-4,-index-rtindex*indexe)
-                indexeh = min(-1,-index+rtindex*indexe)
+                indexel = max(-4,-index-rtindex) #*indexe
+                indexeh = min(-1,-index+rtindex)
             else: 
-                indexel = max(-5.5,-index-rtindex*indexe)
-                indexeh = min(-1.5,-index+rtindex*indexe)
+                indexel = max(-5.5,-index-rtindex)
+                indexeh = min(-1.5,-index+rtindex)
 
         if sb is not None:
             sbl = sb[0]
@@ -322,11 +331,11 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
             kbh = kb[1]
         else:
             if detector=="WCDA":
-                kbl = max(1e-15, (flux/100)*Nc) #-rtflux*fluxe
-                kbh = min(1e-11, (flux+rtflux*fluxe)*Nc)
+                kbl = max(1e-15, (flux/rtflux/10)*Nc) #-rtflux*fluxe
+                kbh = min(1e-11, (flux*rtflux)*Nc)
             else:
-                kbl = max(1e-18, (flux/100)*Nc) #-rtflux*fluxe
-                kbh = min(1e-14, (flux+rtflux*fluxe)*Nc)
+                kbl = max(1e-18, (flux/rtflux/10)*Nc) #-rtflux*fluxe
+                kbh = min(1e-14, (flux*rtflux)*Nc)
 
         if Kscale is not None:
             flux = flux/Kscale
@@ -351,7 +360,6 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
                 kf = mkf
                 indexf = mindexf
                 doit=True
-                
         else:
             if (distance(ra1,dec1, ras, decs)<data_radius and (hp.ang2pix(1024, ras, decs, lonlat=True) in roi.active_pixels(1024))):
                 sf = osf 
@@ -385,6 +393,13 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
             pf = False
             kf = False
             indexf = False
+
+        if releaseroi is not None:
+            if (hp.ang2pix(1024, ras, decs, lonlat=True) in releaseroi.active_pixels(1024)):
+                sf = osf
+                pf = opf
+                kf = okf
+                indexf = oindexf
         
         if doit:
             log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
@@ -603,7 +618,7 @@ def check_bondary(optmodel):
     return ifatlimit, boundpar
     
 
-def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True, quiet=False):
+def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True, quiet=False, lmini = "minuit"):
     """
         进行拟合
 
@@ -634,7 +649,7 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verb
         grid_minimizer = GlobalMinimization("grid")
 
         # Create an instance of a local minimizer, which will be used by GRID
-        local_minimizer = LocalMinimization(mini)
+        local_minimizer = LocalMinimization(lmini)
 
         # Define a grid for mu as 10 steps between 2 and 80
         my_grid = grids #{Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
@@ -654,18 +669,18 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verb
 
         import pygmo
 
-        my_algorithm = pygmo.algorithm(pygmo.cmaes(gen = 100, sigma0=0.3)) #pygmo.bee_colony(gen=20)
+        my_algorithm = pygmo.algorithm(pygmo.bee_colony(gen=100, limit=50)) #pygmo.bee_colony(gen=20)
 
         # Create an instance of a local minimizer
-        local_minimizer = LocalMinimization("ROOT")
+        local_minimizer = LocalMinimization(lmini)
 
         # Setup the global minimization
         pagmo_minimizer.setup(
             second_minimization=local_minimizer,
             algorithm=my_algorithm,
-            islands=10,
-            population_size=10,
-            evolution_cycles=2,
+            islands=12,
+            population_size=30,
+            evolution_cycles=5,
         )
 
         # Set the minimizer for the JointLikelihood object
@@ -985,7 +1000,7 @@ def get_profile_likelihood(region_name, Modelname, data, model, par, min=None, m
             plt.xscale("log")
     return mu, L    
 
-def reload_modelname(modelpath):
+def load_modelpath(modelpath):
     activate_warnings()
     try:
         results = load_analysis_results(modelpath+"/Results.fits")
@@ -1493,7 +1508,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Diffusespec.K = kk * fluxUnit
         Diffusespec.K.fix=Kf
         if setdeltabypar:
-            Diffusespec.K.delta = 0.1*kk * fluxUnit
+            Diffusespec.K.delta = deltatime*kk * fluxUnit
 
         if Kb is not None:
             Diffusespec.K.bounds=np.array(Kb) * fluxUnit
@@ -1508,7 +1523,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Diffusespec.K = K * fluxUnit
         Diffusespec.K.fix=Kf
         if setdeltabypar:
-            Diffusespec.K.delta = 0.1*K * fluxUnit
+            Diffusespec.K.delta = deltatime*K * fluxUnit
         if Kb is not None:
             Diffusespec.K.bounds=np.array(Kb) * fluxUnit
         else:
@@ -1553,7 +1568,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     Diffusespec.K.fix=Kf
 
     if setdeltabypar:
-        Diffusespec.K.delta = 0.1*K * fluxUnit
+        Diffusespec.K.delta = 1*K * fluxUnit
 
     if Kb:
         Diffusespec.K.bounds=np.array(Kb) * fluxUnit

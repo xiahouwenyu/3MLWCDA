@@ -51,6 +51,11 @@ def _SSQPL(x,par):
 def gaussian(x, amplitude, mean, stddev):
     return amplitude * np.exp(-((x - mean) / 2 / stddev)**2)
 
+def step(x, amplitude, mean, stddev, c):
+    result = c*np.ones(len(x))
+    result[(x<=(mean+stddev)) & (x>=(mean-stddev))]=c+amplitude
+    return result
+
 def poly(x, a, b, c, d):
     return d*x**3 + c*x**2 + b*x + a
 
@@ -650,7 +655,7 @@ class lc(object):
         from scipy.optimize import curve_fit
         rs = int((t1-self.t0)/self.dt)
         re = int((t2-self.t0)/self.dt)
-        params, covariance = curve_fit(func, self.time[rs:re], self.counts[rs:re], p0=[10000, 260, 4])
+        params, covariance = curve_fit(func, self.time[rs:re], self.counts[rs:re], p0=[10000, 260, 2, 10])
         plt.plot(self.time[rs:re], self.counts[rs:re])
         xx = np.arange(t1,t2,0.1)
         ll=""

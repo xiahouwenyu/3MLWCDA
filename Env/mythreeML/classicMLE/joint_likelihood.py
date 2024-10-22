@@ -26,6 +26,7 @@ from threeML.io.table import Table
 from threeML.minimizer import minimization
 from threeML.parallel.parallel_client import ParallelClient
 from threeML.utils.statistics.stats_tools import aic, bic
+import time
 
     
 plt.style.use(str(get_path_of_data_file("threeml.mplstyle")))
@@ -1011,6 +1012,18 @@ class JointLikelihood(object):
                 "trial values: %s -> logL = %.3f"
                 % (",".join(["%.5g" % x for x in trial_values]), summed_log_likelihood)
             )
+
+        # Calculate and log the time intervals
+        current_time = time.time()
+        if hasattr(self, '_last_call_time'):
+            interval = current_time - self._last_call_time
+            if not hasattr(self, '_intervals'):
+                self._intervals = collections.deque(maxlen=1000)  # Limit to last 1000 intervals
+            self._intervals.append(interval)
+            average_interval = sum(self._intervals) / len(self._intervals)
+            log.info(f"Time interval since last call: {interval:.5f} seconds")
+            log.info(f"Average time interval: {average_interval:.5f} seconds")
+        self._last_call_time = current_time
 
         # Record this call
         if self._record:

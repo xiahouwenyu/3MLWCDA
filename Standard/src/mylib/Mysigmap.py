@@ -956,88 +956,273 @@ def fits_pixel_to_healpix(ra, dec, nside):
     # phi = np.radians(ra)
     return hp.ang2pix(nside, ra, dec, lonlat=True)
 
-def normalize_fits_within_healpix_roi(fits_file, healpix_pixels, nside, output_file):
-    """
-    对给定ROI内的FITS像素进行按立体角积分归一化,并保存为新的FITS文件,同时屏蔽掉ROI以外的像素。
+# def normalize_fits_within_healpix_roi(fits_file, output_file, healpix_pixels=None, nside=None):
+#     """
+#     对给定ROI内的FITS像素进行按立体角积分归一化,并保存为新的FITS文件,同时屏蔽掉ROI以外的像素。
 
-    Parameters:
-        fits_file (str): 输入的FITS文件路径
-        healpix_pixels (set of int): Healpix格式的ROI像素集合
-        nside (int): Healpix的nside参数
-        output_file (str): 输出的FITS文件路径
+#     Parameters:
+#         fits_file (str): 输入的FITS文件路径
+#         healpix_pixels (set of int): Healpix格式的ROI像素集合
+#         nside (int): Healpix的nside参数
+#         output_file (str): 输出的FITS文件路径
 
-    Returns:
-        None
-    """
-    from decimal import Decimal
-    # 读取FITS文件和数据
+#     Returns:
+#         None
+#     """
+#     from decimal import Decimal
+#     # 读取FITS文件和数据
+#     hdu = fits.open(fits_file)
+#     data = hdu[0].data
+#     header = hdu[0].header
+
+#     # 获取WCS信息
+#     wcs = WCS(header)
+
+#     # 创建mask并初始化为True
+#     mask = np.ones(data.shape, dtype=bool)
+
+#     # 初始化归一化参数
+#     total_flux = 0.0
+#     total_solid_angle = 0.0
+
+#     S = np.zeros(data.shape, dtype=bool)
+#     # 遍历FITS文件的每一个像素
+#     pixel_solid_angles = []
+#     total_fluxs = []
+#     for y in range(data.shape[0]):
+#         for x in range(data.shape[1]):
+#             # 将FITS像素转换为天球坐标 (RA, Dec)
+#             ra, dec = wcs.wcs_pix2world(x, y, 0)
+#             # 判断该Healpix像素是否在ROI内
+#             if healpix_pixels is not None:
+#                 # 将天球坐标转换为对应的Healpix像素索引
+#                 healpix_index = fits_pixel_to_healpix(ra, dec, nside)
+#                 if healpix_index in healpix_pixels:
+#                     # 计算当前FITS像素的立体角
+#                     pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+
+#                     # 计算该像素的贡献
+#                     # print(pixel_solid_angle)
+#                     flux = data[y, x]
+#                     if np.isnan(pixel_solid_angle):
+#                         print("solid_angle_nan")
+#                     if pixel_solid_angle==0:
+#                         print("solid_angle_zero")
+#                     if np.isnan(flux):
+#                         continue
+#                     S[y,x] = pixel_solid_angle
+#                     pixel_solid_angles.append(pixel_solid_angle)
+#                     total_fluxs.append(flux * pixel_solid_angle)
+#                     # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
+#                     # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
+#                     mask[y, x] = False  # 在ROI内的像素不被mask
+#             else:
+#                 # 计算当前FITS像素的立体角
+#                 pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+
+#                 # 计算该像素的贡献
+#                 # print(pixel_solid_angle)
+#                 flux = data[y, x]
+#                 if np.isnan(pixel_solid_angle):
+#                     print("solid_angle_nan")
+#                 if pixel_solid_angle==0:
+#                     print("solid_angle_zero")
+#                 if np.isnan(flux):
+#                     continue
+#                 S[y,x] = pixel_solid_angle
+#                 pixel_solid_angles.append(pixel_solid_angle)
+#                 total_fluxs.append(flux * pixel_solid_angle)
+#                 # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
+#                 # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
+#                 mask[y, x] = False  # 在ROI内的像素不被mask
+#     total_flux = math.fsum(total_fluxs)
+#     total_solid_angle = math.fsum(pixel_solid_angles)
+
+#     # if total_solid_angle == 0:
+#     #     print(total_solid_angle)
+#     #     raise ValueError("总立体角为0,可能ROI像素列表为空。")
+
+#     normalization_factor = total_flux #/ total_solid_angle
+#     print(normalization_factor)
+
+#     # 对ROI内的像素进行归一化处理
+#     normalized_data = data.copy()
+#     normalized_data[~mask] /= normalization_factor
+
+#     # 将ROI以外的像素屏蔽掉
+#     normalized_data[mask] = 0
+
+#     # 保存为新的FITS文件
+#     hdu[0].data = normalized_data
+#     hdu.writeto(output_file, overwrite=True)
+#     print(f"归一化后的FITS文件已保存为 {output_file}")
+
+def process_pixel(args):
+    x, y, data, wcs, healpix_pixels, nside = args
+    ra, dec = wcs.wcs_pix2world(x, y, 0)
+    if healpix_pixels is not None:
+        healpix_index = fits_pixel_to_healpix(ra, dec, nside)
+        if healpix_index in healpix_pixels:
+            pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+            flux = data[y, x]
+            if np.isnan(pixel_solid_angle) or pixel_solid_angle == 0 or np.isnan(flux):
+                return None
+            return (x, y, flux * pixel_solid_angle, pixel_solid_angle)
+    else:
+        pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+        flux = data[y, x]
+        if np.isnan(pixel_solid_angle) or pixel_solid_angle == 0 or np.isnan(flux):
+            return None
+        return (x, y, flux * pixel_solid_angle, pixel_solid_angle)
+    return None
+
+def normalize_fits_within_healpix_roi_mp(fits_file, output_file, healpix_pixels=None, nside=None):
+    import multiprocessing as mp
     hdu = fits.open(fits_file)
     data = hdu[0].data
     header = hdu[0].header
-
-    # 获取WCS信息
     wcs = WCS(header)
-
-    # 创建mask并初始化为True
     mask = np.ones(data.shape, dtype=bool)
 
-    # 初始化归一化参数
-    total_flux = 0.0
-    total_solid_angle = 0.0
+    args = [(x, y, data, wcs, healpix_pixels, nside) for y in range(data.shape[0]) for x in range(data.shape[1])]
+    
+    with mp.Pool(mp.cpu_count()) as pool:
+        results = pool.map(process_pixel, args)
 
-    S = np.zeros(data.shape, dtype=bool)
-    # 遍历FITS文件的每一个像素
-    pixel_solid_angles = []
     total_fluxs = []
-    for y in range(data.shape[0]):
-        for x in range(data.shape[1]):
-            # 将FITS像素转换为天球坐标 (RA, Dec)
-            ra, dec = wcs.wcs_pix2world(x, y, 0)
+    pixel_solid_angles = []
+    for result in results:
+        if result is not None:
+            x, y, flux_solid_angle, solid_angle = result
+            total_fluxs.append(flux_solid_angle)
+            pixel_solid_angles.append(solid_angle)
+            mask[y, x] = False
 
-            # 将天球坐标转换为对应的Healpix像素索引
-            healpix_index = fits_pixel_to_healpix(ra, dec, nside)
-
-            # 判断该Healpix像素是否在ROI内
-            if healpix_index in healpix_pixels:
-                # 计算当前FITS像素的立体角
-                pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
-
-                # 计算该像素的贡献
-                # print(pixel_solid_angle)
-                flux = data[y, x]
-                if np.isnan(pixel_solid_angle):
-                    print("solid_angle_nan")
-                if pixel_solid_angle==0:
-                    print("solid_angle_zero")
-                if np.isnan(flux):
-                    continue
-                S[y,x] = pixel_solid_angle
-                pixel_solid_angles.append(pixel_solid_angle)
-                total_fluxs.append(flux * pixel_solid_angle)
-                # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
-                # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
-                mask[y, x] = False  # 在ROI内的像素不被mask
     total_flux = math.fsum(total_fluxs)
     total_solid_angle = math.fsum(pixel_solid_angles)
+    normalization_factor = total_flux
 
-    # if total_solid_angle == 0:
-    #     print(total_solid_angle)
-    #     raise ValueError("总立体角为0,可能ROI像素列表为空。")
-
-    normalization_factor = total_flux #/ total_solid_angle
-    print(normalization_factor)
-
-    # 对ROI内的像素进行归一化处理
     normalized_data = data.copy()
     normalized_data[~mask] /= normalization_factor
-
-    # 将ROI以外的像素屏蔽掉
     normalized_data[mask] = 0
 
-    # 保存为新的FITS文件
     hdu[0].data = normalized_data
     hdu.writeto(output_file, overwrite=True)
-    print(f"归一化后的FITS文件已保存为 {output_file}")
+    print(f"归一化后的FITS文件已保存为 {output_file}, 归一化因子为 {normalization_factor}")
+
+
+def generate_wcs_fits_with_range(coord_range, coordinate_system='equatorial', 
+                                 projection='CAR', image_shape=(1024, 512), save=False, output_fits_path=None):
+    """
+    生成一个FITS文件，包含给定坐标系和投影方式的WCS，使用RA/Dec或l/b的坐标范围。
+
+    参数:
+        output_fits_path (str): 输出FITS文件路径。
+        coord_range (dict): 图像的坐标范围，形式为 {'ra_range': (min, max), 'dec_range': (min, max)} 或 {'l_range': (min, max), 'b_range': (min, max)}。
+        coordinate_system (str): 目标坐标系，'galactic' 表示银道坐标系，'equatorial' 表示赤道坐标系。
+        projection (str): 投影类型，默认为'CAR'（正交投影），可选'AIT'（艾托夫投影）、'MOL'（莫尔维德投影）。
+        image_shape (tuple): 图像尺寸，形式为 (宽度, 高度)，默认为 (1024, 512)。
+    
+    返回:
+        WCS对象：包含生成的WCS信息。
+    """
+    # 创建WCS对象
+    wcs = WCS(naxis=2)
+
+    # 设置坐标系类型和投影方式
+    if coordinate_system == 'galactic':
+        wcs.wcs.ctype = [f'GLON-{projection}', f'GLAT-{projection}']  # 银道坐标
+        lon_range = coord_range['l_range']
+        lat_range = coord_range['b_range']
+    elif coordinate_system == 'equatorial':
+        wcs.wcs.ctype = [f'RA---{projection}', f'DEC--{projection}']  # 赤道坐标
+        lon_range = coord_range['ra_range']
+        lat_range = coord_range['dec_range']
+    else:
+        raise ValueError("无效的目标坐标系，必须是 'galactic' 或 'equatorial'")
+
+    # 计算每像素的分辨率
+    lon_size = lon_range[1] - lon_range[0]
+    lat_size = lat_range[1] - lat_range[0]
+
+    # 计算每像素的度数
+    cdelt_lon = lon_size / image_shape[0]  # 经度方向的每像素度数
+    cdelt_lat = lat_size / image_shape[1]  # 纬度方向的每像素度数
+
+    # 设置参考像素为图像左下角，并将其对应的天球坐标设置为lon_range[0], lat_range[0]
+    wcs.wcs.crpix = [1, 1]  # 左下角像素
+    wcs.wcs.crval = [lon_range[0], lat_range[0]]  # 左下角的坐标
+
+    # 设置像素尺寸
+    wcs.wcs.cdelt = [cdelt_lon, cdelt_lat]  # 经度和纬度方向的每像素度数
+
+    if save:
+        # 将WCS写入HDR文件
+        header = wcs.to_header()
+        with open(output_fits_path, 'w') as hdr_file:
+            hdr_file.write(header.tostring())
+
+        print(f"WCS HDR file saved to {output_fits_path}")
+    return wcs
+
+def reproject_fits(input_fits_path, output_fits_path, to_system='galactic', target_wcs=None, projection='CAR'):
+    """
+    将FITS文件重新投影到不同的坐标系，支持赤道坐标系和银道坐标系的相互转换，适用于小区域和全天图像。
+
+    参数:
+        input_fits_path (str): 输入FITS文件路径
+        output_fits_path (str): 输出FITS文件路径
+        to_system (str): 目标坐标系，'galactic' 表示转换为银道坐标系，'equatorial' 表示转换为赤道坐标系
+        target_wcs (WCS): 目标的WCS投影。如果为None，将根据目标坐标系生成默认WCS。
+        projection (str): 投影类型，默认为'CAR'（正交投影），可选'AIT'（艾托夫投影）或'MOL'（莫尔维德投影）。
+    """
+    from reproject import reproject_interp
+    from astropy.wcs.utils import proj_plane_pixel_scales
+    import numpy as np
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    import astropy.units as u
+    
+    # 打开FITS文件并获取WCS信息和数据
+    with fits.open(input_fits_path) as hdul:
+        wcs_input = WCS(hdul[0].header)
+        data = hdul[0].data
+
+        # 如果没有提供目标WCS，则创建默认的目标WCS
+        if target_wcs is None:
+            # 获取FITS图像的像素尺寸
+            pixel_scale = np.mean(proj_plane_pixel_scales(wcs_input)) * u.deg
+
+            # 获取图像中心的天球坐标
+            sky_center = wcs_input.pixel_to_world(data.shape[1] // 2, data.shape[0] // 2)
+
+            # 设置目标WCS
+            target_wcs = WCS(naxis=2)
+            if to_system == 'galactic':
+                sky_center_gal = sky_center.transform_to('galactic')
+                target_wcs.wcs.ctype = [f'GLON-{projection}', f'GLAT-{projection}']  # 银道坐标系
+                target_wcs.wcs.crval = [sky_center_gal.l.deg, sky_center_gal.b.deg]  # 中心坐标
+            elif to_system == 'equatorial':
+                sky_center_eq = sky_center.transform_to('icrs')
+                target_wcs.wcs.ctype = [f'RA---{projection}', f'DEC--{projection}']  # 赤道坐标系
+                target_wcs.wcs.crval = [sky_center_eq.ra.deg, sky_center_eq.dec.deg]  # 中心坐标
+            else:
+                raise ValueError("无效的目标坐标系，必须是 'galactic' 或 'equatorial'")
+
+            # 定义目标WCS的参考像素为图像中心
+            target_wcs.wcs.crpix = [data.shape[1] // 2, data.shape[0] // 2]
+            target_wcs.wcs.cdelt = [-pixel_scale.to(u.deg).value, pixel_scale.to(u.deg).value]  # 每像素度数
+
+        # 使用reproject进行图像重新投影
+        print("重新投影进行中...")
+        reprojected_data, _ = reproject_interp((data, wcs_input), target_wcs, shape_out=data.shape)
+
+        # 创建新的FITS文件，并保存重新投影后的数据和WCS信息
+        new_header = target_wcs.to_header()
+        hdu = fits.PrimaryHDU(reprojected_data, header=new_header)
+        hdu.writeto(output_fits_path, overwrite=True)
+
+    print(f"FITS file reprojected to {to_system} coordinates and saved to {output_fits_path}")
 
 
 def crop_fits_by_coords(input_fits_path, output_fits_path, ra_min, ra_max, dec_min, dec_max):
@@ -1046,23 +1231,60 @@ def crop_fits_by_coords(input_fits_path, output_fits_path, ra_min, ra_max, dec_m
         # 获取第一个扩展的WCS信息和图像数据
         wcs = WCS(hdul[0].header)
         data = hdul[0].data
-        
-        # 将天文坐标转换为像素坐标
-        # (ra_min, dec_min) 对应的像素坐标
-        x_min, y_min = wcs.all_world2pix(ra_min, dec_min, 0)
-        # (ra_max, dec_max) 对应的像素坐标
-        x_max, y_max = wcs.all_world2pix(ra_max, dec_max, 0)
-        
-        # 转换为整数像素索引并确保索引在有效范围内
-        x_min, x_max = int(np.floor(x_min)), int(np.ceil(x_max))
-        y_min, y_max = int(np.floor(y_min)), int(np.ceil(y_max))
-        
-        # 裁剪图像数据
-        cropped_data = data[y_min:y_max, x_min:x_max]
-        
-        # 更新裁剪后的WCS信息
-        new_header = wcs[y_min:y_max, x_min:x_max].to_header()
-        
+
+        # 初始化裁剪后的数据
+        cropped_data = None
+
+        if ra_min > ra_max:
+            # 第一部分：从ra_min到360度
+            x_min1, y_min1 = wcs.all_world2pix(ra_min, dec_min, 0)
+            x_max1, y_max1 = wcs.all_world2pix(360, dec_max, 0)
+            x_min1, x_max1 = int(np.floor(x_min1)), int(np.ceil(x_max1))
+            y_min1, y_max1 = int(np.floor(y_min1)), int(np.ceil(y_max1))
+
+            cropped_data_1 = data[y_min1:y_max1, x_min1:x_max1]
+
+            # 第二部分：从0度到ra_max
+            x_min2, y_min2 = wcs.all_world2pix(0, dec_min, 0)
+            x_max2, y_max2 = wcs.all_world2pix(ra_max, dec_max, 0)
+            x_min2, x_max2 = int(np.floor(x_min2)), int(np.ceil(x_max2))
+            y_min2, y_max2 = int(np.floor(y_min2)), int(np.ceil(y_max2))
+
+            cropped_data_2 = data[y_min2:y_max2, x_min2:x_max2]
+
+            # 拼接两部分
+            cropped_data = np.hstack((cropped_data_1, cropped_data_2))
+
+            # 更新WCS信息，分别处理两部分的CRPIX
+            new_wcs = wcs.deepcopy()
+            new_wcs.wcs.crpix[0] -= x_min1  # RA方向，第一部分
+            new_wcs.wcs.crpix[1] -= y_min1  # Dec方向
+
+            # 更新WCS信息，第二部分需要对RA方向进行偏移，保持连续性
+            # 第二部分的CRPIX调整基于x_min2和cropped_data_1的宽度
+            new_wcs.wcs.crpix[0] += cropped_data_1.shape[1]  # 第二部分RA相对于第一部分
+
+        else:
+            # 常规情况，RA没有跨越0度
+            x_min, y_min = wcs.all_world2pix(ra_min, dec_min, 0)
+            x_max, y_max = wcs.all_world2pix(ra_max, dec_max, 0)
+            x_min, x_max = int(np.floor(x_min)), int(np.ceil(x_max))
+            y_min, y_max = int(np.floor(y_min)), int(np.ceil(y_max))
+
+            cropped_data = data[y_min:y_max, x_min:x_max]
+
+            # 更新裁剪后的WCS信息
+            new_wcs = wcs.deepcopy()
+            new_wcs.wcs.crpix[0] -= x_min  # 更新RA方向的CRPIX1
+            new_wcs.wcs.crpix[1] -= y_min  # 更新Dec方向的CRPIX2
+
+        # 检查裁剪数据是否成功
+        if cropped_data is None:
+            raise ValueError("裁剪失败，可能由于输入坐标范围错误或数据问题")
+
+        # 转换为header
+        new_header = new_wcs.to_header()
+
         # 创建新的FITS文件，并保存裁剪后的数据和新的WCS信息
         hdu = fits.PrimaryHDU(cropped_data, header=new_header)
         hdu.writeto(output_fits_path, overwrite=True)
@@ -1090,35 +1312,60 @@ def get_fits_roi_bounds(fits_file):
     # Return the sky bounds in terms of RA and Dec
     return (ra_min, ra_max, dec_min, dec_max)
 
-def healpix_to_fits(fits_file, nside):
-    # Get the ROI bounds from the FITS file
+def process_healpix_pixel(args):
+    pix, nside, wcs, data, ra_min, ra_max, dec_min, dec_max, reverse = args
+    theta, phi = hp.pix2ang(nside, pix)
+    ra = np.degrees(phi)
+    dec = 90.0 - np.degrees(theta)
+    
+    if ra_min <= ra <= ra_max and dec_min <= dec <= dec_max:
+        x, y = wcs.world_to_pixel_values(ra, dec)
+        if 0 <= x < data.shape[1] and 0 <= y < data.shape[0]:
+            fits_value = data[int(y), int(x)]
+            return pix, fits_value
+    return pix, 0.0
+
+def fits2healpix(fits_file, nside, reverse=False):
+    import multiprocessing as mp
     ra_min, ra_max, dec_min, dec_max = get_fits_roi_bounds(fits_file)
     
-    # Step 1: Load the FITS file and extract WCS and data
     with fits.open(fits_file) as hdul:
         hdu = hdul[0]
         wcs = WCS(hdu.header)
         data = hdu.data
+
+    if reverse:
+        data[data==1] = 5
+        data[data==0] = 1
+        data[data==5] = 0
     
-    # Step 2: Initialize an empty Healpix map
     npix = hp.nside2npix(nside)
     healpix_map = np.zeros(npix, dtype=np.float64)
     
-    # Step 3: Loop through each pixel in the Healpix map
-    for pix in range(npix):
-        # Convert the Healpix pixel index to (theta, phi) in radians
-        theta, phi = hp.pix2ang(nside, pix)
-        ra = np.degrees(phi)  # Convert to degrees
-        dec = 90.0 - np.degrees(theta)  # Convert theta to Dec
-        
-        # Step 4: Check if the (RA, Dec) falls within the ROI bounds
-        if ra_min <= ra <= ra_max and dec_min <= dec <= dec_max:
-            # Convert the (RA, Dec) to FITS pixel coordinates
-            x, y = wcs.world_to_pixel_values(ra, dec)
-            
-            # Step 5: Check if the pixel is within the FITS bounds and assign the value
-            if 0 <= x < data.shape[1] and 0 <= y < data.shape[0]:
-                fits_value = data[int(y), int(x)]  # Ensure integer indexing for pixel
-                healpix_map[pix] = fits_value
+    args = [(pix, nside, wcs, data, ra_min, ra_max, dec_min, dec_max, reverse) for pix in range(npix)]
+    
+    with mp.Pool(mp.cpu_count()) as pool:
+        results = pool.map(process_healpix_pixel, args)
+    
+    for pix, value in results:
+        healpix_map[pix] = value
     
     return healpix_map
+
+def find_brightest_pixel(healpix_map):
+    """
+    找到 Healpix 图像中最亮位置的索引和对应的值，忽略 NaN 值和 mask。
+
+    参数:
+    healpix_map (numpy.ndarray): Healpix 图像数据。
+
+    返回:
+    tuple: (最亮位置的索引, 最亮位置的值)
+    """
+    # 使用 np.nanmax 找到最大值，并忽略 NaN 和 mask
+    max_value = np.nanmax(healpix_map[np.isfinite(healpix_map)])
+    
+    # 找到最大值的索引，使用 np.isnan 和 mask 进行筛选
+    max_index = np.where(healpix_map == max_value)[0][0]
+    
+    return max_index, max_value

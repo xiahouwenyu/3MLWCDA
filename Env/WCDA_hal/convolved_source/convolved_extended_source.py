@@ -6,8 +6,12 @@ import numpy as np
 
 from astromodels import use_astromodels_memoization
 from threeML.io.logging import setup_logger
+from numba import njit, prange
+
 log = setup_logger(__name__)
 log.propagate = False
+
+import concurrent.futures
 
 
 def _select_with_wrap_around(arr, start, stop, wrap=(360, 0)):
@@ -193,31 +197,80 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
             # Loop over the Dec bins that cover this source and compute the expected flux, interpolating between
             # two dec bins for each point
 
-            for dec_bin1, dec_bin2 in zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:]):
+            # for dec_bin1, dec_bin2 in zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:]):
 
-                # Get the two response bins to consider
+            #     # Get the two response bins to consider
+            #     this_response_bin1 = dec_bin1[energy_bin_id]
+            #     this_response_bin2 = dec_bin2[energy_bin_id]
+
+            #     # Figure out which pixels are between the centers of the dec bins we are considering
+            #     c1, c2 = this_response_bin1.declination_center, this_response_bin2.declination_center
+
+            #     idx = (self._flat_sky_projection.decs >= c1) & (self._flat_sky_projection.decs < c2) & \
+            #           self._active_flat_sky_mask
+
+            #     # Reweight the spectrum separately for the two bins
+            #     # NOTE: the scale is the same because the sim_differential_photon_fluxes are the same (the simulation
+            #     # used to make the response used the same spectrum for each bin). What changes between the two bins
+            #     # is the observed signal per bin (the .sim_signal_events_per_bin member)
+            #     scale = old_div((self._all_fluxes[idx, :] * pixel_area_rad2), this_response_bin1.sim_differential_photon_fluxes)
+
+            #     # Compute the interpolation weights for the two responses
+            #     w1 = old_div((self._flat_sky_projection.decs[idx] - c2), (c1 - c2))
+            #     w2 = old_div((self._flat_sky_projection.decs[idx] - c1), (c2 - c1))
+
+            #     this_model_image[idx] = (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
+            #                              w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * \
+            #                             1e9
+
+
+            # def process_dec_bins(dec_bin1, dec_bin2):
+            #     this_response_bin1 = dec_bin1[energy_bin_id]
+            #     this_response_bin2 = dec_bin2[energy_bin_id]
+
+            #     c1, c2 = this_response_bin1.declination_center, this_response_bin2.declination_center
+
+            #     idx = (self._flat_sky_projection.decs >= c1) & (self._flat_sky_projection.decs < c2) & \
+            #           self._active_flat_sky_mask
+
+            #     scale = old_div((self._all_fluxes[idx, :] * pixel_area_rad2), this_response_bin1.sim_differential_photon_fluxes)
+
+            #     w1 = old_div((self._flat_sky_projection.decs[idx] - c2), (c1 - c2))
+            #     w2 = old_div((self._flat_sky_projection.decs[idx] - c1), (c2 - c1))
+
+            #     return idx, (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
+            #                  w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * 1e9
+
+
+            @njit(parallel=True)
+            def process_dec_bins(dec_bin1, dec_bin2, energy_bin_id, flat_sky_projection_decs, active_flat_sky_mask, all_fluxes, pixel_area_rad2):
                 this_response_bin1 = dec_bin1[energy_bin_id]
                 this_response_bin2 = dec_bin2[energy_bin_id]
 
-                # Figure out which pixels are between the centers of the dec bins we are considering
                 c1, c2 = this_response_bin1.declination_center, this_response_bin2.declination_center
 
-                idx = (self._flat_sky_projection.decs >= c1) & (self._flat_sky_projection.decs < c2) & \
-                      self._active_flat_sky_mask
+                idx = (flat_sky_projection_decs >= c1) & (flat_sky_projection_decs < c2) & active_flat_sky_mask
 
-                # Reweight the spectrum separately for the two bins
-                # NOTE: the scale is the same because the sim_differential_photon_fluxes are the same (the simulation
-                # used to make the response used the same spectrum for each bin). What changes between the two bins
-                # is the observed signal per bin (the .sim_signal_events_per_bin member)
-                scale = old_div((self._all_fluxes[idx, :] * pixel_area_rad2), this_response_bin1.sim_differential_photon_fluxes)
+                scale = (all_fluxes[idx, :] * pixel_area_rad2) / this_response_bin1.sim_differential_photon_fluxes
 
-                # Compute the interpolation weights for the two responses
-                w1 = old_div((self._flat_sky_projection.decs[idx] - c2), (c1 - c2))
-                w2 = old_div((self._flat_sky_projection.decs[idx] - c1), (c2 - c1))
+                w1 = (flat_sky_projection_decs[idx] - c2) / (c1 - c2)
+                w2 = (flat_sky_projection_decs[idx] - c1) / (c2 - c1)
 
-                this_model_image[idx] = (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
-                                         w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * \
-                                        1e9
+                result = (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
+                          w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * 1e9
+
+                return idx, result
+
+            results = []
+            for dec_bin1, dec_bin2 in zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:]):
+                idx, result = process_dec_bins(dec_bin1, dec_bin2, energy_bin_id, self._flat_sky_projection.decs, self._active_flat_sky_mask, self._all_fluxes, pixel_area_rad2)
+                results.append((idx, result))
+
+            # with concurrent.futures.ThreadPoolExecutor() as executor:
+            #     results = list(executor.map(lambda bins: process_dec_bins(*bins), zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:])))
+
+            for idx, result in results:
+                this_model_image[idx] = result
 
             # Reshape the flux array into an image
             this_model_image = this_model_image.reshape((self._flat_sky_projection.npix_height,
