@@ -140,11 +140,11 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 elif ("SpatialTemplate" not in pa):
                     kparname=newpa
                     # print("change bounds!!!!")
-                    print(par[pa].value*1e9)
+                    # print(par[pa].value*1e9)
                     value = par[pa].value
                     if value<0:
                         value=abs(value)
-                    lm2.sources[ss].parameters[newpa].bounds=np.array((-bondaryrange*value*1e9,bondaryrange*value*1e9))*fluxUnit
+                    lm2.sources[ss].parameters[newpa].bounds=np.array((-bondaryrange*value*1e9, np.max([2e-12, bondaryrange*value*1e9])))*fluxUnit
                     lm2.sources[ss].parameters[newpa].delta = 0.1*par[pa].value
     else:
         #遍历源
@@ -155,7 +155,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 if (ss == source and ".K" not in fp) or ss != source:
                     lm2.sources[ss].free_parameters[fp].fix = True
                 elif (ss == source and ".K" in fp and lm.sources[ss].components['main'].shape.name==spec.name):
-                    lm2.sources[ss].free_parameters[fp].bounds=np.array((-bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9,bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9)) * fluxUnit
+                    lm2.sources[ss].free_parameters[fp].bounds=np.array((-bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9, np.max([2e-12, bondaryrange*lm2.sources[ss].free_parameters[fp].value*1e9]))) * fluxUnit
                     lm2.sources[ss].free_parameters[fp].delta = 0.1*bondaryrange*lm2.sources[ss].free_parameters[fp].value
                 else:
                     kparname=fp
@@ -163,12 +163,19 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
     result2 = fit("nothing","nothing", WCDA_1,lm2,int(i),int(i),mini=mini,savefit=False, ifgeterror=ifgeterror)
 
     TSflux=result2[0].compute_TS(source,result2[1][1]).values[0][2]
-    if np.isnan(TSflux) or TSflux>1e10:
-        TSflux=0
+    if ifpowerlawM:
+        if np.isnan(TSflux) or TSflux>1e10 or lm2.sources[source].parameters[kparname].value<0:
+            TSflux=0
+    else:
+        if np.isnan(TSflux) or TSflux>1e10 or lm2.sources[source].parameters[kparname.replace(spec.name,spec.name.replace("M",""))].value<0:
+            TSflux=0
+            
     if not nCL:
         if ifpowerlawM:
             lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname], cl=2*CL-1)    
+            print(int(i), scanbin, TSflux, threshold**2)
             if int(i) >= scanbin and TSflux<threshold**2:
+                print("get upper limit")
                 ub, mewmini = get_upperlimit(result2[0], kparname, CL=CL, num=scannum)
                 if mewmini is not None:
                     result2[1][0].iloc[0,0] = mewmini
@@ -437,7 +444,7 @@ def reweightxall(WCDA, lm, func = fun_Powerlaw,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, acc=False, scannum=200):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.17, acc=False, scannum=200):
     """
         获取某个源的能谱点
 
@@ -492,7 +499,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         errorl = abs(result2[1][0].values[0][1])
         erroru = result2[1][0].values[0][2]
         error1 = result2[1][0].values[0][3]
-        print(xx)
+        # print(xx)
         Flux_WCDA[int(i)-imin][0]=np.double(pow(10.,np.double(xx[0])))
         Flux_WCDA[int(i)-imin][1]=np.double(pow(10.,np.double(xx[1])))
         Flux_WCDA[int(i)-imin][2]=np.double(pow(10.,np.double(xx[2])))
@@ -512,7 +519,8 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
     activate_logs()
     return Flux_WCDA, results
 
-def Draw_sepctrum_points(region_name, Modelname, Flux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None, scale=1):
+def Draw_sepctrum_points(region_name, Modelname, FFlux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None, scale=1):
+    Flux_WCDA = copy.deepcopy(FFlux_WCDA)
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
     """
         从能谱点矩阵画能谱点

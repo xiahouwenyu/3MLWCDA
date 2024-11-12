@@ -545,7 +545,7 @@ def Drawcat(xmin,xmax,ymin,ymax,cat="TeVCat",mark="s",c1="black", c2="black", an
                     ax.add_artist(error_ellipse)
             iflabel+=1
 
-def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=0.01, sizelhaaso=0.01, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, sizecut=0.6, sizediscut=1/3,  bkgmap="../../data/fullsky_WCDA_llh.fits", ifbkg=False, skyrange=(10,80,-2,2), ifcut=False, zmax=30, catname=None, yrange=None, sizeunit=1, considersize=False):
+def drawcatsimple(LHAASOCat, anycat, catinfo1 = None, colorlhaaso = "tab:cyan",coloranycat="tab:blue", sizecat=0.01, sizelhaaso=0.01, catinfo = {"name":"", "RA":"", "DEC":"", "color":"", "size":""}, coor="G", distcut=0.2, sizecut=0.6, sizediscut=1/3,  bkgmap="../../data/fullsky_WCDA_20240131_2.6_gal.fits.gz", ifbkg=False, skyrange=(10,80,-2,2), ifcut=False, zmax=30, catname=None, yrange=None, sizeunit=1, considersize=False):
     """
         画图并比较 LHAASOCat 以及任何 Dataframe格式的cat
 

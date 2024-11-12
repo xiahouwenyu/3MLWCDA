@@ -1,3 +1,5 @@
+#!/bin/bash
+
 source activate 3ML
 
 srcdir=${dirsrc}/

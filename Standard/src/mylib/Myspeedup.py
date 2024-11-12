@@ -27,9 +27,11 @@ def runllhskymap(roi, maptree, response, ra1, dec1, data_radius, region_name, de
         if e is None:
             e=6
         os.system(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runwcdaall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response} {libdir}")
+        print(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runwcdaall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response} {libdir}")
     elif detector=="KM2A":
         if s is None:
             s=4
         if e is None:
             e=13
         os.system(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runkm2aall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response} {libdir}")
+        print(f"cd ./tools/llh_skymap/; rm -rf ./output/*; ./runkm2aall.sh {libdir}/{maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response} {libdir}")

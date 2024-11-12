@@ -499,7 +499,7 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
         fits.writeto(name, np.array(array), wcs2.to_header(), overwrite=True)
 
 def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, zmin=None, zmax=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "markercolor": "grey", "labelcolor": "black", "angle": 60, "catext": 1}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
-    colors=None, grid=False, dpi=300
+    colors=None, grid=False, dpi=300, drawLHAASO=False, detector = "WCDA"
         ):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
@@ -538,6 +538,12 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     #         'tab:olive',
     #         'tab:cyan',
     #         'tab:gray']
+
+    if drawLHAASO:
+        from Myfit import getcatModel, get_sources
+        lm = getcatModel(ra1, dec1, rad/2, rad/2, ifext_mt_2=True, detector=detector)
+        sources = get_sources(lm)
+
     i=0
     ifasymm=False
     for sc in sources.keys():
@@ -607,7 +613,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
-def getsig1D(S, region_name, Modelname, name):
+def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae=2, xlimscale=10):
     """
         从healpix显著性天图S画一维显著性分布并保存
 
@@ -644,12 +650,13 @@ def getsig1D(S, region_name, Modelname, name):
 
     plt.figure()
     #plt.plot([0.,0.],[1,1e6],'k--',linewidth=0.5)
-    plt.plot(
-        (bin_x[:100] + bin_x[1:101]) / 2,
-        gaussian((bin_x[:100] + bin_x[1:101]) / 2, popt[0], 0, 1),
-        '--',
-        label='expectation',
-    )
+    if showexp:
+        plt.plot(
+            (bin_x[:100] + bin_x[1:101]) / 2,
+            gaussian((bin_x[:100] + bin_x[1:101]) / 2, popt[0], 0, 1),
+            '--',
+            label='expectation',
+        )
     plt.plot((bin_x[:100] + bin_x[1:101]) / 2, bin_y, label="data")
     plt.plot(
         (bin_x[:100] + bin_x[1:101]) / 2,
@@ -657,11 +664,12 @@ def getsig1D(S, region_name, Modelname, name):
         '--',
         label='fit',
     )
-    plt.yscale('log')
-    plt.xlim(-10,10)
-    plt.ylim(1,max(bin_y*2))
+    if logy:
+        plt.yscale('log')
+    plt.xlim(-xlimscale,xlimscale)
+    plt.ylim(1,max(bin_y*ylimsclae))
     plt.grid(True)
-    plt.text(-9.5,max(bin_y),'mean = %f\n width = %f'%(popt[1],popt[2]))
+    plt.text(-xlimscale+0.5,max(bin_y),'mean = %f\n width = %f'%(popt[1],popt[2]))
     plt.xlabel(r'Significance($\sigma$)')
     plt.ylabel("entries")
     plt.legend()
@@ -758,7 +766,24 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
     ## outfile
     fout = ROOT.TFile.Open(f"../res/{region_name}/{Modelname}/{outname}.root", 'recreate')
-    bininfoout = bininfo.CloneTree()
+    # bininfoout = bininfo.CloneTree()
+    # bininfoout = bininfo.CopyTree(f'name >= "{binc[0]}" && name <= "{binc[-1]}"')
+    # bininfoout.Write()
+    bininfoout = bininfo.CloneTree(0)
+    for entry in bininfo:
+        # 检查每个条目
+        if str(entry.name) in binc:  # 假设有一个bin_id的字段
+            bininfoout.Fill()  # 将符合条件的条目写入新树
+    # if detector=="WCDA":
+      
+        # for i in range(7):
+        #     if str(i) not in binc:  
+        #         bininfoout.DeleteEntry(i)
+    # elif detector=="KM2A":
+    #     for i in range(14):
+    #         if str(i) not in binc:  
+    #             bininfoout.DeleteEntry(i)            
+    bininfoout.Write()
     fout.Write(f"../res/{region_name}/{Modelname}/{outname}.root", ROOT.TFile.kOverwrite)
     fout.Close()
 
@@ -860,24 +885,30 @@ def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detecto
     npix=hp.nside2npix(nside)
     skymap=hp.UNSEEN*np.ones(npix)
     for file in all_files:
+        # print(file)
         datas = np.load(file, allow_pickle=True)[0]
         for dd in datas:
             if dd != []:
                 dd2 = np.array(dd)
                 if len(dd2) >0:
                     skymap[dd2[:,0].astype(np.int)]=dd2[:,1]
+    print("done")
     skymap=hp.ma(skymap)
     if ifsave:
+        print("save")
         hp.write_map(f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits.gz", skymap, overwrite=True)
     if ifdraw:
+        print("Draw")
         sources={}
         drawmap(region_name, Modelname, sources, skymap, ra1, dec1, rad=2*data_radius, contours=[10000],save=ifsave, savename=inname,
                 cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "size": 20,"markercolor": "grey","labelcolor": "black","angle": 60,"catext": 1 }, color="Fermi"
                   )
     if drawfullsky:
+        print("Draw_fullsky")
         fig = mt.hpDraw("region_name", "Modelname", skymap,0,0,skyrange=(0,360,-20,80),
                     colorlabel="Significance", contours=[1000], save=False, cat={}, color="Milagro", xsize=2048)
     if tofits:
+        print("Draw_fits")
         plt.figure()
         heal2fits(skymap, f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
     return skymap

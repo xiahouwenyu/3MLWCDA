@@ -34,7 +34,7 @@ deltatime = 3
 
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
-            sigma=None,sf=False,sb=None,radius=None,rf=False,rb=None,
+            sigma=None,sf=False,sb=None,radius=None,rf=False,rb=None, sigmar=None, sigmarf=False, sigmarb=None,
             ################################ Spectrum
             k=1.3e-13,kf=False,kb=None,piv=3,pf=True,index=-2.6,indexf=False,indexb=None,alpha=-2.6,alphaf=False,alphab=None,beta=0,betaf=False,betab=None,
             kn=None,
@@ -51,7 +51,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             a=None, af=False, ab=None, e=None, ef=False, eb=None, theta=None, thetaf=False, thetab=None,
 
             ################################ Beta
-            rc1=None, rc1f=False, rc1b=None, beta1=None, beta1f=False, beta1b=None, rc2=None, rc2f=False, rc2b=None, beta2=None, beta2f=False, beta2b=None,
+            rc1=None, rc1f=False, rc1b=None, beta1=None, beta1f=False, beta1b=None, rc2=None, rc2f=False, rc2b=None, beta2=None, beta2f=False, beta2b=None, yita=None, yitaf=False, yitab=None,
 
             ################################ EBL
             redshift=None, ebl_model="franceschini",
@@ -122,6 +122,13 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
         spat = Beta_function()
     elif spat == "DBeta":
         spat = Double_Beta_function()
+    elif spat == "Ring":
+        spat = Ring_on_sphere()
+        if radius != None:
+            spat.radius = radius
+            spat.radius.fix = rf
+            if rb != None:
+                spat.radius.bounds = rb
     elif spat == "Asymm":
         spat=Asymm_Gaussian_on_sphere()
     elif spat == "Ellipse":
@@ -246,6 +253,8 @@ if parb != None:
     setspatParameter("rc2",rc2,rc2f,rc2b)
     setspatParameter("beta1",beta1,beta1f,beta1b)
     setspatParameter("beta2",beta2,beta2f,beta2b)
+    setspatParameter("yita",yita,yitaf,yitab)
+    setspatParameter("sigmar",sigmar,sigmarf,sigmarb)
 
     return source
 
@@ -256,7 +265,7 @@ def copy_free_parameters(source_model, target_model):
         else:
             print(f"Parameter {param_name} not found in target model")
 
-def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=8, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False, releaseroi=None):
+def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=2, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False, releaseroi=None):
     """
         获取LHAASO catalog模型
 
@@ -1001,26 +1010,26 @@ def get_profile_likelihood(region_name, Modelname, data, model, par, min=None, m
     return mu, L    
 
 def load_modelpath(modelpath):
-    activate_warnings()
+    # silence_warnings()
     try:
         results = load_analysis_results(modelpath+"/Results.fits")
     except:
-        log.warning("No results found")
+        print("No results found")
         results = None
 
     try:
         lmini = load_model(modelpath+"/Model_init.yml")
     except:
-        log.warning("No initial model found")
+        print("No initial model found")
         lmini = None
 
     try:
         lmopt = load_model(modelpath+"/Model_opt.yml")
     except:
-        log.warning("No optimized model found")
+        print("No optimized model found")
         lmopt = None
 
-    silence_warnings()
+    # activate_warnings()
     return results, lmini, lmopt
 
 def getTSall(TSlist, region_name, Modelname, result, WCDA):
@@ -1161,7 +1170,7 @@ def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5):
     # resu = (ON-BK)/np.sqrt(ON)
     return resu
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=8, rtp=8):
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
     """
         在一个区域搜索新源
 
@@ -1224,7 +1233,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         npt=lm.get_number_of_point_sources()
     
     if fromcatalog:
-        lm = getcatModel(ra1, dec1, data_radius, model_radius, fixall=fixcatall, detector=detector,  rtsigma=rtsigma, rtflux=rtflux, rtindex=rtindex, rtp=rtp)
+        lm = getcatModel(ra1, dec1, data_radius, model_radius, fixall=fixcatall, detector=detector,  rtsigma=rtsigma, rtflux=rtflux, rtindex=rtindex, rtp=rtp, ifext_mt_2=ifext_mt_2)
         next = lm.get_number_of_extended_sources()
         if 'Diffuse' in lm.sources.keys():
             next-=1
@@ -1250,7 +1259,8 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
 
     # WCDA.set_model(lm)
     for N_src in range(100):
-        resu = getressimple(WCDA, lm)
+        # resu = getressimple(WCDA, lm)
+        resu = getresaccuracy(WCDA, lm)
         new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
         new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
         lon_array.append(new_source_lon_lat[0])
@@ -1278,14 +1288,15 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
             TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
             TS_all.append(TS["TS_all"])
+            TS_allpt = TS["TS_all"]
             pts.append(pt)
 
             sources = get_sources(lm,result)
             sources.pop("Diffuse")
             if detector=="WCDA":
-                map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
             else:
-                map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
             map2 = maskroi(map2, roi)
             fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
             plt.show()
@@ -1314,9 +1325,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         sources = get_sources(lm,result)
         sources.pop("Diffuse")
         if detector=="WCDA":
-            map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_llh-2.6.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
         else:
-            map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_llh-3.5_new.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
         map2 = maskroi(map2, roi)
         fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
         plt.show()
@@ -1336,12 +1347,14 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
                 npt+=1
                 next-=1
                 Modelname=f"{npt}pt+{next}ext"+tDGE
-                lm.remove_source(name)
-                lm.add_source(pts[-1])
+                lm = copy.deepcopy(bestcache)
+                WCDA.set_model(lm)
+                # lm.remove_source(name)
+                # lm.add_source(pts[-1])
                 name=f"pt{npt}"
-                result = fit(region_name+"_iter", Modelname, WCDA, lm, 0, 5,mini="ROOT")
-                TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
-                TS_all[-1]=TS["TS_all"]
+                # result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini="ROOT")
+                # TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
+                TS_all[-1]=TS_allpt #TS["TS_all"]
                 source[-1]=pt
         else:
             bestcache=copy.deepcopy(lm)
@@ -1368,7 +1381,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         else:
             log.info(f"{bestmodelname} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}, no need for more!")
             lm.display()
-            result = fit(region_name+"_iter", bestmodelname, WCDA, bestcache, 0, 5,mini="ROOT")
+            result = fit(region_name+"_iter", bestmodelname, WCDA, bestcache, s, e,mini="ROOT")
             TS, TSdatafram = getTSall([], region_name+"_iter", bestmodelname, result, WCDA)
             return bestmodel,result
 
@@ -1513,7 +1526,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         if Kb is not None:
             Diffusespec.K.bounds=np.array(Kb) * fluxUnit
         else:
-            Diffusespec.K.bounds=np.array((0.0001*kk,10000*kk)) * fluxUnit
+            Diffusespec.K.bounds=np.array((kk/kbratio,kbratio*kk)) * fluxUnit
         Diffusespec.Kn = Kn
         Diffusespec.Kn.fix = True
     else:
@@ -1527,7 +1540,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         if Kb is not None:
             Diffusespec.K.bounds=np.array(Kb) * fluxUnit
         else:
-            Diffusespec.K.bounds=np.array((0.0001*K,10000*K)) * fluxUnit
+            Diffusespec.K.bounds=np.array((K/kbratio,kbratio*K)) * fluxUnit
 
 
 

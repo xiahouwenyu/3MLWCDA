@@ -1,0 +1,690 @@
+GRB221009A (point source):
+
+  position:
+
+    ra:
+
+      value: 0.0
+
+      desc: Right Ascension
+
+      min_value: 0.0
+
+      max_value: 360.0
+
+      unit: deg
+
+      is_normalization: false
+
+      delta: 0.1
+
+      free: false
+
+    dec:
+
+      value: 0.0
+
+      desc: Declination
+
+      min_value: -90.0
+
+      max_value: 90.0
+
+      unit: deg
+
+      is_normalization: false
+
+      delta: 0.1
+
+      free: false
+
+    equinox: J2000
+
+  spectrum:
+
+    main:
+
+      composite:
+
+        a_1:
+
+          value: 113.27784997196336
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: keV-1 s-1 cm-2
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        b_1:
+
+          value: -0.03029904478867712
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: s-1 cm-2 keV-2
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        c_1:
+
+          value: 2.6017323621548972e-06
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: s-1 cm-2 keV-3
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        d_1:
+
+          value: -6.176771572235902e-11
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: s-1 cm-2 keV-4
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        a_2:
+
+          value: 0.0
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: keV-1 s-1 cm-2
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        b_2:
+
+          value: 0.0
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: s-1 cm-2 keV-2
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        c_2:
+
+          value: 0.0
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: s-1 cm-2 keV-3
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        d_2:
+
+          value: 0.0
+
+          desc: coefficient
+
+          min_value: null
+
+          max_value: null
+
+          unit: s-1 cm-2 keV-4
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: false
+
+        Fc_3:
+
+          value: 2021.191793031331
+
+          desc: Normalization
+
+          min_value: 0.0
+
+          max_value: 100000.0
+
+          unit: ''
+
+          is_normalization: true
+
+          delta: 0.1
+
+          free: true
+
+          prior:
+
+            Uniform_prior:
+
+              lower_bound:
+
+                value: 0.0
+
+                desc: Lower bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              upper_bound:
+
+                value: 100000.0
+
+                desc: Upper bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              value:
+
+                value: 1.0
+
+                desc: Value in the interval
+
+                min_value: null
+
+                max_value: null
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+        alpha_c_3:
+
+          value: 1.148364673318806
+
+          desc: index 1
+
+          min_value: 0.0
+
+          max_value: 5.0
+
+          unit: ''
+
+          is_normalization: false
+
+          delta: 0.2
+
+          free: true
+
+          prior:
+
+            Uniform_prior:
+
+              lower_bound:
+
+                value: 0.0
+
+                desc: Lower bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              upper_bound:
+
+                value: 5.0
+
+                desc: Upper bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              value:
+
+                value: 1.0
+
+                desc: Value in the interval
+
+                min_value: null
+
+                max_value: null
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+        Tc_3:
+
+          value: 15.0
+
+          desc: break time
+
+          min_value: null
+
+          max_value: null
+
+          unit: s
+
+          is_normalization: false
+
+          delta: 10.0
+
+          free: false
+
+        tc_3:
+
+          value: 0.0003880258621052281
+
+          desc: start
+
+          min_value: 0.0
+
+          max_value: 1000.0
+
+          unit: s
+
+          is_normalization: false
+
+          delta: 2.0
+
+          free: true
+
+          prior:
+
+            Uniform_prior:
+
+              lower_bound:
+
+                value: 0.0
+
+                desc: Lower bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: s
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              upper_bound:
+
+                value: 1000.0
+
+                desc: Upper bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: s
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              value:
+
+                value: 1.0
+
+                desc: Value in the interval
+
+                min_value: null
+
+                max_value: null
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+        t0_3:
+
+          value: 226.0
+
+          desc: start time
+
+          min_value: 220.0
+
+          max_value: 235.0
+
+          unit: s
+
+          is_normalization: false
+
+          delta: 22.6
+
+          free: false
+
+        mean_4:
+
+          value: 620.3357762858246
+
+          desc: Lower bound for the interval
+
+          min_value: 450.0
+
+          max_value: 650.0
+
+          unit: keV
+
+          is_normalization: false
+
+          delta: 0.1
+
+          free: true
+
+          prior:
+
+            Uniform_prior:
+
+              lower_bound:
+
+                value: 450.0
+
+                desc: Lower bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: keV
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              upper_bound:
+
+                value: 650.0
+
+                desc: Upper bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: keV
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              value:
+
+                value: 1.0
+
+                desc: Value in the interval
+
+                min_value: null
+
+                max_value: null
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+        sigma_4:
+
+          value: 140.18689597594792
+
+          desc: Upper bound for the interval
+
+          min_value: 0.0
+
+          max_value: 200.0
+
+          unit: keV
+
+          is_normalization: false
+
+          delta: 1.0
+
+          free: true
+
+          prior:
+
+            Uniform_prior:
+
+              lower_bound:
+
+                value: 0.0
+
+                desc: Lower bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: keV
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              upper_bound:
+
+                value: 200.0
+
+                desc: Upper bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: keV
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              value:
+
+                value: 1.0
+
+                desc: Value in the interval
+
+                min_value: null
+
+                max_value: null
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+        value_4:
+
+          value: 8.039696722801432
+
+          desc: Value in the interval
+
+          min_value: 5.0
+
+          max_value: 200.0
+
+          unit: keV-1 s-1 cm-2
+
+          is_normalization: false
+
+          delta: 2.0
+
+          free: true
+
+          prior:
+
+            Uniform_prior:
+
+              lower_bound:
+
+                value: 5.0
+
+                desc: Lower bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: keV-1 s-1 cm-2
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              upper_bound:
+
+                value: 200.0
+
+                desc: Upper bound for the interval
+
+                min_value: -.inf
+
+                max_value: .inf
+
+                unit: keV-1 s-1 cm-2
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+              value:
+
+                value: 1.0
+
+                desc: Value in the interval
+
+                min_value: null
+
+                max_value: null
+
+                unit: ''
+
+                is_normalization: false
+
+                delta: 0.1
+
+                free: true
+
+        expression: (((Cubic{1} * 1) + (Cubic{2} * 1)) + ((Cubic{1} / 106.56243893623805)
+
+          * (TPLM2{3} + StepFunction{4})))
+
+      polarization: {}
+

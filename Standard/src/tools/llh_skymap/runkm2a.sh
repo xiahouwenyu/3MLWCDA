@@ -1,3 +1,8 @@
+#!/bin/bash
+
+#SBATCH --mail-type=end
+#SBATCH --mail-user=caowy@mail.ustc.edu.cn
+
 source activate 3ML
 
 # dirnow=dir

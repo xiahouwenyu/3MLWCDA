@@ -14,6 +14,7 @@ from astropy.io import fits
 import hashlib
 
 from astromodels.utils.logging import setup_logger
+from scipy.interpolate import griddata
 
 log = setup_logger(__name__)
 
@@ -304,7 +305,58 @@ class Beta_function(Function2D, metaclass=FunctionMeta):
                 min : 0
                 max : 20
                 delta : 0.1
+
+            yita :
+                desc :
+                initial value : 1.0
+                min : 0
+                max : 20
+                delta : 0.1
+
+        # properties:
+        #     fits_file:
+        #         desc: fits file to load
+        #         defer: True
+        #         function: _load_file
         """
+    
+    # def __init__(self, ):
+    #     # 使用 super() 调用父类的初始化方法，初始化父类的变量
+    #     super().__init__(Function2D)
+        # 子类增加新的变量
+        # self.precomputed_values = {}
+
+        # lon_range = np.linspace(self.lon0.value - 1, self.lon0.value + 1, 30)
+        # lat_range = np.linspace(self.lat0.value - 1, self.lat0.value + 1, 30)
+
+        # for lon in lon_range:
+        #     for lat in lat_range:
+        #         angsep = angular_distance(self.lon0.value, self.lat0.value, lon, lat)
+        #         def projected_intensity(R, rc1, beta1, yita):
+
+        #             # 定义分布函数
+        #             def f1(z):
+        #                 return (1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3 * beta1)
+                    
+        #             def f2(z):
+        #                 return (1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3 * beta1)**yita
+
+        #             # 计算积分
+        #             I1, _ = quad(lambda z: 2 * f1(z) * f2(z), -5*rc1, 5*rc1)
+
+        #             return I1
+
+        #         def pdf(angsep):
+        #             return projected_intensity(angsep, self.rc1.value, self.beta1.value, self.yita.value)
+                
+        #         def pdf2(angsep):
+        #             return 2*np.pi*angsep * projected_intensity(angsep, self.rc1.value, self.beta1.value, self.yita.value) #
+
+        #         integral, _ = quad(pdf2, 0, 10) #/(2*np.pi*angsep)
+
+        #         vectorized_pdf = np.vectorize(pdf)
+
+        #         self.precomputed_values[(lon, lat)] = (180/np.pi)**2 * (1/integral) * vectorized_pdf(angsep)
 
     def _set_units(self, x_unit, y_unit, z_unit):
 
@@ -315,34 +367,42 @@ class Beta_function(Function2D, metaclass=FunctionMeta):
         self.lon0.unit = x_unit
         self.lat0.unit = y_unit
         self.rc1.unit = x_unit
+        
 
-    def evaluate(self, x, y, lon0, lat0, rc1, beta1):
+    def evaluate(self, x, y, lon0, lat0, rc1, beta1, yita):
 
         lon, lat = x,y
 
-        angsep = angular_distance(lon0, lat0, lon, lat)
-
-        def projected_intensity(R, rc1, beta1):
+        angsep = angular_distance(self.lon0.value, self.lat0.value, lon, lat)
+        def projected_intensity(R, rc1, beta1, yita):
 
             # 定义分布函数
             def f1(z):
-                return (1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3 * beta1)
-
+                return (1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3 * beta1)**(yita+1)
+        
             # 计算积分
-            I1, _ = quad(lambda z: 2 * f1(z), -5*rc1, 5*rc1)
+            I1, _ = quad(lambda z: f1(z), -5*rc1, 5*rc1)
 
             return I1
 
         def pdf(angsep):
-            return projected_intensity(angsep, rc1, beta1)
+            return projected_intensity(angsep, self.rc1.value, self.beta1.value, self.yita.value)
         
         def pdf2(angsep):
-            return 2*np.pi*angsep * projected_intensity(angsep, rc1, beta1)
+            return 2*np.pi*angsep * projected_intensity(angsep, self.rc1.value, self.beta1.value, self.yita.value) #
 
-        integral, _ = quad(pdf2, 0, 100) #/(2*np.pi*angsep)
+        integral, _ = quad(pdf2, 0, 10) #/(2*np.pi*angsep)
 
         vectorized_pdf = np.vectorize(pdf)
+
         result = (180/np.pi)**2 * (1/integral) * vectorized_pdf(angsep)
+
+        # lon_vals = np.array(list(self.precomputed_values.keys()))[:, 0]
+        # lat_vals = np.array(list(self.precomputed_values.keys()))[:, 1]
+        # values = np.array(list(self.precomputed_values.values()))
+
+        # points = np.array([lon_vals, lat_vals]).T
+        # result = griddata(points, values, (x, y), method='linear', fill_value=0)
 
         return result
         # return (180/np.pi)**2*(1/integral)*pdf(angsep)
@@ -445,6 +505,13 @@ class Double_Beta_function(Function2D, metaclass=FunctionMeta):
                 min : 0
                 max : 20
                 delta : 0.1
+
+            yita :
+                desc :
+                initial value : 1.0
+                min : 0
+                max : 20
+                delta : 0.1
         """
 
     def _set_units(self, x_unit, y_unit, z_unit):
@@ -458,30 +525,33 @@ class Double_Beta_function(Function2D, metaclass=FunctionMeta):
         self.rc1.unit = x_unit
         self.rc2.unit = x_unit
 
-    def evaluate(self, x, y, lon0, lat0, rc1, beta1, rc2, beta2):
+    def evaluate(self, x, y, lon0, lat0, rc1, beta1, rc2, beta2, yita):
 
         lon, lat = x,y
 
         angsep = angular_distance(lon0, lat0, lon, lat)
 
-        def projected_intensity(R, rc1, beta1, rc2, beta2):
+        def projected_intensity(R, rc1, beta1, rc2, beta2, yita):
 
                 # 定义分布函数
                 def f1(z):
-                    return ((1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3/2 * beta1) + (1 + ((np.sqrt(R**2 + z**2) / rc2)**2))**(-3/2 * beta2))**2
+                    return (((1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3/2 * beta1) + (1 + ((np.sqrt(R**2 + z**2) / rc2)**2))**(-3/2 * beta2))**2)**(yita+1)
+                
+                # def f2(z):
+                #     return (((1 + ((np.sqrt(R**2 + z**2) / rc1)**2))**(-3/2 * beta1) + (1 + ((np.sqrt(R**2 + z**2) / rc2)**2))**(-3/2 * beta2))**2)
 
                 # 计算积分
-                I1, _ = quad(lambda z: 2 * f1(z), -5, 5)
+                I1, _ = quad(lambda z: f1(z), -3, 3)
 
                 return I1
 
         def pdf(angsep):
-            return projected_intensity(angsep, rc1, beta1, rc2, beta2)
+            return projected_intensity(angsep, rc1, beta1, rc2, beta2, yita)
         
         def pdf2(angsep):
-            return 2*np.pi*angsep * projected_intensity(angsep, rc1, beta1, rc2, beta2)
+            return 2*np.pi*angsep * projected_intensity(angsep, rc1, beta1, rc2, beta2, yita) #
 
-        integral, _ = quad(pdf2, 0, 100) #/(2*np.pi*angsep)
+        integral, _ = quad(pdf2, 0, 3) #/(2*np.pi*angsep)
 
         vectorized_pdf = np.vectorize(pdf)
         result = (180/np.pi)**2 * (1/integral) * vectorized_pdf(angsep)
@@ -531,6 +601,108 @@ class Double_Beta_function(Function2D, metaclass=FunctionMeta):
         :return: an array of values of the integral (same dimension as z).
         """
         
+        if isinstance( z, u.Quantity):
+            z = z.value
+        return np.ones_like( z )
+    
+class Ring_on_sphere(Function2D, metaclass=FunctionMeta):
+    r"""
+        description :
+
+            A bidimensional disk/tophat function on a sphere (in spherical coordinates)
+
+        latex : $$ f(\vec{x}) = \left(\frac{180}{\pi}\right)^2 \frac{1}{\pi~({\rm radius})^2} ~\left\{\begin{matrix} 1 & {\rm if}& {\rm | \vec{x} - \vec{x}_0| \le {\rm radius}} \\ 0 & {\rm if}& {\rm | \vec{x} - \vec{x}_0| > {\rm radius}} \end{matrix}\right. $$
+
+        parameters :
+
+            lon0 :
+
+                desc : Longitude of the center of the source
+                initial value : 0.0
+                min : 0.0
+                max : 360.0
+
+            lat0 :
+
+                desc : Latitude of the center of the source
+                initial value : 0.0
+                min : -90.0
+                max : 90.0
+
+            radius :
+
+                desc : Radius of the disk
+                initial value : 4
+                min : 0
+                max : 20
+
+            sigmar :
+                
+                desc : Width of the disk
+                initial value : 1
+                min : 0
+                max : 20
+
+        """
+
+    def _set_units(self, x_unit, y_unit, z_unit):
+
+        # lon0 and lat0 and rdiff have most probably all units of degrees. However,
+        # let's set them up here just to save for the possibility of using the
+        # formula with other units (although it is probably never going to happen)
+
+        self.lon0.unit = x_unit
+        self.lat0.unit = y_unit
+        self.radius.unit = x_unit
+        self.sigmar.unit = x_unit
+
+    def evaluate(self, x, y, lon0, lat0, radius, sigmar):
+
+        lon, lat = x,y
+
+        angsep = angular_distance(lon0, lat0, lon, lat)
+
+        return np.power(old_div(180, np.pi), 2) * 1. / (np.pi * ((radius+sigmar) ** 2 - (radius-sigmar) ** 2)) * ((angsep <= radius+sigmar) & (angsep >= radius-sigmar))
+
+    def get_boundaries(self):
+
+        # Truncate the disk at 2 times the max of radius allowed
+
+        max_radius = self.radius.max_value+self.sigmar.max_value
+
+        min_lat = max(-90., self.lat0.value - 2 * max_radius)
+        max_lat = min(90., self.lat0.value + 2 * max_radius)
+
+        max_abs_lat = max(np.absolute(min_lat), np.absolute(max_lat))
+
+        if max_abs_lat > 89. or 2 * max_radius / np.cos(max_abs_lat * np.pi / 180.) >= 180.:
+
+            min_lon = 0.
+            max_lon = 360.
+
+        else:
+
+            min_lon = self.lon0.value - 2 * max_radius / np.cos(max_abs_lat * np.pi / 180.)
+            max_lon = self.lon0.value + 2 * max_radius / np.cos(max_abs_lat * np.pi / 180.)
+
+            if min_lon < 0.:
+
+                min_lon = min_lon + 360.
+
+            elif max_lon > 360.:
+
+                max_lon = max_lon - 360.
+
+        return (min_lon, max_lon), (min_lat, max_lat)
+
+    def get_total_spatial_integral(self, z=None):  
+        """
+        Returns the total integral (for 2D functions) or the integral over the spatial components (for 3D functions).
+        needs to be implemented in subclasses.
+
+        :return: an array of values of the integral (same dimension as z).
+        """
+
         if isinstance( z, u.Quantity):
             z = z.value
         return np.ones_like( z )

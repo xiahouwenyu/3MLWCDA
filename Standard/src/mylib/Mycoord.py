@@ -167,6 +167,29 @@ def hms_to_deg(ra_hours, ra_minutes, ra_seconds, dec_degrees, dec_minutes, dec_s
     dec_degrees *= sign
 
     return ra_degrees, dec_degrees
+def deg_to_hms(ra_degrees, dec_degrees):
+    """
+        转换角度为时角
+
+        Parameters:
+            
+        Returns:
+            ra_hours, ra_minutes, ra_seconds, dec_degrees, dec_minutes, dec_seconds
+    """
+    # 转换赤经为时角
+    ra_hours = int(ra_degrees // 15)
+    ra_minutes = int((ra_degrees % 15) * 4)
+    ra_seconds = ((ra_degrees % 15) * 4 - ra_minutes) * 60
+
+    # 转换赤纬为度、分、秒
+    sign = -1 if dec_degrees < 0 else 1
+    dec_degrees = abs(dec_degrees)
+    dec_deg = int(dec_degrees)
+    dec_minutes = int((dec_degrees - dec_deg) * 60)
+    dec_seconds = ((dec_degrees - dec_deg) * 60 - dec_minutes) * 60
+    dec_deg *= sign
+
+    return ra_hours, ra_minutes, ra_seconds, dec_deg, dec_minutes, dec_seconds
 
 def eql2hcs(ha, dn):
     import math
