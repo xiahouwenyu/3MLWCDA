@@ -12,7 +12,7 @@ def calculate_significance(dof, logllh1, logllh2):
     p_value = 1 - stats.chi2.cdf(test_statistic, dof)
     
     # Calculate the significance level
-    significance = stats.norm.ppf(1 - p_value)
+    significance = stats.norm.ppf(1 - p_value/2)
     
     return significance
 

@@ -11,6 +11,7 @@ Standard/src/tools/llh_skymap/skytxt3/*.gz
 Standard/src/tools/llh_skymap/skytxt3/*.pdf
 Standard/src/tools/llh_skymap/skytxt3/*.txt
 Standard/src/tools/llh_skymap/sourcetxt/*
+Standard/src/tools/llh_skymap/*out
 Standard/src/tools/LHAASO_skytrans/skytxt/*txt
 Standard/src/tools/LHAASO_skytrans/skytxt/*pdf
 Standard/src/tools/LHAASO_skytrans/skytxt/*fits

@@ -557,9 +557,9 @@ def Draw_lateral_distribution_deg2(region_name, Modelname, map, ra, dec, num, wi
     nside = 1024
     npix=hp.nside2npix(nside)
     pixel_areas = 4 * np.pi / npix
-    pixel_areas = 129600 / npix
-
- 
+    # pixel_areas = 129600 / npix
+    pixel_areas = 41252.96124941928 / npix
+     
     data_disc = np.zeros(n) #define the excess_disc number in each disc
     data_ring = np.zeros(n) #define the excess_disc number in each ring
     bkg_disc = np.zeros(n) #define the excess_disc number in each disc

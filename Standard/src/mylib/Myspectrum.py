@@ -193,7 +193,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
         else:
             lb, ub = result2[0].results.get_equal_tailed_interval(lm2.sources[source].parameters[kparname.replace(spec.name,spec.name.replace("M",""))], cl=2*CL-1)
             if int(i) >= scanbin and TSflux<threshold**2:
-                ub, mewmini = get_upperlimit(result2[0], kparname.replace(spec.name,spec.name.replace("M","")), CL=CL, scannum=scannum)
+                ub, mewmini = get_upperlimit(result2[0], kparname.replace(spec.name,spec.name.replace("M","")), CL=CL, num=scannum)
                 if mewmini is not None:
                     result2[1][0].iloc[0,0] = mewmini
             if (ub-result2[1][0].iloc[0,0])>0 and TSflux<threshold**2:
@@ -444,7 +444,7 @@ def reweightxall(WCDA, lm, func = fun_Powerlaw,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.17, acc=False, scannum=200):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=0, iffixtans=False, bondaryrange=100, pixelsize=0.17, acc=False, scannum=200):
     """
         获取某个源的能谱点
 

@@ -47,7 +47,7 @@ def go(args):
     
     # Use from bin 1 to bin 9
     # WCDA.set_active_measurements(0,6)
-    WCDA.set_active_measurements(2,13)
+    WCDA.set_active_measurements(4,13)
 
 #    pixid=roi.active_pixels(roi._original_nside)
     #pixid=roi.active_pixels(1024)
@@ -62,7 +62,7 @@ def go(args):
                            ra=ra_c,
                            dec=dec_c,
                            spectral_shape=spectrum)
-    fluxUnit=1./(u.TeV* u.cm**2 * u.s)
+    # fluxUnit=1./(u.TeV* u.cm**2 * u.s)
         #source.position.ra=ra_pix
        # source.position.ra.fix=True
         #source.position.dec=dec_pix
@@ -78,10 +78,11 @@ def go(args):
     # spectrum.index.fix=True
 
     #KM2A
+    fluxUnit=1e-9
     spectrum.K=1e-16 *fluxUnit
     spectrum.K.fix=False
-    spectrum.K.bounds=(-1e-17*fluxUnit, 1e-14*fluxUnit)
-    spectrum.K.delta=1e-17*fluxUnit
+    spectrum.K.bounds=(-1e-16*fluxUnit, 1e-14*fluxUnit)
+    spectrum.K.delta=1e-16*fluxUnit
     spectrum.piv= 50.*u.TeV
     spectrum.piv.fix=True
     spectrum.index=-3.6
@@ -98,19 +99,19 @@ def go(args):
         ra_pix , dec_pix = hp.pix2ang(1024,pid,lonlat=True)
         if(dec_pix<=-20. or dec_pix>=80.):
             sig=hp.UNSEEN
-            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt2/sig_no%i.txt"%no,"a+") as fs:
                 fs.write(str(pid)+" "+str(sig)+" "+str(hp.UNSEEN)+"\n")
             continue
 
         if dec_c<=-13.5:
             roi = HealpixConeROI(data_radius=np.max([1.5,dec_pix+19.5]), model_radius=np.max([2,dec_pix+19.5]), ra=ra_pix, dec=dec_pix)
             WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
-            WCDA.set_active_measurements(0,6)
+            WCDA.set_active_measurements(4,13)
             WCDA.psf_integration_method="fast"
         elif dec_c>=73.5:
             roi = HealpixConeROI(data_radius=np.max([1.5,79.5-dec_pix]), model_radius=np.max([2,79.5-dec_pix]), ra=ra_pix, dec=dec_pix)
             WCDA = HAL("WCDA", maptree, response, roi, flat_sky_pixels_size=0.17)
-            WCDA.set_active_measurements(0,6)
+            WCDA.set_active_measurements(4,13)
             WCDA.psf_integration_method="fast"
 
 
@@ -120,7 +121,7 @@ def go(args):
         source.position.dec.fix=True
         # WCDA.set_active_measurements(0,6)
         # WCDA.set_active_measurements(2,7)
-        WCDA.set_active_measurements(2,13)
+        WCDA.set_active_measurements(4,13)
         data = DataList(WCDA)
         jl = JointLikelihood(model, data, verbose=False)
         jl.set_minimizer("ROOT")
@@ -131,7 +132,7 @@ def go(args):
             sig=0 #hp.UNSEEN
             K_fitted=0
             errid=pid
-            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/erridlist_%s.txt"%name,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt2/erridlist_%s.txt"%name,"a+") as fs:
                 fs.write(str(errid)+"\n")
         else:
             results = jl.results
@@ -151,7 +152,7 @@ def go(args):
                 sig=0
             
           #  sig_list.append(sig)
-        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
+        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt2/sig_no%i.txt"%no,"a+") as fs:
             fs.write(str(pid)+" "+str(sig)+" "+str(K_fitted)+"\n")
         
 #    np.savetxt(r'siglist_%s.txt'%name,sig_list)

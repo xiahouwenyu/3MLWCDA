@@ -329,3 +329,71 @@ def redshift_to_Mpc(redshift):
     # 计算共动距离并转换为Mpc
     distance_mpc = cosmo.comoving_distance(redshift).to(u.Mpc).value
     return distance_mpc
+
+def physical_scale_per_degree(distance, unit='ly'):
+    """
+    Calculate the physical scale corresponding to one degree on the sky at a given distance.
+
+    Parameters:
+    -----------
+    distance : float
+        The distance to the object (in parsecs).
+    unit : str, optional
+        The unit of the physical scale. Options are:
+        'ly' for light-years (default),
+        'pc' for parsecs,
+        'km' for kilometers,
+        'au' for astronomical units.
+    
+    Returns:
+    --------
+    scale : float
+        The physical scale corresponding to one degree on the sky in the specified unit.
+    """
+    # Conversion factors
+    pc_to_ly = 3.262  # 1 parsec = 3.262 light-years
+    pc_to_km = 3.086e13  # 1 parsec = 3.086 x 10^13 kilometers
+    pc_to_au = 206265  # 1 parsec = 206,265 astronomical units
+
+    # Convert 1 degree to radians
+    one_degree_in_radians = np.deg2rad(1)
+
+    # Physical scale in parsecs
+    scale_in_pc = distance * np.tan(one_degree_in_radians)
+    
+    # Convert scale to the requested unit
+    if unit == 'ly':
+        scale = scale_in_pc * pc_to_ly
+    elif unit == 'km':
+        scale = scale_in_pc * pc_to_km
+    elif unit == 'au':
+        scale = scale_in_pc * pc_to_au
+    elif unit == 'pc':
+        scale = scale_in_pc
+    else:
+        raise ValueError("Invalid unit. Choose from 'ly', 'pc', 'km', or 'au'.")
+
+    return scale
+
+def calculate_physical_distance(l1, b1, d1, l2, b2, d2):
+    """
+    Calculate the physical distance between two objects in the Galaxy.
+
+    Args:
+        l1, b1: Galactic longitude and latitude of the first object (in degrees).
+        d1: Distance of the first object (in kpc).
+        l2, b2: Galactic longitude and latitude of the second object (in degrees).
+        d2: Distance of the second object (in kpc).
+
+    Returns:
+        The physical distance between the two objects (in kpc).
+    """
+    # Create SkyCoord objects for the two positions
+    obj1 = SkyCoord(l=l1 * u.deg, b=b1 * u.deg, distance=d1 * u.kpc, frame="galactic")
+    obj2 = SkyCoord(l=l2 * u.deg, b=b2 * u.deg, distance=d2 * u.kpc, frame="galactic")
+    
+    # Calculate the 3D physical distance
+    distance = obj1.separation_3d(obj2)
+    
+    # Return distance in kpc
+    return distance.to(u.kpc).value

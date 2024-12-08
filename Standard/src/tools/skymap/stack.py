@@ -6,7 +6,7 @@ p = argparse.ArgumentParser()
 
 p.add_argument("-i", "--input", dest="infile")
 p.add_argument("-o", "--output", dest="outfile")
-p.add_argument("-w", "--weight", dest="weight")
+p.add_argument("-w", "--", dest="weight")
 args = p.parse_args()
 
 files = (args.infile).split()

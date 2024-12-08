@@ -395,7 +395,7 @@ def drawfits(fits_file_path = '/data/home/cwy/Science/3MLWCDA/Standard/res/S147/
         plt.show()
         return fig, wcs, data
     
-def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=False, check=False, alpha=1, projection="CAR", coord="C", saveCAR=0, flip=0):
+def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_max=30, ysize=0.1, nside=1024, ifplot=False, ifnorm=False, check=False, alpha=1, projection="CAR", coord="C", saveCAR=0, flip=0, ifcounts=False):
     """
         将healpix天图转fits天图
 
@@ -451,6 +451,10 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
     # 将HEALPix数据的指定区域复制到新数组中
     extracted_data = map[pix_indices]
     extracted_data[np.isnan(extracted_data)]=0
+
+    if ifcounts:
+        area = np.radians(xsize)*np.radians(ysize)*np.ones((len(dec), len(ra)))*np.cos(np.radians(Y))
+        extracted_data = extracted_data*area/pixarea
 
     if ifplot:
         plt.imshow(extracted_data.data, extent=[ra_min, ra_max, dec_min, dec_max], origin="lower", aspect='auto', vmin=np.min(extracted_data.data), vmax=np.max(extracted_data.data))

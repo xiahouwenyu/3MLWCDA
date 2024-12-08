@@ -86,7 +86,7 @@ def go(args):
         ra_pix , dec_pix = hp.pix2ang(1024,pid,lonlat=True)
         if(dec_pix<=-20. or dec_pix>=80.):
             sig=hp.UNSEEN
-            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/sig_no%i.txt"%no,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
                 fs.write(str(pid)+" "+str(sig)+" "+str(hp.UNSEEN)+"\n")
             continue
         if dec_c<=-13.5:
@@ -115,7 +115,7 @@ def go(args):
             sig=0 #hp.UNSEEN
             K_fitted=0
             errid=pid
-            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/erridlist_%s.txt"%name,"a+") as fs:
+            with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/erridlist_%s.txt"%name,"a+") as fs:
                 fs.write(str(errid)+"\n")
         else:
             results = jl.results
@@ -135,7 +135,7 @@ def go(args):
                 sig=0
             
           #  sig_list.append(sig)
-        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt3/sig_no%i.txt"%no,"a+") as fs:
+        with open("/data/home/cwy/Science/3MLWCDA/Standard/src/tools/llh_skymap/skytxt/sig_no%i.txt"%no,"a+") as fs:
             fs.write(str(pid)+" "+str(sig)+" "+str(K_fitted)+"\n")
         
 #    np.savetxt(r'siglist_%s.txt'%name,sig_list)

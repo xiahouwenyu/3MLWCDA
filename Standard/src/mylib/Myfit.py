@@ -1194,14 +1194,13 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
     exts=[]
     npt=0
     next=0
-    TS_all=[0]
+    TS_all=[]
     lm=Model()
     lon_array=[]
     lat_array=[]
     Modelname="Original"
     smooth_sigma=0.3
-    bestmodel=0
-    bestmodelname=0
+    bestmodelname="Original"
     
     tDGE=""
 
@@ -1211,9 +1210,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         kb=(1e-18, 1e-10)
         indexb=(-4.5, -0.5)
     else:
-        kbs=(1e-18, 1e-14)
+        kbs=(1e-18, 1e-13)
         indexbs=(-5.5, -1.5)
-        kb=(1e-18, 1e-14)
+        kb=(1e-18, 1e-13)
         indexb=(-5.5, -0.5)
 
     if startfromfile is not None:
@@ -1240,22 +1239,51 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         npt=lm.get_number_of_point_sources()
 
     if ifDGE and ('Diffuse' not in lm.sources.keys()):
+        if detector=="WCDA":
+            piv=3
+        else:
+            piv=50
         if freeDGE:
             tDGE="_DGE_free"
             Diffuse = set_diffusebkg(
                             ra1, dec1, model_radius, model_radius,
                             Kf=False, indexf=False, indexb=indexb,
-                            name = region_name, Kb=kb
+                            name = region_name, Kb=kb, piv=piv
                             )
         else:
             tDGE="_DGE_fix"
             Diffuse = set_diffusebkg(
                             ra1, dec1, model_radius, model_radius,
-                            file=DGEfile,
+                            file=DGEfile, piv=piv,
                             name = region_name
                             )
         lm.add_source(Diffuse)
         exts.append(Diffuse)
+
+    sources = get_sources(lm)
+    if detector=="WCDA":
+        map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+    else:
+        map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+    map2 = maskroi(map2, roi)
+    fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi", savename="Oorg")
+    plt.show()
+
+    bestmodel=copy.deepcopy(lm)
+    bestresult = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
+    bestresultc = copy.deepcopy(bestresult)
+    TS, TSdatafram = getTSall([], region_name+"_iter", Modelname, bestresult, WCDA)
+    TSorg = TS["TS_all"]
+    TS_all.append(TS["TS_all"])
+    sources = get_sources(lm,bestresult)
+    sources.pop("Diffuse")
+    if detector=="WCDA":
+        map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+    else:
+        map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+    map2 = maskroi(map2, roi)
+    fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
+    plt.show()
 
     # WCDA.set_model(lm)
     for N_src in range(100):
@@ -1271,13 +1299,13 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         plt.scatter(lon_array,lat_array,marker='x',color='red')
         if not os.path.exists(f'../res/{region_name}_iter/'):
             os.system(f'mkdir ../res/{region_name}_iter/')
-        plt.savefig(f"../res/{region_name}_iter/{N_src}.png",dpi=300)
+        plt.savefig(f"../res/{region_name}_iter/{Modelname}_{N_src}.png",dpi=300)
         plt.show()
 
         if not ifnopt:
             npt+=1
             name=f"pt{npt}"
-            bestmodelnamec=copy.copy(name)
+            bestmodelnamec=copy.copy(Modelname)
             pt = setsorce(name,lon_array[N_src],lat_array[N_src], 
                         indexb=indexbs,kb=kbs,
                         fitrange=data_radius)
@@ -1285,13 +1313,17 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             bestcache=copy.deepcopy(lm)
             Modelname=f"{npt}pt+{next}ext"+tDGE
             lm.display()
-            result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
-            TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
+            ptresult = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
+            TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, ptresult, WCDA)
+
+            # if TS["TS_all"]-TSorg<25:
+            #     log.info("worst than original, stop!")
+            #     return bestmodel,bestresult
+            
             TS_all.append(TS["TS_all"])
             TS_allpt = TS["TS_all"]
-            pts.append(pt)
 
-            sources = get_sources(lm,result)
+            sources = get_sources(lm,ptresult)
             sources.pop("Diffuse")
             if detector=="WCDA":
                 map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
@@ -1306,6 +1338,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             next+=1; npt-=1
         else:
             next+=1
+
         name=f"ext{next}"
         Modelname=f"{npt}pt+{next}ext"+tDGE
         if ifAsymm:
@@ -1313,7 +1346,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
                         indexb=indexbs,kb=kbs,
                         fitrange=data_radius, spat="Asymm")
         else:
-            ext = setsorce(name,lon_array[N_src],lat_array[N_src], sigma=0.1, sb=(0,3),
+            ext = setsorce(name,lon_array[N_src],lat_array[N_src], sigma=0.1, sb=(0,5),
                         indexb=indexbs,kb=kbs,
                         fitrange=data_radius)
         lm.add_source(ext)
@@ -1321,6 +1354,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         lm.display()
         result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
         TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
+        if TS["TS_all"]-TSorg<25:
+            log.info("worst than original, stop!")
+            return bestmodel,bestresult
 
         sources = get_sources(lm,result)
         sources.pop("Diffuse")
@@ -1336,19 +1372,21 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             if(TS["TS_all"]-TS_all[-1]>=extthereshold):
                 deltaTS = TS["TS_all"]-TS_all[-1]
                 log.info(f"Ext is better!! deltaTS={deltaTS:.2f}")
+                bestresultc = copy.deepcopy(result)
                 bestcache=copy.deepcopy(lm)
-                bestmodelnamec=copy.copy(name)
+                bestmodelnamec=copy.copy(Modelname)
                 TS_all[-1]=TS["TS_all"]
                 exts.append(ext)
-                pts.pop()
             else:
                 deltaTS = TS["TS_all"]-TS_all[-1]
                 log.info(f"pt is better!! deltaTS={deltaTS:.2f}")
                 npt+=1
                 next-=1
                 Modelname=f"{npt}pt+{next}ext"+tDGE
+                bestresultc = copy.deepcopy(ptresult)
                 lm = copy.deepcopy(bestcache)
                 WCDA.set_model(lm)
+                pts.append(pt)
                 # lm.remove_source(name)
                 # lm.add_source(pts[-1])
                 name=f"pt{npt}"
@@ -1358,7 +1396,8 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
                 source[-1]=pt
         else:
             bestcache=copy.deepcopy(lm)
-            bestmodelnamec=copy.copy(name)
+            bestresultc = copy.deepcopy(result)
+            bestmodelnamec=copy.copy(Modelname)
             TS_all.append(TS["TS_all"])
             exts.append(ext)
         
@@ -1376,14 +1415,23 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
                 
         if(TS_all[N_src+1]-TS_all[N_src]>25):
             log.info(f"{bestmodelnamec} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}")
-            bestmodelname=bestmodelnamec
-            bestmodel=bestcache
+            bestmodelname= copy.copy(bestmodelnamec)
+            bestresult = copy.deepcopy(bestresultc)
+            bestmodel= copy.deepcopy(bestcache)
         else:
             log.info(f"{bestmodelname} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}, no need for more!")
-            lm.display()
-            result = fit(region_name+"_iter", bestmodelname, WCDA, bestcache, s, e,mini="ROOT")
-            TS, TSdatafram = getTSall([], region_name+"_iter", bestmodelname, result, WCDA)
-            return bestmodel,result
+            bestmodel.display()
+            sources = get_sources(bestmodel,bestresult)
+            sources.pop("Diffuse")
+            if detector=="WCDA":
+                map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+            else:
+                map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+            map2 = maskroi(map2, roi)
+            fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
+            plt.show()
+            log.info(f"Best model is {bestmodelname}")
+            return bestmodel,bestresult
 
 def fun_Logparabola(x,K,alpha,belta,Piv):
     return K*pow(x/Piv,alpha-belta*np.log(x/Piv))
@@ -1391,7 +1439,7 @@ def fun_Logparabola(x,K,alpha,belta,Piv):
 def fun_Powerlaw(x,K,index,piv):
     return K*pow(x/piv,index)
 
-def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =-2.733, indexf = False, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=1000):
+def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =-2.733, indexf = False, file=None, piv=3, name=None, ifreturnratio=False, Kn=None, indexb=None, setdeltabypar=True, kbratio=1000, spec=None, alpha=None, alphaf=None, alphab=None, beta=None, betaf=None, betab=None):
     """
         自动生成区域弥散模版
 
@@ -1425,6 +1473,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         lranges = lr
         branges = br
         l,b = edm2gal(ra1,dec1)
+        branges += abs(b)
         # l=int(l); b=int(b)
         ll = np.arange(l-lranges,l+lranges,X_size)
         bb =  np.arange(-branges,branges,Y_size)
@@ -1530,7 +1579,10 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Diffusespec.Kn = Kn
         Diffusespec.Kn.fix = True
     else:
-        Diffusespec = Powerlaw()
+        if spec is not None:
+            Diffusespec = spec
+        else:
+            Diffusespec = Powerlaw()
         Diffuseshape = SpatialTemplate_2D(fits_file=file)
         Diffuse = ExtendedSource("Diffuse",spatial_shape=Diffuseshape,spectral_shape=Diffusespec)
         Diffusespec.K = K * fluxUnit
@@ -1547,12 +1599,25 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
     Diffusespec.piv = piv * u.TeV
     Diffusespec.piv.fix=True
 
-    Diffusespec.index = index
-    Diffusespec.index.fix = indexf
-    if indexb is not None:
-        Diffusespec.index.bounds = indexb
+    if spec is None:
+        Diffusespec.index = index
+        Diffusespec.index.fix = indexf
+        if indexb is not None:
+            Diffusespec.index.bounds = indexb
+        else:
+            Diffusespec.index.bounds = (-4,-1)
     else:
-        Diffusespec.index.bounds = (-4,-1)
+        Diffusespec.alpha = alpha
+        if alphaf is not None:
+            Diffusespec.alpha.fix = alphaf
+        if alphab is not None:
+            Diffusespec.alpha.bounds = alphab
+        Diffusespec.beta = beta
+        if betaf is not None:
+            Diffusespec.beta.fix = betaf
+        if betab is not None:
+            Diffusespec.beta.bounds = betab
+    
     Diffuseshape.K = 1/u.deg**2
     if ifreturnratio:
         return Diffuse, [sa/0.00012671770357488944, ss, ss/2.745913003176557],
