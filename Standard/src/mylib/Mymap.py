@@ -41,7 +41,7 @@ def settransWCDA(WCDA, ra1, dec1, tansit=None):
     for i in range(6):           
         WCDA._maptree._analysis_bins[str(i)]._n_transits=tansit
 
-def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22, oldmethod=0, cmap="Greys"):
+def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22, oldmethod=0, cmap="Greys", ax=None, coord="C2C", smoothsigma=None):
     """
         叠加fitscontour
 
@@ -88,15 +88,20 @@ def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array(
         galactic_coord = SkyCoord(Glon* u.degree, Glat* u.degree, frame='galactic')
         j2000_coords = galactic_coord.transform_to('fk5')
         Glon,Glat = j2000_coords.ra,j2000_coords.dec
-        plt.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
+        if ax is None:
+            ax = plt.gca()
+        ax.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
     else:
         from matplotlib.colors import Normalize
         from astropy.io import fits
         from astropy.wcs import WCS
         import numpy as np
+        from scipy.ndimage import gaussian_filter
         with fits.open(file) as hdul:
                 # 输出文件信息
                 qtsj = hdul[0].data
+                if smoothsigma is not None:
+                    qtsj = gaussian_filter(qtsj, sigma=smoothsigma)
                 wcs = WCS(hdul[0].header)
 
         naxis1, naxis2 = qtsj.shape
@@ -106,10 +111,15 @@ def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array(
         # 使用wcs计算天球坐标
         ra, dec = wcs.all_pix2world(x, y, 0)
 
-        galactic_coord = SkyCoord(ra* u.degree, dec* u.degree, frame='galactic')
-        j2000_coords = galactic_coord.transform_to('fk5')
+        if coord=="G2C":
+            galactic_coord = SkyCoord(ra* u.degree, dec* u.degree, frame='galactic')
+            j2000_coords = galactic_coord.transform_to('fk5')
+        elif coord=="C2C":
+            j2000_coords = SkyCoord(ra* u.degree, dec* u.degree, frame='fk5')
         Glon,Glat = j2000_coords.ra,j2000_coords.dec
-        plt.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
+        if ax is None:
+            ax = plt.gca()
+        ax.contour(Glon,Glat,qtsj,5,cmap=cmap,levels=levels,norm=Normalize(vmin=vmin,vmax=vmax),alpha=0.7)
 
 def Draw_reg(file="/data/home/cwy/Science/3MLWCDA/Standard/res/J0057/j0057_new_casob7.reg", iflabel=0):
     """

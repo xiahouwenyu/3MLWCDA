@@ -265,6 +265,21 @@ def copy_free_parameters(source_model, target_model):
         else:
             print(f"Parameter {param_name} not found in target model")
 
+def change_spectrum(lm, ss, spec=Log_parabola(), piv=None):
+    if spec.name == "Log_parabola":
+        spec.alpha = lm.sources[ss.name].spectrum.main.Powerlaw.index.value
+        spec.alpha.bounds = lm.sources[ss.name].spectrum.main.Powerlaw.index.bounds
+        spec.K = lm.sources[ss.name].spectrum.main.Powerlaw(piv*1e9)
+        spec.K.bounds = [spec.K.value/20, spec.K.value*20]
+        spec.beta = 0.1
+        spec.beta.bounds = (0, 1)
+        if piv is not None:
+            spec.piv = piv*1e9
+            spec.piv.fix = True
+    source = ExtendedSource(ss.name, spatial_shape=ss.spatial_shape, spectral_shape=spec)
+    lm.remove_source(ss.name)
+    lm.add_source(source)
+
 def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=2, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False, releaseroi=None):
     """
         获取LHAASO catalog模型
