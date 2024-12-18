@@ -1353,11 +1353,11 @@ def process_healpix_pixel(args):
     ra = np.degrees(phi)
     dec = 90.0 - np.degrees(theta)
     
-    if ra_min <= ra <= ra_max and dec_min <= dec <= dec_max:
-        x, y = wcs.world_to_pixel_values(ra, dec)
-        if 0 <= x < data.shape[1] and 0 <= y < data.shape[0]:
-            fits_value = data[int(y), int(x)]
-            return pix, fits_value
+    # if ra_min <= ra <= ra_max and dec_min <= dec <= dec_max:
+    x, y = wcs.world_to_pixel_values(ra, dec)
+    if 0 <= x < data.shape[1] and 0 <= y < data.shape[0]:
+        fits_value = data[int(y), int(x)]
+        return pix, fits_value
     return pix, 0.0
 
 def fits2healpix(fits_file, nside, reverse=False):

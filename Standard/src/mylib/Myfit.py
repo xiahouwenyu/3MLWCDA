@@ -276,6 +276,16 @@ def change_spectrum(lm, ss, spec=Log_parabola(), piv=None):
         if piv is not None:
             spec.piv = piv*1e9
             spec.piv.fix = True
+    elif spec.name == "Cutoff_powerlaw":
+        spec.index = lm.sources[ss.name].spectrum.main.Powerlaw.index.value
+        spec.index.bounds = (lm.sources[ss.name].spectrum.main.Powerlaw.index.bounds[0]-2, lm.sources[ss.name].spectrum.main.Powerlaw.index.bounds[1]+4)
+        spec.xc = piv*1e9
+        spec.xc.bounds = (0.1*1e9, 500*1e9)
+        spec.K = lm.sources[ss.name].spectrum.main.Powerlaw(piv*1e9)
+        spec.K.bounds = [spec.K.value/100, spec.K.value*100]
+        if piv is not None:
+            spec.piv = piv*1e9
+            spec.piv.fix = True
     source = ExtendedSource(ss.name, spatial_shape=ss.spatial_shape, spectral_shape=spec)
     lm.remove_source(ss.name)
     lm.add_source(source)

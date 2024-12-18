@@ -720,7 +720,7 @@ def plot_spectra(*analysis_results, **kwargs) -> plt.Figure:
 
         color_itr += 1
 
-    return plotter.finalize(_defaults)
+    return plotter.finalize(_defaults), energy_range, mle_analyses
 
 
 class SpectralContourPlot(object):
