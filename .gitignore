@@ -46,6 +46,7 @@ Standard/src/temp2
 Standard/src/archive
 Standard/src/GRB221009A
 Standard/src/tools/*fits
+Standard/src/tools/*.fits.gz
 !Standard/src/Justdraw.ipynb
 !Standard/src/tools/llh_skymap/sourcetxt/*ipynb
 !Standard/src/3MLnew_Crab.ipynb
