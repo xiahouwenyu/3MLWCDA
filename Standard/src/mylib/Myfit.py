@@ -5,21 +5,14 @@ from Mymodels import *
 import os
 import numpy as np
 from Myspec import *
-
 import healpy as hp
 import matplotlib.pyplot as plt
 import copy
-
 from tqdm import tqdm
-
 import root_numpy as rt
-
 from Mymap import *
-
 from Mysigmap import *
-
 from Mycoord import *
-
 try:
     from Mycatalog import LHAASOCat
 except:
@@ -212,7 +205,7 @@ if parb != None:
     if spec.name == "Log_parabola":
         setspecParameter("alpha",alpha,alphaf,alphab)
         setspecParameter("beta",beta,betaf,betab)
-    elif spec.name == "Cutoff_powerlaw":
+    elif spec.name == "Cutoff_powerlaw" or spec.name == "Cutoff_powerlawM":
         xc=xc*1e9
         xcb=(xcb[0]*1e9, xcb[1]*1e9)
         setspecParameter("index",index,indexf,indexb)
@@ -271,7 +264,7 @@ def change_spectrum(lm, ss, spec=Log_parabola(), piv=None):
         spec.alpha.bounds = lm.sources[ss.name].spectrum.main.Powerlaw.index.bounds
         spec.K = lm.sources[ss.name].spectrum.main.Powerlaw(piv*1e9)
         spec.K.bounds = [spec.K.value/20, spec.K.value*20]
-        spec.beta = 0.1
+        spec.beta = np.random.uniform(0, 0.3)
         spec.beta.bounds = (0, 1)
         if piv is not None:
             spec.piv = piv*1e9
@@ -286,7 +279,10 @@ def change_spectrum(lm, ss, spec=Log_parabola(), piv=None):
         if piv is not None:
             spec.piv = piv*1e9
             spec.piv.fix = True
-    source = ExtendedSource(ss.name, spatial_shape=ss.spatial_shape, spectral_shape=spec)
+    try:
+        source = ExtendedSource(ss.name, spatial_shape=ss.spatial_shape, spectral_shape=spec)
+    except:
+        source = PointSource(ss.name, ra=ss.position.ra.value, dec=ss.position.dec.value, spectral_shape=spec)
     lm.remove_source(ss.name)
     lm.add_source(source)
 
@@ -971,6 +967,134 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
 
     return [jl,result]
 
+
+def create_high_dim_matrix(array_list):
+    # 获取输入数组的个数（维度数）和每个数组的长度（每维的大小）
+    dimensions = [len(arr) for arr in array_list]
+    num_arrays = len(array_list)
+    
+    # 创建一个高维矩阵，初始可以用任意值填充，这里用 None
+    matrix = np.full(dimensions, None, dtype=object)
+    
+    # 遍历矩阵的每个位置，填充对应的元素组合
+    for idx in np.ndindex(*dimensions):
+        # 对于当前坐标 idx，取出每个数组对应位置的元素组成列表
+        element = [array_list[i][idx[i]] for i in range(num_arrays)]
+        matrix[idx] = element
+    
+    return matrix
+
+def reconstruct_high_dim_array(flat_indices, flat_values, original_shape):
+    # 创建一个与原始形状相同的数组，初始填充任意值（这里用 0）
+    reconstructed_array = np.zeros(original_shape, dtype=flat_values.dtype)
+    
+    # 将 flat_values 填入对应的 flat_indices 位置
+    for idx, val in zip(flat_indices, flat_values):
+        reconstructed_array[tuple(idx)] = val
+    
+    return reconstructed_array
+
+from itertools import combinations
+
+def custom_corner_plot(high_dim_array, axis_values, labels=None):
+    # 获取数组的维度和形状
+    ndim = high_dim_array.ndim
+    shape = high_dim_array.shape
+    
+    # 检查 axis_values 的长度是否匹配维度数
+    if len(axis_values) != ndim:
+        raise ValueError("axis_values 的长度必须与 high_dim_array 的维度数匹配")
+    
+    # 检查每个维度的坐标轴值长度是否匹配形状
+    for i, ax in enumerate(axis_values):
+        if len(ax) != shape[i]:
+            raise ValueError(f"第 {i} 维的 axis_values 长度 ({len(ax)}) 与形状 ({shape[i]}) 不匹配")
+    
+    # 如果没有提供标签，自动生成
+    if labels is None:
+        labels = [f"Dim{i+1}" for i in range(ndim)]
+    
+    # 找到整个数组的最小值及其索引
+    min_value = np.min(high_dim_array)
+    min_index = np.unravel_index(np.argmin(high_dim_array), shape)
+    min_params = {labels[i]: axis_values[i][min_index[i]] for i in range(ndim)}
+    
+    # 打印最小值和对应的参数
+    print(f"高维数组的最小值: {min_value}")
+    print("对应的参数:")
+    iii = 0
+    minvas = {}
+    for label, value in min_params.items():
+        print(f"  {label}: {value}")
+        minvas[iii] = value
+        iii += 1
+    
+    # 创建一个 n x n 的子图网格
+    fig, axes = plt.subplots(ndim, ndim, figsize=(ndim * 3, ndim * 3))
+    
+    # 对角线和下三角的所有二维组合
+    for i, j in combinations(range(ndim), 2):
+        # 固定第 i 和第 j 维，其他维度取最小值
+        min_axes = tuple(k for k in range(ndim) if k != i and k != j)
+        projection = np.min(high_dim_array, axis=min_axes)
+        
+        # 根据 i, j 的顺序调整投影数据和坐标轴
+        # if i < j:
+        proj_data = projection
+        x_idx, y_idx = i, j
+        # else:
+        #     proj_data = projection.T
+        #     # x_idx, y_idx = j, i
+        
+        # 下三角：绘制二维 contour
+        ax = axes[y_idx, x_idx]
+        X, Y = np.meshgrid(axis_values[x_idx], axis_values[y_idx])
+        try:
+            proj_min_idx = np.unravel_index(np.argmin(proj_data), proj_data.shape)
+            min_x = axis_values[x_idx][proj_min_idx[1]]
+            if minvas[x_idx] == min_x:
+                contour = ax.contour(X, Y, proj_data)
+                ax.contourf(X, Y, proj_data)
+            else:
+                contour = ax.contour(X, Y, proj_data.T)            
+                ax.contourf(X, Y, proj_data.T)    
+                proj_min_idx = np.unravel_index(np.argmin(proj_data.T), proj_data.T.shape)
+        except:
+            contour = ax.contour(X, Y, proj_data.T)
+            ax.contourf(X, Y, proj_data.T)    
+            proj_min_idx = np.unravel_index(np.argmin(proj_data.T), proj_data.T.shape)
+        # ax.clabel(contour, inline=True, fontsize=8)
+        ax.set_xlabel(labels[x_idx])
+        ax.set_ylabel(labels[y_idx])
+        
+       
+        min_x = axis_values[x_idx][proj_min_idx[1]]  # 注意：contour 的 x 是第 1 个索引
+        min_y = axis_values[y_idx][proj_min_idx[0]]  # y 是第 0 个索引
+        ax.scatter([min_x], [min_y], marker='*', color='red', s=100, label='Min')
+    
+    # 对角线：绘制一维分布，使用 axis_values 作为 x 轴
+    for i in range(ndim):
+        ax = axes[i, i]
+        other_axes = tuple(k for k in range(ndim) if k != i)
+        proj_1d = np.min(high_dim_array, axis=other_axes)
+        ax.plot(axis_values[i], proj_1d)
+        ax.set_xlabel(labels[i])
+        
+        # 找到一维投影的最小值位置并标注星标
+        min_idx_1d = np.argmin(proj_1d)
+        min_x_1d = axis_values[i][min_idx_1d]
+        min_y_1d = proj_1d[min_idx_1d]
+        ax.scatter([min_x_1d], [min_y_1d], marker='*', color='red', s=100, label='Min')
+    
+    # 上三角留空
+    for i in range(ndim):
+        for j in range(i + 1, ndim):
+            axes[i, j].axis('off')
+    
+    # 调整布局
+    plt.tight_layout()
+    plt.show()
+
 def parscan(WCDA, result, par, min=1e-29, max=1e-22, steps=100, log=[False]):
     jjj = result[0]
     rrr=jjj.results
@@ -1033,6 +1157,32 @@ def get_profile_likelihood(region_name, Modelname, data, model, par, min=None, m
         if log:
             plt.xscale("log")
     return mu, L    
+
+def hDparscan(pars, nums, GRBlike, altr_hypo):
+    trails = []
+    for i,par in enumerate(pars):
+        pmin = altr_hypo.parameters[par].min_value
+        pmax = altr_hypo.parameters[par].max_value
+        num = 100
+        trail = np.linspace(pmin, pmax, nums[i])
+        trails.append(trail)
+    trails2 = create_high_dim_matrix(trails)
+    # new_array = np.zeros(original_shape)
+
+    flat_indices = np.array(list(np.ndindex(trails2.shape)))
+    flat_values = trails2.ravel()
+    result = np.zeros((len(flat_values)))
+
+    for i,values in enumerate(tqdm(flat_values)):
+        for j,par in enumerate(pars):
+            altr_hypo.parameters[par].value = values[j]
+        GRBlike.set_model(altr_hypo)
+        llh = GRBlike.get_log_like()
+        result[i] = llh
+
+    result = reconstruct_high_dim_array(flat_indices, result, trails2.shape)
+    custom_corner_plot(-result,trails,pars)
+    return result, trails
 
 def load_modelpath(modelpath):
     # silence_warnings()
@@ -1649,7 +1799,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
     else:
         return Diffuse
 
-def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, piv=3, setdeltabypar=True, kbratio=1000, ratio=None, spec = Powerlaw()):
+def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, indexb = (-4,-1), piv=3, setdeltabypar=True, kbratio=1000, ratio=None, spec = Powerlaw(), be = 4000, beb=(100,10000), index2=-3.3, index2b=(-4.5, -2.5)):
     """
         读取fits的形态模版
 
@@ -1678,13 +1828,32 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
     else:
         Diffusespec.K.bounds=np.array((K/kbratio,kbratio*K)) * fluxUnit
 
-    Diffusespec.piv = piv * u.TeV
-    Diffusespec.piv.fix=True
 
-    Diffusespec.index = index
-    Diffusespec.index.fix = indexf
-    Diffusespec.index.bounds = (-4,-1)
-    Diffuseshape.K = 1/u.deg**2
+
+    if  spec.name == "Cutoff_powerlaw" or spec.name == "Cutoff_powerlawM":
+        Diffusespec.piv = piv * u.TeV
+        Diffusespec.piv.fix=True
+        Diffusespec.index = index
+        Diffusespec.index.fix = indexf
+        Diffusespec.index.bounds = indexb
+
+    elif  spec.name == "SmoothlyBrokenPowerLaw" or spec.name == "SmoothlyBrokenPowerLawM":
+        Diffusespec.pivot = piv * u.TeV
+        Diffusespec.pivot.fix=True
+        Diffusespec.alpha = index
+        Diffusespec.alpha.fix = indexf
+        Diffusespec.alpha.bounds = indexb
+        Diffusespec.break_energy = be * u.TeV
+        Diffusespec.break_energy.bounds = beb * u.TeV
+        Diffusespec.beta = index2
+        Diffusespec.beta.bounds = index2b
+    else:
+        Diffusespec.piv = piv * u.TeV
+        Diffusespec.piv.fix=True
+        Diffusespec.index = index
+        Diffusespec.index.fix = indexf
+        Diffusespec.index.bounds = indexb
+        Diffuseshape.K = 1/u.deg**2
     return Diffuse
 
 
@@ -1717,3 +1886,20 @@ def get_sources(lm,result=None):
                 source[p.split('.')[-1]] = (0,par,par.value,0,0)
             sources[name] = source
     return sources
+
+def generate_random_coordinates(num_coords, galactic_latitude_limit=10):
+    ra_list = []
+    dec_list = []
+    
+    while len(ra_list) < num_coords:
+        ra = np.random.uniform(0, 360)
+        dec = np.random.uniform(-20, 80)
+        
+        coord = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
+        galactic_latitude = coord.galactic.b.deg
+        
+        if abs(galactic_latitude) > galactic_latitude_limit:
+            ra_list.append(ra)
+            dec_list.append(dec)
+    
+    return ra_list, dec_list
