@@ -333,6 +333,106 @@ class Cutoff_powerlawM(Function1D, metaclass=FunctionMeta):
         result = nb_func.cplaw_eval(x_, K_, xc_, index_, piv_)
 
         return result * unit_
+    
+class SmoothlyBrokenPowerLawM(Function1D, metaclass=FunctionMeta):
+    r"""
+    description :
+
+        A Smoothly Broken Power Law
+
+    Latex : $  $
+
+    parameters :
+
+        K :
+
+            desc : normalization
+            initial value : 1
+            min : -1e3
+            is_normalization : True
+
+
+        alpha :
+
+            desc : power law index below the break
+            initial value : -1
+            min : -3
+            max : 2
+
+        break_energy:
+
+            desc: location of the peak
+            initial value : 300
+            fix : no
+            min : 10
+
+        break_scale :
+
+            desc: smoothness of the break
+            initial value : 0.5
+            min : 0.
+            max : 10.
+            fix : yes
+
+        beta:
+
+            desc : power law index above the break
+            initial value : -2.
+            min : -5.0
+            max : -1.6
+
+        pivot:
+
+            desc: where the spectrum is normalized
+            initial value : 100.
+            fix: yes
+
+
+    """
+
+    def _set_units(self, x_unit, y_unit):
+
+        # norm has same unit as energy
+        self.K.unit = y_unit
+
+        self.break_energy.unit = x_unit
+
+        self.pivot.unit = x_unit
+
+        self.alpha.unit = astropy_units.dimensionless_unscaled
+        self.beta.unit = astropy_units.dimensionless_unscaled
+        self.break_scale.unit = astropy_units.dimensionless_unscaled
+
+    def evaluate(self, x, K, alpha, break_energy, break_scale, beta, pivot):
+
+        if isinstance(x, astropy_units.Quantity):
+            alpha_ = alpha.value
+            beta_ = beta.value
+            K_ = K.value
+            pivot_ = pivot.value
+            break_energy_ = break_energy.value
+            break_scale_ = break_scale.value
+            x_ = x.value
+
+            unit_ = self.y_unit
+
+        else:
+            unit_ = 1.0
+            K_, pivot_, x_, alpha_, beta_, break_scale_, break_energy_ = (
+                K,
+                pivot,
+                x,
+                alpha,
+                beta,
+                break_scale,
+                break_energy,
+            )
+
+        result = nb_func.sbplaw_eval(
+            x_, K_, alpha_, break_energy, break_scale_, beta_, pivot_
+        )
+
+        return result * unit_
 
 class Line_ratio(Function1D, metaclass=FunctionMeta):
     r"""

@@ -617,7 +617,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
-def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae=2, xlimscale=10):
+def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=100):
     """
         从healpix显著性天图S画一维显著性分布并保存
 
@@ -626,7 +626,7 @@ def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae
         Returns:
             >>> None
     """ 
-    bin_y,bin_x,patches=plt.hist(S.compressed(),bins=100)
+    bin_y,bin_x,patches=plt.hist(S.compressed(),bins=bins)
     plt.close()
     bin_x=np.array(bin_x)
     bin_y=np.array(bin_y)
@@ -656,15 +656,15 @@ def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae
     #plt.plot([0.,0.],[1,1e6],'k--',linewidth=0.5)
     if showexp:
         plt.plot(
-            (bin_x[:100] + bin_x[1:101]) / 2,
-            gaussian((bin_x[:100] + bin_x[1:101]) / 2, popt[0], 0, 1),
+            (bin_x[:bins] + bin_x[1:bins+1]) / 2,
+            gaussian((bin_x[:bins] + bin_x[1:bins+1]) / 2, popt[0], 0, 1),
             '--',
             label='expectation',
         )
-    plt.plot((bin_x[:100] + bin_x[1:101]) / 2, bin_y, label="data")
+    plt.plot((bin_x[:bins] + bin_x[1:bins+1]) / 2, bin_y, label="data")
     plt.plot(
-        (bin_x[:100] + bin_x[1:101]) / 2,
-        gaussian((bin_x[:100] + bin_x[1:101]) / 2, popt[0], popt[1], popt[2]),
+        (bin_x[:bins] + bin_x[1:bins+1]) / 2,
+        gaussian((bin_x[:bins] + bin_x[1:bins+1]) / 2, popt[0], popt[1], popt[2]),
         '--',
         label='fit',
     )

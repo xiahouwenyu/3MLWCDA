@@ -382,11 +382,11 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
 
     if save:
         if plotres:
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_res.png",dpi=dpi)
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh_res.pdf")
+            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}_res.png",dpi=dpi)
+            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}_res.pdf")
         else:
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh.png",dpi=dpi)
-            plt.savefig(f"../res/{region_name}/{Modelname}/J0248_sig_llh.pdf")
+            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.png",dpi=dpi)
+            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.pdf")
 
     return fig
 
@@ -675,3 +675,70 @@ def getmaskedroi(ra1, dec1, data_radius, maskp=[]):
     roimap[mask]=0
     return roimap
 
+def shift_fits_center(input_fits, output_fits, new_center_ra, new_center_dec):
+    # Open the input FITS file
+    with fits.open(input_fits) as hdul:
+        # Get the WCS and data from the primary HDU
+        wcs = WCS(hdul[0].header)
+        data = hdul[0].data
+
+        # Get the original center coordinates
+        original_center = SkyCoord(ra=wcs.wcs.crval[0], dec=wcs.wcs.crval[1], unit='deg', frame='icrs')
+
+        # Calculate the shift in pixels
+        new_center = SkyCoord(ra=new_center_ra, dec=new_center_dec, unit='deg', frame='icrs')
+        shift_ra = (new_center.ra.deg - original_center.ra.deg) * np.cos(np.radians(original_center.dec.deg))
+        shift_dec = new_center.dec.deg - original_center.dec.deg
+        shift_pix = wcs.wcs_world2pix([[shift_ra, shift_dec]], 1)[0]
+
+        # Update the WCS with the new center
+        wcs.wcs.crval = [new_center_ra, new_center_dec]
+        wcs.wcs.crpix += shift_pix
+
+        # Update the header with the new WCS
+        hdul[0].header.update(wcs.to_header())
+
+        # Write the new FITS file
+        hdul.writeto(output_fits, overwrite=True)
+
+def shift_healpix_map(healpix_map, ra_shift, dec_shift, nside):
+    """
+    Shift a healpix map by given ra and dec shifts.
+
+    Parameters:
+    healpix_map (numpy.ndarray): The input healpix map.
+    ra_shift (float): The shift in right ascension (degrees).
+    dec_shift (float): The shift in declination (degrees).
+    nside (int): The nside parameter of the healpix map.
+
+    Returns:
+    numpy.ndarray: The shifted healpix map.
+    """
+    npix = hp.nside2npix(nside)
+    theta, phi = hp.pix2ang(nside, np.arange(npix))
+    
+    # Convert theta and phi to ra and dec
+    ra = np.degrees(phi)
+    dec = 90 - np.degrees(theta)
+    
+    # Create SkyCoord object for the original coordinates
+    original_coords = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
+    
+    # Apply the shifts and handle wrapping around 360 degrees for RA and 90 degrees for Dec
+    shifted_ra = (original_coords.ra + ra_shift * u.degree).wrap_at(360 * u.degree)
+    shifted_dec = original_coords.dec + dec_shift * u.degree
+    shifted_dec = np.clip(shifted_dec, -90 * u.degree, 90 * u.degree)
+    shifted_coords = SkyCoord(ra=shifted_ra, dec=shifted_dec, frame='icrs')
+    
+    # Convert back to theta and phi
+    shifted_theta = np.radians(90 - shifted_coords.dec.value)
+    shifted_phi = np.radians(shifted_coords.ra.value)
+    
+    # Get the pixel indices for the shifted coordinates
+    shifted_pix = hp.ang2pix(nside, shifted_theta, shifted_phi)
+    
+    # Create the shifted map
+    shifted_map = np.zeros(npix)
+    shifted_map[shifted_pix] = healpix_map
+    
+    return shifted_map
