@@ -6,10 +6,12 @@ import numpy as np
 
 from astromodels import use_astromodels_memoization
 from threeML.io.logging import setup_logger
-from numba import njit, prange
-
+from numba import njit, jit, prange
 log = setup_logger(__name__)
 log.propagate = False
+import copy
+import traceback
+from typing import Tuple
 
 import concurrent.futures
 
@@ -31,6 +33,31 @@ def _select_with_wrap_around(arr, start, stop, wrap=(360, 0)):
 # Conversion factor between deg^2 and rad^2
 deg2_to_rad2 = 0.00030461741978670857
 
+# @njit(["float64[:](float64[:, ::1], float64[::1], float64[::1], float64[::1], float64[::1])"], parallel=True)
+@jit(["float64[:](float64[:,:], float64[:], float64[:], float64[:], float64[:])"], parallel=False)
+def process_dec_bins(sflux, w1, w2, ss1, ss2):
+    ss1_sum = np.einsum('ij,j->i', sflux, ss1) * w1
+    ss2_sum = np.einsum('ij,j->i', sflux, ss2) * w2
+    return (ss1_sum + ss2_sum) * 1e9
+
+# 
+# @jit(["float64[:](float64[:,:], float64[:], float64[:], float64[:], float64[:])"], parallel=True)
+# @jit(["float64[:](float64[:, ::1], float64[::1], float64[::1], float64[::1], float64[::1])"], parallel=True)
+# def process_dec_bins(sflux, w1, w2, ss1, ss2):
+#     return (np.dot(sflux, ss1) * w1 +
+#             np.dot(sflux, ss2) * w2) * 1e9
+
+
+    # return (w1 * np.sum(sflux*ss1, axis=1) +
+    #             w2 * np.sum(sflux*ss2, axis=1)) * 1e9
+
+# @njit(["float64[:](float64[:,:], boolean[:], float64[:], float64[:], float64[:], float64[:])"], parallel=True)
+# def process_dec_bins(sflux, idx, w1, w2, ss1, ss2):
+#     return (np.dot(sflux[idx], ss1) * w1 +
+#             np.dot(sflux[idx], ss2) * w2) * 1e9
+
+def process_bins(args):
+    return process_dec_bins(*args)
 
 class ConvolvedExtendedSource(object):
 
@@ -50,6 +77,11 @@ class ConvolvedExtendedSource(object):
         (ra1, dec1), (ra2, dec2), (ra3, dec3), (ra4, dec4) = flat_sky_projection.wcs.calc_footprint()
 
         (lon_start, lon_stop), (lat_start, lat_stop) = source.get_boundaries()
+
+        if lat_start<=-20 or lat_start>=80:
+            lat_start=-20
+        if lat_stop>=80 or lat_stop<=-20:
+            lat_stop=80
         
         decs = np.array([dec1, dec2, dec3, dec4])
         nan_mask = np.isnan(decs)
@@ -57,11 +89,15 @@ class ConvolvedExtendedSource(object):
             log.warning(f"{self._name} dec_min have nan!")
         decs = decs[~nan_mask]
         if len(decs)!=0:
-            dec_min = max(min(decs), lat_start, -20)
-            dec_max = min(max(decs), lat_stop, 80)
+            if lat_start <= min(decs):
+                lat_start = min(decs)
+            if lat_stop >= max(decs):
+                lat_stop = max(decs)
+            dec_min = max([min(decs), lat_start, -20])
+            dec_max = min([max(decs), lat_stop, 80])
         else:
-            dec_min = max(lat_start, -20)
-            dec_max = min(lat_stop, 80)
+            dec_min = max([lat_start, -20])
+            dec_max = min([lat_stop, 80])
         # dec_min = max(min([-20, *decs]), lat_start)
         # dec_max = min(max([80, *decs]), lat_stop)
 
@@ -113,7 +149,7 @@ class ConvolvedExtendedSource(object):
 
         self._active_flat_sky_mask = (idx_lon & idx_lat)
 
-        assert np.sum(self._active_flat_sky_mask) > 0, "Mismatch between source %s and ROI" % self._name
+        assert np.sum(self._active_flat_sky_mask) > 0, f"Mismatch between source {self._name} and ROI: Source range: {lon_start}-{lon_stop}, {lat_start}-{lat_stop}"
 
         # Get the energies needed for the computation of the flux
         self._energy_centers_keV = self._central_response_bins[list(self._central_response_bins.keys())[0]].sim_energy_bin_centers * 1e9
@@ -152,10 +188,37 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
 
         # We implement a caching system so that the source flux is evaluated only when strictly needed,
         # because it is the most computationally intense part otherwise.
+
+        # self._this_model_image = np.zeros((7, self._flat_sky_projection.npix_width, self._flat_sky_projection.npix_height))
         self._recompute_flux = True
+        self._recompute_flux_position = False
+        self._first_time = True
 
         # Register callback to keep track of the parameter changes
         self._setup_callbacks(self._parameter_change_callback)
+
+        def get_responses(energy_bin_id, dec_bin1, dec_bin2):
+            this_response_bin1 = dec_bin1[energy_bin_id]
+            this_response_bin2 = dec_bin2[energy_bin_id]
+
+            c1, c2 = this_response_bin1.declination_center, this_response_bin2.declination_center
+
+            idx = (self._flat_sky_projection.decs >= c1) & (self._flat_sky_projection.decs < c2) & self._active_flat_sky_mask
+
+            ss1 = this_response_bin1.sim_signal_events_per_bin*self._flat_sky_projection.project_plane_pixel_area * deg2_to_rad2 / this_response_bin1.sim_differential_photon_fluxes
+            ss2 = this_response_bin1.sim_signal_events_per_bin*self._flat_sky_projection.project_plane_pixel_area * deg2_to_rad2 / this_response_bin1.sim_differential_photon_fluxes
+
+            w1 = (self._flat_sky_projection.decs[idx] - c2) / (c1 - c2)
+            w2 = (self._flat_sky_projection.decs[idx] - c1) / (c2 - c1)
+
+            return idx, np.ascontiguousarray(w1), np.ascontiguousarray(w2), np.ascontiguousarray(ss1), np.ascontiguousarray(ss2)
+        
+        self._resultss = []
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for energy_bin_id in range(self._response.n_energy_planes):
+                results = list(executor.map(lambda bins: get_responses(str(energy_bin_id), *bins), zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:])))
+                self._resultss.append(results)
+        
 
     def _parameter_change_callback(self, this_parameter):
 
@@ -165,6 +228,8 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
         # stage. Therefore we will compute the function in the get_source_map method
 
         # print("%s has changed" % this_parameter.name)
+        if  ("lon0" in this_parameter.name) or  ("lat0" in this_parameter.name) or ("ra" in this_parameter.name) or ("dec" in this_parameter.name):
+            self._recompute_flux_position = True
         self._recompute_flux = True
 
     def get_source_map(self, energy_bin_id, tag=None):
@@ -172,25 +237,46 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
         # We do not use the memoization in astromodels because we are doing caching by ourselves,
         # so the astromodels memoization would turn into 100% cache miss and use a lot of RAM for nothing,
         # given that we are evaluating the function on many points and many energies
+        recomputed = False
         with use_astromodels_memoization(False):
 
             # If we need to recompute the flux, let's do it
             if self._recompute_flux:
+            #     # print("recomputing %s" % self._name)
 
-                # print("recomputing %s" % self._name)
+            #     if (not self._recompute_flux_position) and (not self._first_time):
+            #         self._recompute_flux_position = False
+            #         # Recompute the fluxes for the pixels that are covered by this extended source
 
+            #         scale = np.zeros(self._flat_sky_projection.ras.shape[0])
+
+            #         allfluxorg = copy.deepcopy(self._all_fluxes[self._active_flat_sky_mask, :])
+            #         self._all_fluxes[self._active_flat_sky_mask, :] = self._source(
+            #             self._flat_sky_projection.ras[self._active_flat_sky_mask],
+            #             self._flat_sky_projection.decs[self._active_flat_sky_mask],
+            #             self._energy_centers_keV)
+
+            #         scale[self._active_flat_sky_mask] = np.sum((self._all_fluxes[self._active_flat_sky_mask, :] / allfluxorg), axis=1)
+            #         scale = scale.reshape((self._flat_sky_projection.npix_height,
+            #                                 self._flat_sky_projection.npix_width)).T
+            #         self._this_model_image[int(energy_bin_id)] = self._this_model_image[int(energy_bin_id)] * scale
+            #         return self._this_model_image[int(energy_bin_id)]
+
+                self._first_time = False
                 # Recompute the fluxes for the pixels that are covered by this extended source
                 self._all_fluxes[self._active_flat_sky_mask, :] = self._source(
                                                             self._flat_sky_projection.ras[self._active_flat_sky_mask],
                                                             self._flat_sky_projection.decs[self._active_flat_sky_mask],
                                                             self._energy_centers_keV)  # 1 / (keV cm^2 s rad^2)
-
+                
                 # We don't need to recompute the function anymore until a parameter changes
                 self._recompute_flux = False
+                recomputed = True
+            # elif not self._first_time:
+            #     self._recompute_flux = False
+            #     return copy.deepcopy(self._this_model_image[int(energy_bin_id)])
 
             # Now compute the expected signal
-
-            pixel_area_rad2 = self._flat_sky_projection.project_plane_pixel_area * deg2_to_rad2
 
             this_model_image = np.zeros(self._all_fluxes.shape[0])
 
@@ -213,7 +299,7 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
             #     # NOTE: the scale is the same because the sim_differential_photon_fluxes are the same (the simulation
             #     # used to make the response used the same spectrum for each bin). What changes between the two bins
             #     # is the observed signal per bin (the .sim_signal_events_per_bin member)
-            #     scale = old_div((self._all_fluxes[idx, :] * pixel_area_rad2), this_response_bin1.sim_differential_photon_fluxes)
+            #     scale = old_div((self._all_fluxes[idx, :] * self._flat_sky_projection.project_plane_pixel_area * deg2_to_rad2), this_response_bin1.sim_differential_photon_fluxes)
 
             #     # Compute the interpolation weights for the two responses
             #     w1 = old_div((self._flat_sky_projection.decs[idx] - c2), (c1 - c2))
@@ -222,7 +308,23 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
             #     this_model_image[idx] = (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
             #                              w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * \
             #                             1e9
+            
 
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                results = list(executor.map(lambda bins: process_dec_bins(np.ascontiguousarray(self._all_fluxes[bins[0]]), *bins[1:]), self._resultss[int(energy_bin_id)]))
+
+            # with concurrent.futures.ThreadPoolExecutor() as executor:
+            #     results = list(executor.map(lambda bins: process_dec_bins(np.ascontiguousarray(self._all_fluxes), *bins), self._resultss[int(energy_bin_id)]))
+
+            # with concurrent.futures.ProcessPoolExecutor() as executor:
+            #     results = list(executor.map(process_bins, [(np.ascontiguousarray(self._all_fluxes[bins[0]]), *bins[1:]) for bins in self._resultss[int(energy_bin_id)]]))
+
+            # results = [process_dec_bins(self._all_fluxes[bins[0]], *bins[1:]) for bins in self._resultss[int(energy_bin_id)]]
+
+
+            for i, result in enumerate(results):
+                idx = self._resultss[int(energy_bin_id)][i][0]
+                this_model_image[idx] = result
 
             # def process_dec_bins(dec_bin1, dec_bin2):
             #     this_response_bin1 = dec_bin1[energy_bin_id]
@@ -233,50 +335,22 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
             #     idx = (self._flat_sky_projection.decs >= c1) & (self._flat_sky_projection.decs < c2) & \
             #           self._active_flat_sky_mask
 
-            #     scale = old_div((self._all_fluxes[idx, :] * pixel_area_rad2), this_response_bin1.sim_differential_photon_fluxes)
+            #     scale = (self._all_fluxes[idx, :] * self._flat_sky_projection.project_plane_pixel_area * deg2_to_rad2) / this_response_bin1.sim_differential_photon_fluxes
 
-            #     w1 = old_div((self._flat_sky_projection.decs[idx] - c2), (c1 - c2))
-            #     w2 = old_div((self._flat_sky_projection.decs[idx] - c1), (c2 - c1))
+            #     w1 = (self._flat_sky_projection.decs[idx] - c2) / (c1 - c2)
+            #     w2 = (self._flat_sky_projection.decs[idx] - c1) / (c2 - c1)
 
             #     return idx, (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
             #                  w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * 1e9
 
-
-            @njit(parallel=True)
-            def process_dec_bins(dec_bin1, dec_bin2, energy_bin_id, flat_sky_projection_decs, active_flat_sky_mask, all_fluxes, pixel_area_rad2):
-                this_response_bin1 = dec_bin1[energy_bin_id]
-                this_response_bin2 = dec_bin2[energy_bin_id]
-
-                c1, c2 = this_response_bin1.declination_center, this_response_bin2.declination_center
-
-                idx = (flat_sky_projection_decs >= c1) & (flat_sky_projection_decs < c2) & active_flat_sky_mask
-
-                scale = (all_fluxes[idx, :] * pixel_area_rad2) / this_response_bin1.sim_differential_photon_fluxes
-
-                w1 = (flat_sky_projection_decs[idx] - c2) / (c1 - c2)
-                w2 = (flat_sky_projection_decs[idx] - c1) / (c2 - c1)
-
-                result = (w1 * np.sum(scale * this_response_bin1.sim_signal_events_per_bin, axis=1) +
-                          w2 * np.sum(scale * this_response_bin2.sim_signal_events_per_bin, axis=1)) * 1e9
-
-                return idx, result
-
-            results = []
-            for dec_bin1, dec_bin2 in zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:]):
-                idx, result = process_dec_bins(dec_bin1, dec_bin2, energy_bin_id, self._flat_sky_projection.decs, self._active_flat_sky_mask, self._all_fluxes, pixel_area_rad2)
-                results.append((idx, result))
-
             # with concurrent.futures.ThreadPoolExecutor() as executor:
             #     results = list(executor.map(lambda bins: process_dec_bins(*bins), zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:])))
 
-            for idx, result in results:
-                this_model_image[idx] = result
+            # for idx, result in results:
+            #     this_model_image[idx] = result
 
-            # Reshape the flux array into an image
-            this_model_image = this_model_image.reshape((self._flat_sky_projection.npix_height,
+            return this_model_image.reshape((self._flat_sky_projection.npix_height,
                                                          self._flat_sky_projection.npix_width)).T
-
-            return this_model_image
 
 
 class ConvolvedExtendedSource2D(ConvolvedExtendedSource3D):

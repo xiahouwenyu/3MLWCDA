@@ -41,7 +41,7 @@ from WCDA_hal.log_likelihood import log_likelihood
 from WCDA_hal.util import ra_to_longitude
 import contextlib
 
-
+import concurrent.futures
 
 class HAL(PluginPrototype):
     """
@@ -460,6 +460,8 @@ class HAL(PluginPrototype):
         n_radial_bins: int = 30,
         model_to_subtract: astromodels.Model = None,
         subtract_model_from_model: bool = False,
+        squre: bool = False,
+        unit = "1/sr"
     ):
         """Calculates radial profiles for a source in units of excess counts
            per steradian
@@ -491,23 +493,32 @@ class HAL(PluginPrototype):
         good_planes = [plane_id in active_planes for plane_id in self._active_planes]
         plane_ids = set(active_planes) & set(self._active_planes)
 
-        offset = 0.5
+        offset = 1
         delta_r = 1.0 * max_radius / n_radial_bins
-        radii = np.array([delta_r * (r + offset) for r in range(n_radial_bins)])
+        if squre:
+            radii = np.array([np.sqrt(delta_r * (r + offset)) for r in range(n_radial_bins)])
+        else:
+            radii = np.array([delta_r * (r + offset) for r in range(n_radial_bins)])
 
         # Get area of all pixels in a given circle
         # The area of each ring is then given by the difference between two
         # subsequent circe areas.
         area = np.array(
-            [self.get_excess_background(ra, dec, r + offset * delta_r)[0] for r in radii]
+            [self.get_excess_background(ra, dec, r)[0] for r in radii] #+ offset * delta_r
         )
 
         temp = area[1:] - area[:-1]
-        area[1:] = temp
+        if unit == "1/sr":
+            area[1:] = temp
+        elif unit == "1/deg2":
+            area[1:] = temp 
+            area = area * (180/np.pi)**2
+        else:
+            area = np.ones_like(area)
 
         # signals
         signal = np.array(
-            [self.get_excess_background(ra, dec, r + offset * delta_r)[1] for r in radii]
+            [self.get_excess_background(ra, dec, r)[1] for r in radii]
         )
 
         temp = signal[1:] - signal[:-1]
@@ -515,7 +526,7 @@ class HAL(PluginPrototype):
 
         # backgrounds
         bkg = np.array(
-            [self.get_excess_background(ra, dec, r + offset * delta_r)[2] for r in radii]
+            [self.get_excess_background(ra, dec, r)[2] for r in radii]
         )
 
         temp = bkg[1:] - bkg[:-1]
@@ -526,7 +537,7 @@ class HAL(PluginPrototype):
         # model
         # convert 'top hat' excess into 'ring' excesses.
         model = np.array(
-            [self.get_excess_background(ra, dec, r + offset * delta_r)[3] for r in radii]
+            [self.get_excess_background(ra, dec, r)[3] for r in radii]
         )
 
         temp = model[1:] - model[:-1]
@@ -537,7 +548,7 @@ class HAL(PluginPrototype):
             self.set_model(model_to_subtract)
 
             model_subtract = np.array(
-                [self.get_excess_background(ra, dec, r + offset * delta_r)[3] for r in radii]
+                [self.get_excess_background(ra, dec, r)[3] for r in radii]
             )
 
             temp = model_subtract[1:] - model_subtract[:-1]
@@ -557,14 +568,20 @@ class HAL(PluginPrototype):
         # them to the data later. Weight is normalized (sum of weights over
         # the bins = 1).
 
-        total_excess = np.array(self.get_excess_background(ra, dec, max_radius)[1])[good_planes]
+        total_excess = np.array(self.get_excess_background(ra, dec, np.max(radii))[1])[good_planes]
 
-        total_bkg = np.array(self.get_excess_background(ra, dec, max_radius)[2])[good_planes]
+        total_bkg = np.array(self.get_excess_background(ra, dec, np.max(radii))[2])[good_planes]
 
-        total_model = np.array(self.get_excess_background(ra, dec, max_radius)[3])[good_planes]
+        total_model = np.array(self.get_excess_background(ra, dec, np.max(radii))[3])[good_planes]
 
-        w = np.divide(total_model, total_bkg)
+        w = np.divide(total_model+total_bkg, total_bkg)
         weight = np.array([w / np.sum(w) for _ in radii])
+
+        if squre:
+            radii = radii**2
+            weight = np.array([w for _ in radii])
+
+        # print(weight)
 
         # restrict profiles to the user-specified analysis bins
         area = area[:, good_planes]
@@ -574,9 +591,14 @@ class HAL(PluginPrototype):
         bkg = bkg[:, good_planes]
 
         # average over the analysis bins
-        excess_data = np.average(signal / area, weights=weight, axis=1)
-        excess_error = np.sqrt(np.sum(counts * weight * weight / (area * area), axis=1))
-        excess_model = np.average(model / area, weights=weight, axis=1)
+        if not squre:
+            excess_data = np.average(signal / area, weights=weight, axis=1)
+            excess_error = np.sqrt(np.sum(counts * weight * weight / (area * area), axis=1))
+            excess_model = np.average(model / area, weights=weight, axis=1)
+        else:
+            excess_data = np.sum(signal / area, axis=1)
+            excess_error = np.sqrt(np.sum(counts / (area * area), axis=1))
+            excess_model = np.sum(model / area, axis=1)
 
         return radii, excess_model, excess_data, excess_error, sorted(plane_ids)
 
@@ -589,6 +611,8 @@ class HAL(PluginPrototype):
         n_radial_bins: int = 30,
         model_to_subtract: astromodels.Model = None,
         subtract_model_from_model: bool = False,
+        squre: bool = False,
+        unit = "1/sr"
     ):
         """Plots radial profiles of data-background & model
 
@@ -623,6 +647,8 @@ class HAL(PluginPrototype):
             n_radial_bins,
             model_to_subtract,
             subtract_model_from_model,
+            squre,
+            unit
         )
 
         # add a dataframe for easy retrieval for calculations of surface
@@ -847,6 +873,38 @@ class HAL(PluginPrototype):
                     - self._log_factorials[bin_id]
                     - self._saturated_model_like_per_maptree[bin_id]
                 )
+
+        # def compute_log_like(bin_id):
+        #     data_analysis_bin = self._maptree[bin_id]
+
+        #     this_model_map_hpx = self._get_expectation(
+        #     data_analysis_bin, bin_id, n_point_sources, n_ext_sources
+        #     )
+        #     # Now compare with observation
+        #     bkg_renorm = list(self._nuisance_parameters.values())[0].value
+
+        #     obs = data_analysis_bin.observation_map.as_partial()  # type: np.array
+        #     bkg = data_analysis_bin.background_map.as_partial() * bkg_renorm  # type: np.array
+
+        #     this_pseudo_log_like = log_likelihood(obs, bkg, this_model_map_hpx)
+
+        #     log_like_value = (
+        #     this_pseudo_log_like
+        #     - self._log_factorials[bin_id]
+        #     - self._saturated_model_like_per_maptree[bin_id]
+        #     )
+
+        #     return bin_id, log_like_value
+
+        # with concurrent.futures.ThreadPoolExecutor() as executor:
+        #     results = list(executor.map(compute_log_like, self._active_planes))
+
+        # for bin_id, log_like_value in results:
+        #     total_log_like += log_like_value
+        #     if individual_bins is True:
+        #         log_like_per_bin[bin_id] = log_like_value
+
+
         if individual_bins is True:
             for k in log_like_per_bin:
                 log_like_per_bin[k] /= total_log_like
@@ -971,25 +1029,58 @@ class HAL(PluginPrototype):
 
                 this_model_map += expectation_from_this_source
 
+        # def compute_expectation(pts_id):
+        #     this_conv_src = self._convolved_point_sources[pts_id]
+        #     expectation_per_transit = this_conv_src.get_source_map(
+        #     energy_bin_id,
+        #     tag=None,
+        #     psf_integration_method=self._psf_integration_method,
+        #     )
+        #     return expectation_per_transit * data_analysis_bin.n_transits
+
+        # with concurrent.futures.ThreadPoolExecutor() as executor:
+        #     results = list(executor.map(compute_expectation, range(n_point_sources)))
+
+        # for expectation_from_this_source in results:
+        #     if this_model_map is None:
+        #         # First addition
+        #         this_model_map = expectation_from_this_source
+        #     else:
+        #         this_model_map += expectation_from_this_source
+
         # Now process extended sources
         if n_ext_sources > 0:
 
             this_ext_model_map = None
 
-            for ext_id in range(n_ext_sources):
+            # for ext_id in range(n_ext_sources):
 
+            #     this_conv_src = self._convolved_ext_sources[ext_id]
+
+            #     expectation_per_transit = this_conv_src.get_source_map(energy_bin_id)
+
+            #     if this_ext_model_map is None:
+
+            #         # First addition
+
+            #         this_ext_model_map = expectation_per_transit
+
+            #     else:
+
+            #         this_ext_model_map += expectation_per_transit
+
+            def compute_expectation(ext_id):
                 this_conv_src = self._convolved_ext_sources[ext_id]
+                return this_conv_src.get_source_map(energy_bin_id)
 
-                expectation_per_transit = this_conv_src.get_source_map(energy_bin_id)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                results = list(executor.map(compute_expectation, range(n_ext_sources)))
 
+            for expectation_per_transit in results:
                 if this_ext_model_map is None:
-
                     # First addition
-
                     this_ext_model_map = expectation_per_transit
-
                 else:
-
                     this_ext_model_map += expectation_per_transit
 
             # Now convolve with the PSF
@@ -1383,11 +1474,52 @@ class HAL(PluginPrototype):
             bkg = data_analysis_bin.background_map.as_partial()
 
             zero_model=np.zeros(len(obs))
-            this_model_map_hpx = self._get_expectation(data_analysis_bin,this_bin, self._likelihood_model.get_number_of_point_sources(),self._likelihood_model.get_number_of_extended_sources())
+            this_model_map_hpx = self._get_expectation(data_analysis_bin, this_bin, self._likelihood_model.get_number_of_point_sources(), self._likelihood_model.get_number_of_extended_sources())
 
             TS_all += -2*(log_likelihood(obs,bkg,zero_model)-log_likelihood(obs,bkg,this_model_map_hpx))
 
         return TS_all
+    
+    def get_bkg_llh(self):
+        '''
+        This function calculate the bkg log likelihood of all analysis bins. 
+
+        :return: bkg_llh
+        '''
+        bkg_llh=0
+        source_llh=0
+        
+        for i, this_bin in enumerate(self._active_planes):
+            data_analysis_bin = self._maptree[this_bin]
+
+            obs = data_analysis_bin.observation_map.as_partial()
+            bkg = data_analysis_bin.background_map.as_partial()
+            zero_model=np.zeros(len(obs))
+            # this_model_map_hpx = self._get_expectation(data_analysis_bin, this_bin, self._likelihood_model.get_number_of_point_sources(), self._likelihood_model.get_number_of_extended_sources())
+            bkg_llh += log_likelihood(obs,bkg,zero_model) - self._log_factorials[this_bin] - self._saturated_model_like_per_maptree[this_bin]
+            # source_llh += log_likelihood(obs,bkg,this_model_map_hpx) 
+        return bkg_llh
+
+    def cal_TS_array(self,n_pts,n_exts):
+        '''
+        This function calculate the TS of each analysis bins. 
+
+        :return: TS_array
+        '''
+        TS_array=[]
+        for i, this_bin in enumerate(self._active_planes):
+            data_analysis_bin = self._maptree[this_bin]
+
+            obs = data_analysis_bin.observation_map.as_partial()
+            bkg = data_analysis_bin.background_map.as_partial()
+
+            zero_model=np.zeros(len(obs))
+            this_model_map_hpx = self._get_expectation(data_analysis_bin,this_bin, n_pts,n_exts)
+
+            TS_array.append(-2*(log_likelihood(obs,bkg,zero_model)-log_likelihood(obs,bkg,this_model_map_hpx)))
+        #print(TS_all)
+
+        return TS_array
 
     def write_each_model_map(self,filename):
         '''

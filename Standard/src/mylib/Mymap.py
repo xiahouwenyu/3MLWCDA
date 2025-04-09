@@ -11,6 +11,7 @@ import MapPalette
 from tqdm import tqdm
 
 from Mycoord import *
+from matplotlib.ticker import FormatStrFormatter
 
 def settransWCDA(WCDA, ra1, dec1, tansit=None):
     """
@@ -319,6 +320,7 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
         tiks = np.concatenate(([np.min(img)],[5],[np.max(img)]))
     else:
         tiks = np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)]))
+    
     if zmax !=None:
         if tiks[tiks>=zmax] != []:
             tiks[-1]=zmax
@@ -328,11 +330,19 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
         if tiks[tiks<=zmin] != []:
             tiks[0]=zmin
         else:
+            
             tiks= np.concatenate(([zmin],tiks))
-
+    j=0
+    for i in range(len(tiks)):
+        # if i<=len(tiks):
+        if (zmin is not None and (tiks[j]-zmin)<=1.5 and (tiks[j]-zmin)>0) or (zmax is not None and (zmax-tiks[j])<=1.5 and (zmax-tiks[j])>0):
+            tiks = np.delete(tiks, j)
+            j-=1
+        j+=1
         
-
+    # tiks = [f'{tick:.1f}' for tick in tiks]
     cbar.set_ticks(tiks)
+    cbar.ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     #,cbar.get_ticks()
 
