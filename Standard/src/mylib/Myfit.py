@@ -925,11 +925,14 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
     freepars = []
     fixedpars = []
     for p in Model.parameters:
-        par = Model.parameters[p]
-        if par.free:
-            freepars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
-        else:
-            fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+        try:
+            par = Model.parameters[p]
+            if par.free:
+                freepars.append("%-45s %35.6g ± %2.6g %s" % (p, par.value, result[0]["error"][p], par._unit))
+            else:
+                fixedpars.append("%-45s %35.6g %s" % (p, par.value, par._unit))
+        except:
+            continue
 
     if ifgeterror:
         from IPython.display import display
@@ -1044,7 +1047,7 @@ def custom_corner_plot(high_dim_array, axis_values, labels=None):
         x_idx, y_idx = i, j
         # else:
         #     proj_data = projection.T
-        #     # x_idx, y_idx = j, i
+        #     x_idx, y_idx = j, i
         
         # 下三角：绘制二维 contour
         ax = axes[y_idx, x_idx]
@@ -1053,16 +1056,23 @@ def custom_corner_plot(high_dim_array, axis_values, labels=None):
             proj_min_idx = np.unravel_index(np.argmin(proj_data), proj_data.shape)
             min_x = axis_values[x_idx][proj_min_idx[1]]
             if minvas[x_idx] == min_x:
-                contour = ax.contour(X, Y, proj_data)
                 ax.contourf(X, Y, proj_data)
+                contour = ax.contour(X, Y, proj_data)
             else:
-                contour = ax.contour(X, Y, proj_data.T)            
-                ax.contourf(X, Y, proj_data.T)    
-                proj_min_idx = np.unravel_index(np.argmin(proj_data.T), proj_data.T.shape)
-        except:
-            contour = ax.contour(X, Y, proj_data.T)
-            ax.contourf(X, Y, proj_data.T)    
-            proj_min_idx = np.unravel_index(np.argmin(proj_data.T), proj_data.T.shape)
+                proj_data = proj_data.T
+                proj_min_idx = np.unravel_index(np.argmin(proj_data), proj_data.shape)
+                min_x = axis_values[x_idx][proj_min_idx[1]]                
+                ax.pcolormesh(axis_values[x_idx], axis_values[y_idx], proj_data)
+                # ax.contourf(X, Y, proj_data)    
+                # contour = ax.contour(X, Y, proj_data)            
+                
+        except Exception as e:
+            print(e)
+            proj_data = proj_data.T
+            ax.pcolormesh(axis_values[x_idx], axis_values[y_idx], proj_data)
+            # contour = ax.contour(X, Y, proj_data)
+            # ax.contourf(X, Y, proj_data)    
+            proj_min_idx = np.unravel_index(np.argmin(proj_data), proj_data.shape)
         # ax.clabel(contour, inline=True, fontsize=8)
         ax.set_xlabel(labels[x_idx])
         ax.set_ylabel(labels[y_idx])
@@ -1181,6 +1191,7 @@ def hDparscan(pars, nums, GRBlike, altr_hypo):
         result[i] = llh
 
     result = reconstruct_high_dim_array(flat_indices, result, trails2.shape)
+    pars = [it.split(".")[-1] for it in pars]
     custom_corner_plot(-result,trails,pars)
     return result, trails
 
@@ -1207,7 +1218,7 @@ def load_modelpath(modelpath):
     # activate_warnings()
     return results, lmini, lmopt
 
-def getTSall(TSlist, region_name, Modelname, result, WCDA):
+def getTSall(TSlist, region_name, Modelname, result, WCDAs):
     """
         获取TS值
 
@@ -1217,17 +1228,25 @@ def getTSall(TSlist, region_name, Modelname, result, WCDA):
         Returns:
             >>> 总的TS, TSresults(Dataframe)
     """ 
+    if not isinstance(WCDAs, list):
+        WCDAs = [WCDAs]
     TS = {}
-    TS_all = WCDA.cal_TS_all()
-    log.info(f"TS_all: {TS_all}")
-    llh = WCDA.get_log_like()
-    log.info(f"llh_all: {llh}")
+    TS["TS_all"] = 0
+    TS["-log(likelihood)"] = 0
     for sc in tqdm(TSlist):
-        TS[sc]=result[0].compute_TS(sc,result[1][1]).values[0][2]
-        log.info(f"TS_{sc}: {TS[sc]}")
-    
-    TS["TS_all"] = TS_all
-    TS["-log(likelihood)"] = -llh
+        TS[sc]=0
+    for WCDA in WCDAs:
+        
+        TS_all = WCDA.cal_TS_all()
+        log.info(f"TS_all: {TS_all}")
+        llh = WCDA.get_log_like()
+        log.info(f"llh_all: {llh}")
+        for sc in tqdm(TSlist):
+            TS[sc]+=result[0].compute_TS(sc,result[1][1]).values[0][2]
+            log.info(f"TS_{sc}: {TS[sc]}")
+        
+        TS["TS_all"] += TS_all
+        TS["-log(likelihood)"] += -llh
     TSresults = pd.DataFrame([TS])
     TSresults.to_csv(f'../res/{region_name}/{Modelname}/Results.txt', sep='\t', mode='a', index=False)
     TSresults

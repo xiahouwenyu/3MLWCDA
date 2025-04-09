@@ -132,4 +132,6 @@ class ConvolvedPointSource(object):
             scale = old_div(source_diff_spectrum, response_energy_bin.sim_differential_photon_fluxes) * 1e9
 
         # Now return the map multiplied by the scale factor
-        return np.sum(scale * response_energy_bin.sim_signal_events_per_bin) * this_map
+        # return np.sum(scale * response_energy_bin.sim_signal_events_per_bin) * this_map
+        return np.dot(scale, response_energy_bin.sim_signal_events_per_bin) * this_map
+        # return np.einsum('ij,j->i', sflux, ss1) * this_map
