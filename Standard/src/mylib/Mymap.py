@@ -13,7 +13,7 @@ from tqdm import tqdm
 from Mycoord import *
 from matplotlib.ticker import FormatStrFormatter
 
-def settransWCDA(WCDA, ra1, dec1, tansit=None):
+def settransWCDA(WCDA, ra1, dec1, data_radius=None, tansit=None, detector="WCDA"):
     """
         修改天图tansit
 
@@ -25,7 +25,10 @@ def settransWCDA(WCDA, ra1, dec1, tansit=None):
     tobs=0
     if tansit is None:
         import ROOT as rt
-        file = rt.TFile("../../data/20210305_20230731_bkgJ2000.root", "READ")
+        if detector == "WCDA":
+            file = rt.TFile("../../data/Periods_67periods_20240731.root", "READ")
+        else:
+            file = rt.TFile("../../data/sky20-cs3_process.root", "READ")
         hside = file.Get("hSide")
         tsecs = hside.GetNbinsX()
         wbinside = hside.GetXaxis().GetBinWidth(1)
@@ -38,6 +41,26 @@ def settransWCDA(WCDA, ra1, dec1, tansit=None):
                 tobs += hside.GetBinContent(ii+1)
         # tansit = hside.GetBinContent(int(ra1/360*86164))/10
         tansit=tobs/864000
+
+    if data_radius is not None:
+        tansits = []
+        ras = np.linspace(int(ra1-data_radius), int(ra1+data_radius), int(data_radius))
+        for ra in ras:
+            tobs=0
+            for ii in range(tsecs):
+                tside = tside0+(ii+0.5)*wbinside
+                ha = tside-ra
+                zen, azi = eql2hcs(np.radians(ha), np.radians(dec1))
+                if (zen>=0 and zen<=55):
+                    tobs += hside.GetBinContent(ii+1)
+            # tansit = hside.GetBinContent(int(ra1/360*86164))/10
+            tansits.append(tobs/864000)
+
+        plt.figure()
+        plt.plot(ras, tansits, label="tansit")
+        plt.xlabel("RA")
+        plt.ylabel("tansit")
+
     log.info(f"Set WCDA tansit from: {WCDA._maptree._analysis_bins[str(0)]._n_transits} to {tansit}")
     for i in range(6):           
         WCDA._maptree._analysis_bins[str(i)]._n_transits=tansit

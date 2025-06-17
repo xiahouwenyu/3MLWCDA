@@ -17,7 +17,7 @@ try:
     from Mycatalog import LHAASOCat
 except:
     pass
-
+from scipy.optimize import minimize
 from Mylightcurve import p2sigma
 
 log = setup_logger(__name__)
@@ -254,7 +254,15 @@ if parb != None:
 def copy_free_parameters(source_model, target_model):
     for param_name, source_param in source_model.free_parameters.items():
         if param_name in target_model.free_parameters:
-            target_model.free_parameters[param_name].value = source_param.value
+            try:
+                target_model.free_parameters[param_name].value = source_param.value
+            except Exception as e:
+                if "minimum" in str(e):
+                    target_model.free_parameters[param_name].bound[0] = source_param.value - 0.1*source_param.value
+                    target_model.free_parameters[param_name].value = source_param.value
+                elif "maximum" in str(e):
+                    target_model.free_parameters[param_name].bound[1] = source_param.value + 0.1*source_param.value
+                    target_model.free_parameters[param_name].value = source_param.value
         else:
             print(f"Parameter {param_name} not found in target model")
 
@@ -285,6 +293,59 @@ def change_spectrum(lm, ss, spec=Log_parabola(), piv=None):
         source = PointSource(ss.name, ra=ss.position.ra.value, dec=ss.position.dec.value, spectral_shape=spec)
     lm.remove_source(ss.name)
     lm.add_source(source)
+
+def fit_logparabola_from_powerlaws(
+    A1, gamma1, E1,
+    A2, gamma2, E2,
+    pivot=20.0
+):
+    """
+    根据两个powerlaw点（flux + slope）同时拟合一个最优logparabola
+    
+    参数:
+    - A1, gamma1, E1: WCDA点的归一化、谱指数、能量（TeV）
+    - A2, gamma2, E2: KM2A点的归一化、谱指数、能量（TeV）
+    - pivot: LogParabola的pivot能量（TeV）
+    
+    返回:
+    - A0, alpha, beta: LogParabola参数
+    """
+
+    logE1 = np.log(E1 / pivot)
+    logE2 = np.log(E2 / pivot)
+
+    def loss(params):
+        logA0, alpha, beta = params
+        # flux at E1 and E2
+        logphi1_pred = logA0 - alpha * logE1 - beta * logE1**2
+        logphi2_pred = logA0 - alpha * logE2 - beta * logE2**2
+
+        # slope at E1 and E2
+        gamma1_pred = alpha + 2 * beta * logE1
+        gamma2_pred = alpha + 2 * beta * logE2
+
+        # true values
+        logphi1_true = np.log(A1)
+        logphi2_true = np.log(A2)
+
+        # residuals
+        r1 = logphi1_pred - logphi1_true
+        r2 = logphi2_pred - logphi2_true
+        r3 = gamma1_pred - gamma1
+        r4 = gamma2_pred - gamma2
+
+        return r1**2 + r2**2 + r3**2 + r4**2  # total squared error
+
+    # 初始猜测
+    logA0_guess = np.log((A1 + A2)/2)
+    alpha_guess = (gamma1 + gamma2) / 2
+    beta_guess = (gamma2 - gamma1) / (2 * (logE2 - logE1))
+    
+    result = minimize(loss, [logA0_guess, alpha_guess, beta_guess])
+
+    logA0, alpha, beta = result.x
+    A0 = np.exp(logA0)
+    return A0, alpha, beta
 
 def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8, rtflux=15, rtindex=2, rtp=8, fixall=False, roi=None, pf=False, sf=False, kf=False, indexf=False, mpf=True, msf=True, mkf=True, mindexf=True, Kscale=None, releaseall=False, indexb=None, sb=None, kb=None, WCDApiv=3, KM2Apiv=50, setdeltabypar=True, ifext_mt_2=False, releaseroi=None):
     """
@@ -319,24 +380,48 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
     lm = Model()
     opf = pf; osf=sf; okf=kf; oindexf=indexf
     for i in range(len(LHAASOCat)):
+        samesource = False
         cc = LHAASOCat.iloc[i][" components"]
-        if detector not in cc: continue
         if detector=="WCDA":
+            if detector not in cc: continue
             Nc = 1e-13
             piv=WCDApiv
-        else:
+        elif detector=="KM2A":
+            if detector not in cc: continue
             Nc = 1e-16
             piv=KM2Apiv
+        elif detector=="jf":
+            Nc1 = 1e-13
+            Nc2 = 1e-16
+            piv=20
         name = LHAASOCat.iloc[i]["Source name"]
-        ras = float(LHAASOCat.iloc[i][" Ra"])
-        decs = float(LHAASOCat.iloc[i][" Dec"])
-        pe = float(LHAASOCat.iloc[i][" positional error"])
-        sigma = float(LHAASOCat.iloc[i][" r39"])
-        sigmae = float(LHAASOCat.iloc[i][" r39 error"])
-        flux = float(LHAASOCat.iloc[i][" N0"])
-        fluxe = float(LHAASOCat.iloc[i][" N0 error"])
-        index = float(LHAASOCat.iloc[i][" index"])
-        indexe = float(LHAASOCat.iloc[i][" index error"])
+        # lastname = LHAASOCat.iloc[i-1]["Source name"]
+        # nextname = LHAASOCat.iloc[i+1]["Source name"]
+        if i != len(LHAASOCat)-1 and name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","") == LHAASOCat.iloc[i+1]["Source name"].replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","") and detector=="jf":
+            continue
+        if i!=0 and name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","") == LHAASOCat.iloc[i-1]["Source name"].replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","") and detector=="jf":
+            samesource = True
+            ras = (float(LHAASOCat.iloc[i][" Ra"])+float(LHAASOCat.iloc[i-1][" Ra"]))/2
+            decs = (float(LHAASOCat.iloc[i][" Dec"])+float(LHAASOCat.iloc[i-1][" Dec"]))/2
+            pe = abs(float(LHAASOCat.iloc[i][" Ra"])-float(LHAASOCat.iloc[i-1][" Ra"]))+float(LHAASOCat.iloc[i][" positional error"])
+            sigma = (float(LHAASOCat.iloc[i][" r39"])+float(LHAASOCat.iloc[i-1][" r39"]))/2
+            sigmae = abs(float(LHAASOCat.iloc[i][" r39 error"])-float(LHAASOCat.iloc[i-1][" r39 error"]))+float(LHAASOCat.iloc[i][" r39 error"])
+            flux1 = float(LHAASOCat.iloc[i][" N0"])
+            flux2 = float(LHAASOCat.iloc[i-1][" N0"])
+            fluxe = float(LHAASOCat.iloc[i][" N0 error"])
+            index1 = float(LHAASOCat.iloc[i][" index"])
+            index2 = float(LHAASOCat.iloc[i-1][" index"])
+            indexe = float(LHAASOCat.iloc[i][" index error"])
+        else:
+            ras = float(LHAASOCat.iloc[i][" Ra"])
+            decs = float(LHAASOCat.iloc[i][" Dec"])
+            pe = float(LHAASOCat.iloc[i][" positional error"])
+            sigma = float(LHAASOCat.iloc[i][" r39"])
+            sigmae = float(LHAASOCat.iloc[i][" r39 error"])
+            flux = float(LHAASOCat.iloc[i][" N0"])
+            fluxe = float(LHAASOCat.iloc[i][" N0 error"])
+            index = float(LHAASOCat.iloc[i][" index"])
+            indexe = float(LHAASOCat.iloc[i][" index error"])
         name = name.replace("1LHAASO ","").replace("+","P").replace("-","M").replace("*","").replace(" ","")
         if indexb is not None:
             indexel = indexb[0]
@@ -363,7 +448,7 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
             if detector=="WCDA":
                 kbl = max(1e-15, (flux/rtflux/10)*Nc) #-rtflux*fluxe
                 kbh = min(1e-11, (flux*rtflux)*Nc)
-            else:
+            elif detector=="KM2A":
                 kbl = max(1e-18, (flux/rtflux/10)*Nc) #-rtflux*fluxe
                 kbh = min(1e-14, (flux*rtflux)*Nc)
 
@@ -406,11 +491,11 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
                 doit=True
                 log.info(f"{name} in model_radius: {model_radius} sf:{sf} pf:{pf} kf:{kf} indexf:{indexf}")
 
-        if kf or indexf:
-            if detector=="WCDA":
-                piv=3
-            else:
-                piv=50
+        # if kf or indexf:
+        #     if detector=="WCDA":
+        #         piv=3
+        #     else:
+        #         piv=50
 
         if fixall:
             sf = True
@@ -432,24 +517,293 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
                 indexf = oindexf
         
         if doit:
-            log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
-            if sigma is not None:
-                log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f}) fitrange={rtp*pe:.2f}")
-                prompt = f"""
+            if detector=="jf":
+                if samesource:
+                    A0, alpha, beta = fit_logparabola_from_powerlaws(
+                        flux1*Nc1, index1, 3,
+                        flux2*Nc2, index2, 50,
+                        pivot=20.0
+                    )
+                    alpha = -alpha
+                else:
+                    if "WCDA" in cc:
+                        A0 = fun_Powerlaw(20,flux*Nc1,-index,3)
+                    elif "KM2A" in cc:
+                        A0 = fun_Powerlaw(20,flux*Nc2,-index,50)
+                    alpha = -index
+                    beta = 0
+                kbl = max(1e-18, (A0/rtflux/10)) #-rtflux*fluxe
+                kbh = min(1e-12, (A0*rtflux))
+                indexel = max(-8,alpha-rtindex)
+                indexeh = min(10,alpha+rtindex)
+                log.info(f"Spec: \n K={A0:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={alpha:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
+                if sigma is not None:
+                    log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f}) fitrange={rtp*pe:.2f}")
+                    prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={A0}, kb=({kbl}, {kbh}), alpha={alpha}, alphab=({indexel},{indexeh}), beta={beta}, betab=(0,3), fitrange={rtp*pe}, kf={kf}, alphaf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar}, spec=Log_parabola())
+lm.add_source({name})
+                    """
+                    exec(prompt)
+                else:
+                    log.info(f"Mor: fitrange={rtp*pe:.2f}")
+                    prompt = f"""
+{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={A0}, kb=({kbl}, {kbh}), alpha={alpha}, alphab=({indexel},{indexeh}), beta={beta}, betab=(0,3), fitrange={rtp*pe}, kf={kf}, alphaf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar}, spec=Log_parabola())
+lm.add_source({name})
+                    """
+                    exec(prompt)
+            else:
+                log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
+                if sigma is not None:
+                    log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f}) fitrange={rtp*pe:.2f}")
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
         k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar})
 lm.add_source({name})
             """
-                exec(prompt)
-            else:
-                log.info(f"Mor: fitrange={rtp*pe:.2f}")
-                prompt = f"""
+                    exec(prompt)
+                else:
+                    log.info(f"Mor: fitrange={rtp*pe:.2f}")
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
         k={flux*Nc}, kb=({kbl}, {kbh}), index={-index}, indexb=({indexel},{indexeh}), fitrange={rtp*pe}, kf={kf}, indexf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar})
 lm.add_source({name})
             """
-                exec(prompt)
+                    exec(prompt)
     return lm
+
+
+
+
+
+def save_lhaaso_model(lhaaso_model, filepath):
+    """保存LHAASO模型为YAML格式，使用紧凑数组表示法"""
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedSeq
+    yaml = YAML()
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.default_flow_style = None
+    
+    # 将普通字典和列表转换为ruamel.yaml的特殊对象
+    def convert_to_ruamel(data):
+        if isinstance(data, dict):
+            new_dict = {}
+            for k, v in data.items():
+                new_dict[k] = convert_to_ruamel(v)
+            return new_dict
+        elif isinstance(data, list):
+            new_list = CommentedSeq(convert_to_ruamel(x) for x in data)
+            if all(isinstance(x, (int, float, str)) for x in data):
+                new_list.fa.set_flow_style()  # 只有在这里设置流式风格
+            return new_list
+        else:
+            return data
+    
+    # 转换整个数据结构
+    ruamel_model = convert_to_ruamel(lhaaso_model)
+    
+    # 保存到文件
+    with open(filepath, 'w') as f:
+        yaml.dump(ruamel_model, f)
+
+
+
+def split_sci_num(num):
+    """分解科学计数法数字为系数和指数，确保系数在 [1, 10) 范围内"""
+    from decimal import Decimal, getcontext
+    
+    # 设置高精度
+    getcontext().prec = 20
+    
+    d = Decimal(str(num))
+    if d == 0:
+        return 0.0, 0
+    
+    # 获取标准科学计数法的系数和指数
+    coeff = float(d.scaleb(-d.adjusted()).to_eng_string())
+    exp = d.adjusted()
+    
+    # 手动调整到 [1, 10) 范围（防止极端情况）
+    while abs(coeff) >= 10.0:
+        coeff /= 10.0
+        exp += 1
+    while abs(coeff) < 1.0:
+        coeff *= 10.0
+        exp -= 1
+    
+    return coeff, exp
+
+def convert_3ml_to_lhaaso(three_ml_model, region_name, Modelname, piv=50, save=True):
+    """
+    将3ML模型转换为与示例完全匹配的LHAASO格式
+    
+    参数:
+        three_ml_model (dict): 3ML模型字典
+        
+    返回:
+        dict: 与示例格式一致的LHAASO模型字典
+    """
+    three_ml_model = three_ml_model.to_dict()
+    lhaaso_model = {
+        "DGE": {
+            "Active": 1,
+            "ConvoPSF": 1,
+            "Template0": {
+                "Name": "dust",
+                "Tempfile": "/home/lhaaso/hushicong/Standard_prog_lib/Source_Analysis/Space_energy_Joint_fitting/v0.65_combine_diff/Template/gll_dust_process_Eqm.root",  # 需要替换为实际路径
+                "TempHist": ["hTemp_ana"],
+                "Epiv": piv,
+                "SEDModel": {
+                    "type": "PL",
+                    "F0": [250, 0.00, 500.00, 0, 1.e-17],
+                    "alpha": [2.74, 2.00, 4.00, 0]
+                }
+            }
+        },
+        "SRC": {
+            "UseCatalog": 0,
+            "Active": 1,
+            "Epiv": piv,
+            "ParStatus": {
+                "Position": 0,
+                "F0": 0,
+                "Index": 0,
+                "MorPar": 0
+            }
+        }
+    }
+
+    # 处理点源和高斯源
+    src_index = 0
+    for src_name, src_data in three_ml_model.items():
+        if src_name in ['WCDA_bkg_renorm', 'KM2A_bkg_renorm', 'Diffuse']:
+            continue
+            
+        # 初始化源模型
+        src_key = f"Src{src_index}"
+        src_model = {
+            "Name": src_name,
+            "Epiv": piv,
+            "SEDModel": {},
+            "MorModel": {}
+        }
+        
+        # 处理谱模型
+        spectrum_data = src_data['spectrum']['main']
+        spectrum_type = list(spectrum_data.keys())[0]
+        
+        
+        if spectrum_type == 'Powerlaw':
+            pl_params = spectrum_data[spectrum_type]
+            coeff, exp = split_sci_num(pl_params['K']['value'] * 1e9)
+            coeff1, exp1 = split_sci_num(pl_params['K']['min_value'] * 1e9)
+            coeff1 = coeff1*10**exp1/10**exp
+            coeff2, exp2 = split_sci_num(pl_params['K']['max_value'] * 1e9)
+            coeff2 = coeff2*10**exp2/10**exp
+            src_model["SEDModel"] = {
+                "type": "PL",
+                "F0": [
+                    coeff,  # 当前值
+                    coeff1,  # 最小值
+                    coeff2,  # 最大值
+                    int(not pl_params['K']['free']),  # 是否可调
+                    10**exp  # 步长 f"{:.1e}
+                ],
+                "alpha": [
+                    -pl_params['index']['value'],  # 当前值
+                    -pl_params['index']['max_value'],  # 最小值
+                    -pl_params['index']['min_value'],  # 最大值
+                    int(not pl_params['index']['free'])  # 是否可调
+                ]
+            }
+            
+        elif spectrum_type == 'Log_parabola':
+            lp_params = spectrum_data[spectrum_type]
+            coeff, exp = split_sci_num(lp_params['K']['value'] * 1e9)
+            coeff1, exp1 = split_sci_num(lp_params['K']['min_value'] * 1e9)
+            coeff1 = coeff1*10**exp1/10**exp
+            coeff2, exp2 = split_sci_num(lp_params['K']['max_value'] * 1e9)
+            coeff2 = coeff2*10**exp2/10**exp
+            src_model["SEDModel"] = {
+                "type": "LP",
+                "F0": [
+                    coeff,  # 当前值
+                    coeff1,  # 最小值
+                    coeff2,  # 最大值
+                    int(not lp_params['K']['free']),  # 是否可调
+                    10**exp  # 步长 f"{:.1e}"
+                ],
+                "alpha": [
+                    -lp_params['alpha']['value'],  # 当前值
+                    -lp_params['alpha']['max_value'],  # 最小值
+                    -lp_params['alpha']['min_value'],  # 最大值
+                    int(not lp_params['alpha']['free'])  # 是否可调
+                ],
+                "beta": [
+                    lp_params['beta']['value'],  # 当前值
+                    lp_params['beta']['min_value'],  # 最小值
+                    lp_params['beta']['max_value'],  # 最大值
+                    int(not lp_params['beta']['free'])  # 是否可调
+                ]
+            }
+        
+        # 处理空间模型
+        if 'position' in src_data:
+            pos = src_data['position']
+            src_model["MorModel"] = {
+                "type": "Point",
+                "ra": [
+                    pos['ra']['value'],  # 当前值
+                    pos['ra']['min_value'],  # 最小值
+                    pos['ra']['max_value'],  # 最大值
+                    int(not pos['ra']['free'])  # 是否可调
+                ],
+                "dec": [
+                    pos['dec']['value'],  # 当前值
+                    pos['dec']['min_value'],  # 最小值
+                    pos['dec']['max_value'],  # 最大值
+                    int(not pos['dec']['free'])  # 是否可调
+                ]
+            }
+            
+        elif 'Gaussian_on_sphere' in src_data:
+            gauss = src_data['Gaussian_on_sphere']
+            src_model["MorModel"] = {
+                "type": "Ext_gaus",
+                "ra": [
+                    gauss['lon0']['value'],  # 当前值
+                    gauss['lon0']['min_value'],  # 最小值
+                    gauss['lon0']['max_value'],  # 最大值
+                    int(not gauss['lon0']['free'])  # 是否可调
+                ],
+                "dec": [
+                    gauss['lat0']['value'],  # 当前值
+                    gauss['lat0']['min_value'],  # 最小值
+                    gauss['lat0']['max_value'],  # 最大值
+                    int(not gauss['lat0']['free'])  # 是否可调
+                ],
+                "sigma": [
+                    gauss['sigma']['value'],  # 当前值
+                    gauss['sigma']['min_value'],  # 最小值
+                    gauss['sigma']['max_value'],  # 最大值
+                    int(not gauss['sigma']['free'])  # 是否可调
+                ]
+            }
+
+
+        # 添加到SRC部分
+        lhaaso_model["SRC"][src_key] = src_model
+        src_index += 1
+    
+    if save:
+        # 保存到文件
+        save_lhaaso_model(lhaaso_model, f"../res/{region_name}/{Modelname}/Model_hsc.yaml")
+        # import yamA
+        # with open(f"../res/{region_name}/{Modelname}/Model_hsc.yaml", "w") as f:
+        #     yaml.dump(lhaaso_model, f, default_flow_style=False, sort_keys=False, indent=2)
+
+    return lhaaso_model
 
 
 def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, roi=None, releaseall=False, indexb=None, sb=None, kb=None):
@@ -1293,12 +1647,11 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5):
+def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepath=None):
     """
         获取简单慢速的拟合残差显著性天图,LIMA显著性
 
         Parameters:
-
 
         Returns:
             残差healpix
@@ -1362,6 +1715,8 @@ def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5):
     else:
         resu=(ON-BK)/np.sqrt(BK)
     # resu = (ON-BK)/np.sqrt(ON)
+    if savepath is not None:
+        hp.write_map(savepath, resu,  overwrite=True)
     return resu
 
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
@@ -1818,7 +2173,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
     else:
         return Diffuse
 
-def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, indexb = (-4,-1), piv=3, setdeltabypar=True, kbratio=1000, ratio=None, spec = Powerlaw(), be = 4000, beb=(100,10000), index2=-3.3, index2b=(-4.5, -2.5)):
+def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, index =-2.733, indexf = False, indexb = (-4,-1), piv=3, setdeltabypar=True, kbratio=1000, ratio=None, spec = Powerlaw(), be = 40, beb=(10,10000), index2=-3.3, index2b=(-4.5, -2.5), index2f=None):
     """
         读取fits的形态模版
 
@@ -1866,6 +2221,7 @@ def set_diffusemodel(name, fits_file, K = 7.3776826e-13, Kf = False, Kb=None, in
         Diffusespec.break_energy.bounds = beb * u.TeV
         Diffusespec.beta = index2
         Diffusespec.beta.bounds = index2b
+        Diffusespec.beta.fix = index2f
     else:
         Diffusespec.piv = piv * u.TeV
         Diffusespec.piv.fix=True
