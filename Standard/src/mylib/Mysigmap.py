@@ -861,11 +861,13 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
     os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
+        from WCDA_hal import HealpixConeROI
+        roi2=HealpixConeROI(ra=ra1,dec=dec1,data_radius=data_radius,model_radius=data_radius+1)
         if s is None:
             s=int(binc[0])
         if e is None:
             e=int(binc[-1])
-        runllhskymap(roi, f"../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=s, e=e,jc=jc, sn=sn)
+        runllhskymap(roi2, f"../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=s, e=e,jc=jc, sn=sn)
     return outname+"_res"
 
 def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
@@ -889,13 +891,15 @@ def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detecto
     npix=hp.nside2npix(nside)
     skymap=hp.UNSEEN*np.ones(npix)
     for file in all_files:
-        # print(file)
         datas = np.load(file, allow_pickle=True)[0]
         for dd in datas:
             if dd != []:
                 dd2 = np.array(dd)
                 if len(dd2) >0:
                     skymap[dd2[:,0].astype(np.int)]=dd2[:,1]
+                    # decs = hp.pix2ang(nside, dd2[:,0].astype(np.int)[dd2[:,1]!=hp.UNSEEN])[0]
+                    # decs = 90-decs*180/np.pi
+                    # print(file, np.nanmean(decs)) #)
     print("done")
     skymap=hp.ma(skymap)
     if ifsave:

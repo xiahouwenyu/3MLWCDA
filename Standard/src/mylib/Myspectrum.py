@@ -98,7 +98,7 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=500, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, scannum=200):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, scannum=200, det="WCDA"):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -107,7 +107,8 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
     WCDA_1 = HAL("WCDA_1", maptree, response, roi, flat_sky_pixels_size=pixelsize)
     WCDA_1.psf_integration_method="exact"
     if iffixtans:
-        settransWCDA(WCDA_1, roi.ra_dec_center[0], roi.ra_dec_center[1])
+        if det == "WCDA":
+            settransWCDA(WCDA_1, roi.ra_dec_center[0], roi.ra_dec_center[1], detector=det)
     lm2 = copy.deepcopy(lm)
     # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     fluxUnit = 1e-9
@@ -208,7 +209,7 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
 
     return result2, TSflux
 
-def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248", acc=False):
+def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248", acc=False, piv=3):
     """
         获取拟合能谱下每个bin的能量以及其误差
 
@@ -217,11 +218,10 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248", acc=False):
         Returns:
             >>> x,x_lo,x_hi
     """ 
-    piv=3
     par = lm.sources[source].parameters.keys()
     for pp in par:
         if ".K" in pp:
-            K = lm.sources[source].parameters[pp].value
+            K = lm.sources[source].parameters[pp].value*1e9
         if ".index" in pp:
             func = fun_Powerlaw
             index = lm.sources[source].parameters[pp].value
@@ -254,8 +254,10 @@ def reweightx(lm,WCDA,i,func = fun_Logparabola,source="J0248", acc=False):
             signal = sbl.sim_signal_events_per_bin[j]
             binl = sbl.sim_energy_bin_low[j]
             binu = sbl.sim_energy_bin_hi[j]
+            # print(binl, binu)
             simflux = sbl.sim_differential_photon_fluxes[j]*(binu-binl)
             if func == fun_Logparabola:
+                # fitflux = func(10**((np.log10(binu)+np.log10(binl))/2),K,alpha,beta,piv)
                 fitflux = sp.integrate.quad(func,binl,binu,args=(K,alpha,beta,piv))[0]
             elif func == fun_Powerlaw:
                 fitflux = sp.integrate.quad(func,binl,binu,args=(K,index,piv))[0]
@@ -486,8 +488,8 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         log.info(f"Processing plane {i}")
         if int(i) <= imin:
             imin = int(i)
-        xx = reweightx(lm, Detector, i, source=source, func=func, acc=acc)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange, pixelsize=pixelsize, scannum=scannum)
+        xx = reweightx(lm, Detector, i, source=source, func=func, acc=acc, piv=piv)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange, pixelsize=pixelsize, scannum=scannum, det = Detector.name)
         # try:
         #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
         # except Exception as e:
@@ -786,7 +788,7 @@ def drawspechsc(Energy, Flux, Ferr, Fc = 1e-14, label="", colorp="tab:blue", sub
     Energy = np.array(Energy)
     Flux = np.array(Flux)
     Ferr = np.array(Ferr)
-    color = np.array([1,     1,     1,   1,     1,     1,     0,     0,     0,     0,     0,     0,     0,     0,     0,  0])
+    color = np.array([1,     1,     1,   1,     1,     1,   1,   0,     0,     0,     0,     0,     0,     0,     0,     0,  0])
     color = color[:len(Energy)]
     ax.errorbar(Energy[Ferr!=0][color[Ferr!=0]==1],np.array(Flux[Ferr!=0][color[Ferr!=0]==1])*Fc,np.array(Ferr[Ferr!=0][color[Ferr!=0]==1])*Fc,marker="s",linestyle="none",color=colorp, label=label+label2)
     ax.errorbar(Energy[Ferr==0][color[Ferr==0]==1],np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,0.2*np.array(Flux[Ferr==0][color[Ferr==0]==1])*Fc,marker=".",linestyle="none",color=colorp, uplims=True)

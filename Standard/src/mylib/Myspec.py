@@ -369,7 +369,7 @@ class SmoothlyBrokenPowerLawM(Function1D, metaclass=FunctionMeta):
         break_scale :
 
             desc: smoothness of the break
-            initial value : 0.5
+            initial value : 2
             min : 0.
             max : 10.
             fix : yes
