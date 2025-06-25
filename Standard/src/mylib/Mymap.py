@@ -775,3 +775,60 @@ def shift_healpix_map(healpix_map, ra_shift, dec_shift, nside):
     shifted_map[shifted_pix] = healpix_map
     
     return shifted_map
+
+def merge_fits_files(file1, file2, output_file):
+    """
+    合并两个具有相同数据格式和坐标的FITS文件，对数据进行加法操作
+    
+    参数:
+        file1 (str): 第一个FITS文件路径
+        file2 (str): 第二个FITS文件路径
+        output_file (str): 输出合并后的FITS文件路径
+        
+    返回:
+        None
+    """
+    # 打开第一个FITS文件
+    with fits.open(file1) as hdul1:
+        data1 = hdul1[0].data
+        header1 = hdul1[0].header
+        
+        # 检查数据是否为None（根据您提供的头信息，NAXIS=2但可能有数据）
+        if data1 is None:
+            raise ValueError(f"{file1} 不包含数据")
+            
+        # 打开第二个FITS文件
+        with fits.open(file2) as hdul2:
+            data2 = hdul2[0].data
+            header2 = hdul2[0].header
+            
+            if data2 is None:
+                raise ValueError(f"{file2} 不包含数据")
+                
+            # 检查两个文件的数据形状是否相同
+            if data1.shape != data2.shape:
+                raise ValueError("两个FITS文件的数据形状不匹配")
+                
+            # 检查关键坐标参数是否相同
+            required_keys = ['CTYPE1', 'CTYPE2', 'CRPIX1', 'CRPIX2', 
+                           'CRVAL1', 'CRVAL2', 'CDELT1', 'CDELT2', 'CROTA2']
+            
+            for key in required_keys:
+                if header1.get(key) != header2.get(key):
+                    raise ValueError(f"关键坐标参数 {key} 不匹配: {header1.get(key)} vs {header2.get(key)}")
+            
+            # 对数据进行加法操作
+            merged_data = data1 + data2
+            
+            # 创建一个新的HDU对象，保留第一个文件的头信息
+            new_hdu = fits.PrimaryHDU(data=merged_data, header=header1)
+            
+            # 更新头信息中的创建日期和文件名
+            new_hdu.header['FILENAME'] = output_file
+            new_hdu.header['HISTORY'] = 'Merged from two FITS files'
+            new_hdu.header['HISTORY'] = f'File1: {file1}'
+            new_hdu.header['HISTORY'] = f'File2: {file2}'
+            
+            # 写入新的FITS文件
+            new_hdu.writeto(output_file, overwrite=True)
+            print(f"成功合并文件并保存为 {output_file}")
