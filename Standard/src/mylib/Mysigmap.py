@@ -966,26 +966,56 @@ def healpix_to_fits_pixels(healpix_pixels, nside, wcs):
 #     return np.sum(solid_angle) * hp.pixelfunc.nside2pixarea(8192)
 
 def calculate_pixel_solid_angle(wcs, x, y):
-    """计算FITS文件中给定像素的立体角（以弧度为单位）。"""
-    # 获取像素中心的天球坐标 (RA, Dec)
-    ra_dec_center = wcs.pixel_to_world(x, y)
-
-    # print(ra_dec_center)
-
+    """
+    计算FITS文件中给定像素的立体角（以弧度为单位）。
+    兼容赤道坐标系(RA/Dec)和银道坐标系(l/b)。
+    
+    参数:
+        wcs: WCS对象
+        x, y: 像素坐标
+        
+    返回:
+        立体角（以弧度为单位）
+    """
+    # 获取像素中心的天球坐标
+    coord = wcs.pixel_to_world(x, y)
+    
+    # 获取WCS的坐标系类型
+    ctype1 = wcs.wcs.ctype[0].upper()
+    ctype2 = wcs.wcs.ctype[1].upper()
+    
+    # 判断坐标系类型
+    is_galactic = ('GLON' in ctype1 and 'GLAT' in ctype2)
+    
     # 计算RA和Dec方向上像素的角大小（假设它们是小量）
     pixel_scale = wcs.pixel_scale_matrix
-    delta_ra = np.abs(pixel_scale[0, 0])  # RA方向像素的角大小，单位：度
-    delta_dec = np.abs(pixel_scale[1, 1])  # Dec方向像素的角大小，单位：度
-
-    # 转换为弧度
-    delta_ra_rad = np.radians(delta_ra)
-    delta_dec_rad = np.radians(delta_dec)
+    delta_lon = np.abs(pixel_scale[0, 0])  # 经度方向像素的角大小，单位：度
+    delta_lat = np.abs(pixel_scale[1, 1])  # 纬度方向像素的角大小，单位：度
     
-    # 使用cos(dec)因子计算立体角
-    solid_angle = delta_ra_rad * delta_dec_rad * np.cos(np.radians(ra_dec_center.dec.value))
-
-    if solid_angle==0:
-        print(delta_ra_rad, delta_dec_rad, ra_dec_center.dec.value, np.cos(np.radians(ra_dec_center.dec.value)))
+    # 转换为弧度
+    delta_lon_rad = np.radians(delta_lon)
+    delta_lat_rad = np.radians(delta_lat)
+    
+    # 根据坐标系类型获取纬度值
+    if is_galactic:
+        # 银道坐标系，使用b(银纬)
+        lat_value = coord.b.value
+    else:
+        # 赤道坐标系，使用dec(赤纬)
+        try:
+            lat_value = coord.dec.value
+        except AttributeError:
+            # 如果dec属性不存在，尝试其他可能的名称
+            lat_value = getattr(coord, 'lat', getattr(coord, 'latitude', 0)).value
+    
+    # 使用cos(lat)因子计算立体角
+    solid_angle = delta_lon_rad * delta_lat_rad * np.cos(np.radians(lat_value))
+    
+    # 调试输出
+    if solid_angle == 0:
+        print(f"Warning: Zero solid angle at pixel ({x}, {y})")
+        print(f"Delta_lon: {delta_lon_rad}, Delta_lat: {delta_lat_rad}")
+        print(f"Latitude value: {lat_value}, cos(lat): {np.cos(np.radians(lat_value))}")
     
     return solid_angle
 
@@ -995,106 +1025,107 @@ def fits_pixel_to_healpix(ra, dec, nside):
     # phi = np.radians(ra)
     return hp.ang2pix(nside, ra, dec, lonlat=True)
 
-# def normalize_fits_within_healpix_roi(fits_file, output_file, healpix_pixels=None, nside=None):
-#     """
-#     对给定ROI内的FITS像素进行按立体角积分归一化,并保存为新的FITS文件,同时屏蔽掉ROI以外的像素。
+def normalize_fits_within_healpix_roi(fits_file, output_file, healpix_pixels=None, nside=None):
+    """
+    对给定ROI内的FITS像素进行按立体角积分归一化,并保存为新的FITS文件,同时屏蔽掉ROI以外的像素。
 
-#     Parameters:
-#         fits_file (str): 输入的FITS文件路径
-#         healpix_pixels (set of int): Healpix格式的ROI像素集合
-#         nside (int): Healpix的nside参数
-#         output_file (str): 输出的FITS文件路径
+    Parameters:
+        fits_file (str): 输入的FITS文件路径
+        healpix_pixels (set of int): Healpix格式的ROI像素集合
+        nside (int): Healpix的nside参数
+        output_file (str): 输出的FITS文件路径
 
-#     Returns:
-#         None
-#     """
-#     from decimal import Decimal
-#     # 读取FITS文件和数据
-#     hdu = fits.open(fits_file)
-#     data = hdu[0].data
-#     header = hdu[0].header
+    Returns:
+        None
+    """
+    from decimal import Decimal
+    # 读取FITS文件和数据
+    hdu = fits.open(fits_file)
+    data = hdu[0].data
+    header = hdu[0].header
 
-#     # 获取WCS信息
-#     wcs = WCS(header)
+    # 获取WCS信息
+    wcs = WCS(header)
 
-#     # 创建mask并初始化为True
-#     mask = np.ones(data.shape, dtype=bool)
+    # 创建mask并初始化为True
+    mask = np.ones(data.shape, dtype=bool)
 
-#     # 初始化归一化参数
-#     total_flux = 0.0
-#     total_solid_angle = 0.0
+    # 初始化归一化参数
+    total_flux = 0.0
+    total_solid_angle = 0.0
 
-#     S = np.zeros(data.shape, dtype=bool)
-#     # 遍历FITS文件的每一个像素
-#     pixel_solid_angles = []
-#     total_fluxs = []
-#     for y in range(data.shape[0]):
-#         for x in range(data.shape[1]):
-#             # 将FITS像素转换为天球坐标 (RA, Dec)
-#             ra, dec = wcs.wcs_pix2world(x, y, 0)
-#             # 判断该Healpix像素是否在ROI内
-#             if healpix_pixels is not None:
-#                 # 将天球坐标转换为对应的Healpix像素索引
-#                 healpix_index = fits_pixel_to_healpix(ra, dec, nside)
-#                 if healpix_index in healpix_pixels:
-#                     # 计算当前FITS像素的立体角
-#                     pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+    S = np.zeros(data.shape, dtype=bool)
+    # 遍历FITS文件的每一个像素
+    pixel_solid_angles = []
+    total_fluxs = []
+    for y in range(data.shape[0]):
+        for x in range(data.shape[1]):
+            # 将FITS像素转换为天球坐标 (RA, Dec)
+            ra, dec = wcs.wcs_pix2world(x, y, 0)
+            # print(ra, dec)
+            # 判断该Healpix像素是否在ROI内
+            if healpix_pixels is not None:
+                # 将天球坐标转换为对应的Healpix像素索引
+                healpix_index = fits_pixel_to_healpix(ra, dec, nside)
+                if healpix_index in healpix_pixels:
+                    # 计算当前FITS像素的立体角
+                    pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
 
-#                     # 计算该像素的贡献
-#                     # print(pixel_solid_angle)
-#                     flux = data[y, x]
-#                     if np.isnan(pixel_solid_angle):
-#                         print("solid_angle_nan")
-#                     if pixel_solid_angle==0:
-#                         print("solid_angle_zero")
-#                     if np.isnan(flux):
-#                         continue
-#                     S[y,x] = pixel_solid_angle
-#                     pixel_solid_angles.append(pixel_solid_angle)
-#                     total_fluxs.append(flux * pixel_solid_angle)
-#                     # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
-#                     # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
-#                     mask[y, x] = False  # 在ROI内的像素不被mask
-#             else:
-#                 # 计算当前FITS像素的立体角
-#                 pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
+                    # 计算该像素的贡献
+                    # print(pixel_solid_angle)
+                    flux = data[y, x]
+                    if np.isnan(pixel_solid_angle):
+                        print("solid_angle_nan")
+                    if pixel_solid_angle==0:
+                        print("solid_angle_zero")
+                    if np.isnan(flux):
+                        continue
+                    S[y,x] = pixel_solid_angle
+                    pixel_solid_angles.append(pixel_solid_angle)
+                    total_fluxs.append(flux * pixel_solid_angle)
+                    # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
+                    # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
+                    mask[y, x] = False  # 在ROI内的像素不被mask
+            else:
+                # 计算当前FITS像素的立体角
+                pixel_solid_angle = calculate_pixel_solid_angle(wcs, x, y)
 
-#                 # 计算该像素的贡献
-#                 # print(pixel_solid_angle)
-#                 flux = data[y, x]
-#                 if np.isnan(pixel_solid_angle):
-#                     print("solid_angle_nan")
-#                 if pixel_solid_angle==0:
-#                     print("solid_angle_zero")
-#                 if np.isnan(flux):
-#                     continue
-#                 S[y,x] = pixel_solid_angle
-#                 pixel_solid_angles.append(pixel_solid_angle)
-#                 total_fluxs.append(flux * pixel_solid_angle)
-#                 # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
-#                 # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
-#                 mask[y, x] = False  # 在ROI内的像素不被mask
-#     total_flux = math.fsum(total_fluxs)
-#     total_solid_angle = math.fsum(pixel_solid_angles)
+                # 计算该像素的贡献
+                # print(pixel_solid_angle)
+                flux = data[y, x]
+                if np.isnan(pixel_solid_angle):
+                    print("solid_angle_nan")
+                if pixel_solid_angle==0:
+                    print("solid_angle_zero")
+                if np.isnan(flux):
+                    continue
+                S[y,x] = pixel_solid_angle
+                pixel_solid_angles.append(pixel_solid_angle)
+                total_fluxs.append(flux * pixel_solid_angle)
+                # total_flux = total_flux + flux * Decimal(pixel_solid_angle)
+                # total_solid_angle = total_solid_angle + Decimal(pixel_solid_angle)
+                mask[y, x] = False  # 在ROI内的像素不被mask
+    total_flux = math.fsum(total_fluxs)
+    total_solid_angle = math.fsum(pixel_solid_angles)
 
-#     # if total_solid_angle == 0:
-#     #     print(total_solid_angle)
-#     #     raise ValueError("总立体角为0,可能ROI像素列表为空。")
+    # if total_solid_angle == 0:
+    #     print(total_solid_angle)
+    #     raise ValueError("总立体角为0,可能ROI像素列表为空。")
 
-#     normalization_factor = total_flux #/ total_solid_angle
-#     print(normalization_factor)
+    normalization_factor = total_flux #/ total_solid_angle
+    print(normalization_factor)
 
-#     # 对ROI内的像素进行归一化处理
-#     normalized_data = data.copy()
-#     normalized_data[~mask] /= normalization_factor
+    # 对ROI内的像素进行归一化处理
+    normalized_data = data.copy()
+    normalized_data[~mask] /= normalization_factor
 
-#     # 将ROI以外的像素屏蔽掉
-#     normalized_data[mask] = 0
+    # 将ROI以外的像素屏蔽掉
+    normalized_data[mask] = 0
 
-#     # 保存为新的FITS文件
-#     hdu[0].data = normalized_data
-#     hdu.writeto(output_file, overwrite=True)
-#     print(f"归一化后的FITS文件已保存为 {output_file}")
+    # 保存为新的FITS文件
+    hdu[0].data = normalized_data
+    hdu.writeto(output_file, overwrite=True)
+    print(f"归一化后的FITS文件已保存为 {output_file}")
 
 def process_pixel(args):
     x, y, data, wcs, healpix_pixels, nside = args

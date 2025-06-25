@@ -1,0 +1,41 @@
+name: 3ML
+channels:
+  - astropy
+  - defaults
+dependencies:
+  - python=3.9
+  - astromodels
+  - matplotlib
+  - astropy
+  - root
+  - tqdm
+  - healpy
+  - numpy=1.19.5
+  - pandas=1.3.5
+  - root_numpy
+  - scipy
+  - threeml
+  - gammapy
+  - pip
+  - reproject
+  - sympy
+  - uproot
+  - naima
+  - pywavelets
+  - conda-forge::healpix_cxx
+  - pykrige
+  - pygmo
+  - mamba
+  - pagmo
+  - ca-certificates
+  - certifi
+  - openssl
+  - pycwt
+  - numba
+  - dill
+  - hist
+  - aplpy
+  - spectral-cube
+  - h5py
+  - hdf5=1.10.6
+prefix: /data/home/cwy/.mylib/miniconda3/envs/3ML
