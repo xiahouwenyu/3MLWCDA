@@ -617,7 +617,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
-def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=100):
+def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=None):
     """
         从healpix显著性天图S画一维显著性分布并保存
 
@@ -626,6 +626,10 @@ def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae
         Returns:
             >>> None
     """ 
+    if bins is None:
+        bins = 2*int(max(S.compressed()))
+        if bins<100:
+            bins=100
     bin_y,bin_x,patches=plt.hist(S.compressed(),bins=bins)
     plt.close()
     bin_x=np.array(bin_x)
