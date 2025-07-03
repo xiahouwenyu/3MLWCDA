@@ -841,10 +841,14 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
         flux = scconfig['SEDModel']["F0"][0]
         Kb = [scconfig['SEDModel']["F0"][1], scconfig['SEDModel']["F0"][2]]
         kf = scconfig['SEDModel']["F0"][3]
-        Nc = scconfig['SEDModel']["F0"][4]
+        Nc = float(scconfig['SEDModel']["F0"][4])
         index =  -scconfig['SEDModel']['alpha'][0]
         Indexb =  [-scconfig['SEDModel']['alpha'][2], -scconfig['SEDModel']['alpha'][1]]
         indexf = scconfig['SEDModel']['alpha'][3]
+        if scconfig['SEDModel']['type'] == 'LP':
+            beta = scconfig['SEDModel']['beta'][0]
+            betab = [scconfig['SEDModel']['beta'][1], scconfig['SEDModel']['beta'][2]]
+            betaf = scconfig['SEDModel']['beta'][3]
         ras = scconfig["MorModel"]['ra'][0]
         rab = [scconfig["MorModel"]['ra'][1], scconfig["MorModel"]['ra'][2]]
         pf = scconfig["MorModel"]['ra'][3]
@@ -872,10 +876,10 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
             sbl = sb[0]
             sbh = sb[1]
         else:
-            if sf:
+            if scconfig["MorModel"]['type'] == 'Ext_gaus'and sf:
                 sbl = None
                 sbh = None
-            else:
+            elif scconfig["MorModel"]['type'] == 'Ext_gaus':
                 sbl = sigmab[0]
                 sbh = sigmab[1]
 
@@ -921,10 +925,9 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
             kf = False
             indexf = False
 
-        sbs = f"({sbl},{sbh})" if sbl is not None else "None"
+        
 
         kbs = f"({kbl},{kbh})" if kbl is not None else "None"
-
         indexbs = f"({indexel},{indexeh})" if indexel is not None else "None"
         
         if doit:
@@ -932,25 +935,47 @@ def get_modelfromhsc(file, ra1, dec1, data_radius, model_radius, fixall=False, r
                 log.info(f"Spec: \n K={flux*Nc:.2e} kb=({kbl:.2e}, {kbh:.2e}) index={-index:.2f} indexb=({indexel:.2f},{indexeh:.2f})")
             except:
                 pass
-            if sigma is not None:
-                try:
-                    log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f})")
-                except:
-                    pass
-                prompt = f"""
+            if scconfig['SEDModel']['type'] == 'LP':
+                if sigma is not None:
+                    sbs = f"({sbl},{sbh})" if sbl is not None else "None"
+                    try:
+                        log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f})")
+                    except:
+                        pass
+                    prompt = f"""{name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb={sbs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
+        k={flux*Nc}, kb={kbs}, alpha={-index}, alphab={indexbs}, rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, alphaf={indexf}, beta={beta}, betab=({betab[0]},{betab[1]}), betaf={betaf}, spec=Log_parabola())
+lm.add_source({name})
+                    """
+                    exec(prompt)
+                else:
+                    log.info(f"Mor: ")
+                    prompt = f"""{name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, piv={piv},
+        k={flux*Nc}, kb={kbs}, alpha={-index}, alphab={indexbs}, rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, alphaf={indexf}, beta={beta}, betab=({betab[0]},{betab[1]}), betaf={betaf}, spec=Log_parabola())
+lm.add_source({name})
+                    """
+                    exec(prompt)
+
+            else:
+                if sigma is not None:
+                    sbs = f"({sbl},{sbh})" if sbl is not None else "None"
+                    try:
+                        log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f})")
+                    except:
+                        pass
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb={sbs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
         k={flux*Nc}, kb={kbs}, index={-index}, indexb={indexbs}, rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
 lm.add_source({name})
-            """
-                exec(prompt)
-            else:
-                log.info(f"Mor: ")
-                prompt = f"""
+                """
+                    exec(prompt)
+                else:
+                    log.info(f"Mor: ")
+                    prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
         k={flux*Nc}, kb={kbs}, index={-index}, indexb={indexbs}, rab=({rab[0]},{rab[1]}), decb=({decb[0]},{decb[1]}), kf={kf}, indexf={indexf})
 lm.add_source({name})
-            """
-                exec(prompt)
+                """
+                    exec(prompt)
     return lm
 
 def model2bayes(model):
