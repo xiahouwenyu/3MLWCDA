@@ -1,5 +1,5 @@
 from threeML import *
-from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
+from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
 from time import *
 from Mymodels import *
 import os
@@ -9,7 +9,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import copy
 from tqdm import tqdm
-import root_numpy as rt
+# import root_numpy as rt
 from Mymap import *
 from Mysigmap import *
 from Mycoord import *
@@ -2026,31 +2026,29 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Returns:
             弥散源
     """ 
-    if file == None:
-        from astropy.wcs import WCS
-        from astropy.io import fits
-        if name is None:
-            name="Cache"
-        root_file=ROOT.TFile.Open(("../../data/gll_dust.root"),"read")
-        root_th2d=root_file.Get("gll_region")
-        X_nbins=root_th2d.GetNbinsX()
-        Y_nbins=root_th2d.GetNbinsY()
-        X_min=root_th2d.GetXaxis().GetXmin()
-        X_max=root_th2d.GetXaxis().GetXmax()
-        Y_min=root_th2d.GetYaxis().GetXmin()
-        Y_max=root_th2d.GetYaxis().GetXmax()
-        X_size=(X_max-X_min)/X_nbins
-        Y_size=(Y_max-Y_min)/Y_nbins
-        #  log.info(X_min,X_max,X_nbins, X_size)
-        #  log.info(Y_min,Y_max,Y_nbins, Y_size)
-        data = rt.hist2array(root_th2d).T
+    with uproot.open("../../data/gll_dust.root") as root_file:
+        root_th2d = root_file["gll_region"]
+        
+        # 获取直方图信息
+        X_nbins = root_th2d.member("fXaxis").member("fNbins")
+        Y_nbins = root_th2d.member("fYaxis").member("fNbins")
+        X_min = root_th2d.member("fXaxis").member("fXmin")
+        X_max = root_th2d.member("fXaxis").member("fXmax")
+        Y_min = root_th2d.member("fYaxis").member("fXmin")
+        Y_max = root_th2d.member("fYaxis").member("fXmax")
+        
+        X_size = (X_max - X_min) / X_nbins
+        Y_size = (Y_max - Y_min) / Y_nbins
+        
+        # 使用 uproot 提取直方图数据并转置
+        data = root_th2d.values(flow=False).T  # flow=False 表示不包含溢出桶
+        
         lranges = lr
         branges = br
-        l,b = edm2gal(ra1,dec1)
+        l, b = edm2gal(ra1, dec1)
         branges += abs(b)
-        # l=int(l); b=int(b)
-        ll = np.arange(l-lranges,l+lranges,X_size)
-        bb =  np.arange(-branges,branges,Y_size)
+        ll = np.arange(l - lranges, l + lranges, X_size)
+        bb = np.arange(-branges, branges, Y_size)
         # L,B = np.meshgrid(ll,bb)
         # RA, DEC = gal2edm(L,B)
 

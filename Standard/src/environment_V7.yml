@@ -1,0 +1,44 @@
+name: 3ML
+channels:
+  - conda-forge
+  - defaults
+  - astropy
+  - threeml
+
+
+dependencies:
+  - python=3.9
+  - pip
+  - numpy=1.23.0
+  - scipy
+  - pandas=1.3.5
+  - matplotlib=3.6.2
+  - healpy=1.16.1
+  - numba=0.56.4
+  - ipykernel
+  - jupyter
+  - notebook
+  - jupyterlab
+  - pyyaml
+  - tqdm
+  - gammapy
+  - sympy
+  - mamba
+  - reproject
+  - pywavelets
+  - conda-forge::healpix_cxx
+  - pagmo
+  - pygmo
+  - h5py
+  - hdf5
+  - cfitsio=4.1.0
+  - spectral-cube
+  - root=6.24.6
+  - pip:
+      - astromodels
+      - threeML
+      - emcee
+      - corner
+      - pyMultinest
+      - uproot
+      - naima
