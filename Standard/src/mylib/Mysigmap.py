@@ -13,7 +13,8 @@ import ROOT
 
 import copy
 
-import root_numpy as rn
+# import root_numpy as rn
+import uproot
 
 import matplotlib.colors as mcolors
 
@@ -846,8 +847,17 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
                 toFill_m[idx]=tbkg.count+model[roiid]
             else:
                 toFill_m[idx]=tbkg.count
-        rn.array2tree(toFill_d,tree=tree1)
-        rn.array2tree(toFill_m,tree=tree2)
+        # rn.array2tree(toFill_d,tree=tree1)
+        # rn.array2tree(toFill_m,tree=tree2)
+
+        # 创建字典格式的数据，符合uproot要求
+        data_dict = {"count": toFill_d["count"]}
+        bkg_dict = {"count": toFill_m["count"]}
+
+        # 使用uproot写入树
+        with uproot.update(f"../res/{region_name}/{Modelname}/{outname}.root") as file:
+            file[f"nHit{int(bin):02d}/data"] = data_dict
+            file[f"nHit{int(bin):02d}/bkg"] = bkg_dict
 
         # obj11 = ROOT.TParameter(int)("Nside",1024)
         # obj21 = ROOT.TParameter(int)("Scheme",0)
@@ -865,7 +875,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
     os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
-        from WCDA_hal import HealpixConeROI
+        from hawc_hal import HealpixConeROI
         roi2=HealpixConeROI(ra=ra1,dec=dec1,data_radius=data_radius,model_radius=data_radius+1)
         if s is None:
             s=int(binc[0])
