@@ -1,5 +1,8 @@
 from threeML import *
-from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+try:
+    from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+except:
+    from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 import copy
 from Myfit import *
 

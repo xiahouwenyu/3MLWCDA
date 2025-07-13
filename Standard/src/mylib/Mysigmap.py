@@ -233,6 +233,132 @@ def smoothmap(mapall, smooth_sigma = 0.2896):
 
     return mapall
 
+def compute_significance_mapfast(on, bk, signif=17, alpha=3.24e-5):
+    """Compute significance map from ON and BK maps."""
+    on[np.isnan(on)] = hp.UNSEEN
+    bk[np.isnan(bk)] = hp.UNSEEN
+    on = hp.ma(on)
+    bk = hp.ma(bk)
+
+    if signif == 5:
+        sig = (on - bk) / np.sqrt(on + alpha * bk)
+    elif signif == 9:
+        sig = (on - bk) / np.sqrt(on * alpha + bk)
+    elif signif == 17:
+        sig = np.sqrt(2) * np.sqrt(
+            on * np.log((1. + alpha) / alpha * on / (on + bk / alpha)) +
+            bk / alpha * np.log((1. + alpha) * bk / alpha / (on + bk / alpha))
+        )
+        sig[on < bk] *= -1
+    else:
+        sig = (on - bk) / np.sqrt(bk)
+    sig[np.isnan(sig)] = 0.0
+    return sig
+
+def get_residual_significance_mapfast(
+    WCDA,
+    lm=None,
+    signif=17,
+    combine='none',  # 'none', 'sum', 'weighted'
+    active_sources=None,  # (pta, exta)
+    plot=False,
+    savepath=None,
+    region_name=None,
+    model_name=None,
+    ra1=None,
+    dec1=None
+):
+    """
+    计算显著性图，支持加权合并、多bin显著性、以及自定义模型残差。
+
+    combine: 决定是否对多能段进行合并
+        - 'none'：返回每个能段独立显著性图
+        - 'sum'：直接求和ON和BK再算显著性
+        - 'weighted'：按(S/B)加权合并后再算显著性
+    
+    active_sources: (pta, exta)，控制哪些源被计入模型
+    """
+
+    nside = 1024
+    npix = hp.nside2npix(nside)
+    alpha = 3.24e-5
+
+    if lm:
+        WCDA.set_model(lm)
+    
+    resu_all = []
+    on_all = []
+    bk_all = []
+
+    npt = lm.get_number_of_point_sources() if lm else 0
+    next = lm.get_number_of_extended_sources() if lm else 0
+
+    for i, bin in enumerate(WCDA._active_planes):
+        dmap, bkmap = WCDA._get_excess(WCDA._maptree[bin], all_maps=True)[1:]
+
+        if lm:
+            if active_sources:
+                pta, exta = active_sources
+                model_map = WCDA._get_expectation(bin, bin, 0, 0)
+                for i, keep in enumerate(pta):
+                    if not keep:
+                        model_map += WCDA._get_expectation(bin, bin, i+1, 0)
+                        if i != 0:
+                            model_map -= WCDA._get_expectation(bin, bin, i, 0)
+                for i, keep in enumerate(exta):
+                    if not keep:
+                        model_map += WCDA._get_expectation(bin, bin, 0, i+1)
+                        if i != 0:
+                            model_map -= WCDA._get_expectation(bin, bin, 0, i)
+            else:
+                model_map = WCDA._get_model_map(bin, npt, next).as_dense()
+        else:
+            model_map = 0.0
+
+        on = dmap
+        bk = bkmap + model_map
+
+        on_all.append(on)
+        bk_all.append(bk)
+
+        if combine == 'none':
+            sig = compute_significance_mapfast(on, bk, signif=signif, alpha=alpha)
+            resu_all.append(sig)
+
+    if combine == 'sum':
+        on_total = np.sum(on_all, axis=0)
+        bk_total = np.sum(bk_all, axis=0)
+        resu = compute_significance_mapfast(on_total, bk_total, signif=signif, alpha=alpha)
+        resu_all = resu
+
+    elif combine == 'weighted':
+        weights = [(on - bk) / (bk + 1e-10) for on, bk in zip(on_all, bk_all)]
+        weights = np.array(weights)
+        weighted_on = np.average(np.array(on_all), axis=0, weights=weights)
+        weighted_bk = np.average(np.array(bk_all), axis=0, weights=weights)
+        resu = compute_significance_mapfast(weighted_on, weighted_bk, signif=signif, alpha=alpha)
+        resu_all = resu
+
+    if plot:
+        if isinstance(resu_all, list):
+            n = len(resu_all)
+            ncols = int(np.ceil(np.sqrt(n)))
+            nrows = int(np.ceil(n / ncols))
+            for i, m in enumerate(resu_all):
+                plt.subplot(nrows, ncols, i + 1)
+                hp.mollview(m, title=f"bin {i}", sub=(nrows, ncols, i + 1))
+            plt.tight_layout()
+            plt.show()
+        else:
+            hp.gnomview(resu_all, norm='', rot=[ra1, dec1], xsize=200, ysize=200, reso=6,
+                        title=model_name or "Residual Significance")
+            plt.show()
+            if savepath:
+                os.makedirs(os.path.dirname(savepath), exist_ok=True)
+                hp.write_map(savepath, resu_all, overwrite=True)
+
+    return resu_all
+
 
 import math
 def Draw_ellipse(e_x, e_y, a, e, e_angle, color, linestyle, alpha=0.5, coord="C", ax=None, label=None, lw=None):
@@ -875,7 +1001,10 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
     os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
-        from hawc_hal import HealpixConeROI
+        try:
+            from hawc_hal import HealpixConeROI
+        except:
+            from WCDA_hal import HealpixConeROI
         roi2=HealpixConeROI(ra=ra1,dec=dec1,data_radius=data_radius,model_radius=data_radius+1)
         if s is None:
             s=int(binc[0])

@@ -1002,111 +1002,101 @@ class HAL(PluginPrototype):
         return self._clone[0]
 
     def _get_expectation(self, data_analysis_bin, energy_bin_id, n_point_sources, n_ext_sources):
+        # import time
+        # 初始化时间统计字典
+        # time_stats = {
+        #     'point_sources': 0,
+        #     'ext_sources_compute': 0,
+        #     'ext_sources_reshape': 0,
+        #     'psf_convolve': 0,
+        #     'coordinate_transform': 0,
+        #     'total': 0
+        # }
+        # total_start = time.perf_counter()
 
         # Compute the expectation from the model
-
         this_model_map = None
 
+        # 统计点源处理时间
+        # point_start = time.perf_counter()
         for pts_id in range(n_point_sources):
+            this_conv_pnt_src: ConvolvedPointSource = self._convolved_point_sources[pts_id]
 
-            this_conv_src = self._convolved_point_sources[pts_id]
-
-            expectation_per_transit = this_conv_src.get_source_map(
+            expectation_per_transit = this_conv_pnt_src.get_source_map(
                 energy_bin_id,
                 tag=None,
                 psf_integration_method=self._psf_integration_method,
             )
 
-            expectation_from_this_source = expectation_per_transit * data_analysis_bin.n_transits
+            expectation_from_this_source = (
+                expectation_per_transit * data_analysis_bin.n_transits
+            )
 
             if this_model_map is None:
-
                 # First addition
-
                 this_model_map = expectation_from_this_source
-
             else:
-
                 this_model_map += expectation_from_this_source
-
-        # def compute_expectation(pts_id):
-        #     this_conv_src = self._convolved_point_sources[pts_id]
-        #     expectation_per_transit = this_conv_src.get_source_map(
-        #     energy_bin_id,
-        #     tag=None,
-        #     psf_integration_method=self._psf_integration_method,
-        #     )
-        #     return expectation_per_transit * data_analysis_bin.n_transits
-
-        # with concurrent.futures.ThreadPoolExecutor() as executor:
-        #     results = list(executor.map(compute_expectation, range(n_point_sources)))
-
-        # for expectation_from_this_source in results:
-        #     if this_model_map is None:
-        #         # First addition
-        #         this_model_map = expectation_from_this_source
-        #     else:
-        #         this_model_map += expectation_from_this_source
+        # time_stats['point_sources'] = time.perf_counter() - point_start
 
         # Now process extended sources
         if n_ext_sources > 0:
-
-            this_ext_model_map = None
-
-            # for ext_id in range(n_ext_sources):
-
-            #     this_conv_src = self._convolved_ext_sources[ext_id]
-
-            #     expectation_per_transit = this_conv_src.get_source_map(energy_bin_id)
-
-            #     if this_ext_model_map is None:
-
-            #         # First addition
-
-            #         this_ext_model_map = expectation_per_transit
-
-            #     else:
-
-            #         this_ext_model_map += expectation_per_transit
+            # 统计延展源计算时间
+            # ext_compute_start = time.perf_counter()
+            this_ext_model_map = np.zeros(self._flat_sky_projection.ras.shape[0])
 
             def compute_expectation(ext_id):
-                this_conv_src = self._convolved_ext_sources[ext_id]
+                this_conv_src: Union[
+                    ConvolvedExtendedSource2D, ConvolvedExtendedSource3D
+                ] = self._convolved_ext_sources[ext_id]
                 return this_conv_src.get_source_map(energy_bin_id)
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 results = list(executor.map(compute_expectation, range(n_ext_sources)))
-
+            
             for expectation_per_transit in results:
                 if this_ext_model_map is None:
                     # First addition
-                    this_ext_model_map = expectation_per_transit
+                    this_ext_model_map[expectation_per_transit[0]] = expectation_per_transit[1]
                 else:
-                    this_ext_model_map += expectation_per_transit
+                    this_ext_model_map[expectation_per_transit[0]] += expectation_per_transit[1]
+            # time_stats['ext_sources_compute'] = time.perf_counter() - ext_compute_start
 
-            # Now convolve with the PSF
+            # 统计延展源reshape时间
+            # ext_reshape_start = time.perf_counter()
+            this_ext_model_map = this_ext_model_map.reshape((
+                self._flat_sky_projection.npix_height,
+                self._flat_sky_projection.npix_width
+            )).T
+            # time_stats['ext_sources_reshape'] = time.perf_counter() - ext_reshape_start
+
+            # 统计PSF卷积时间
+            # psf_start = time.perf_counter()
             if this_model_map is None:
-
                 # Only extended sources
-
                 this_model_map = (
-                    self._psf_convolutors[energy_bin_id].extended_source_image(this_ext_model_map)
+                    self._psf_convolutors[energy_bin_id].extended_source_image(
+                        this_ext_model_map
+                    )
                     * data_analysis_bin.n_transits
                 )
-
             else:
-
                 this_model_map += (
-                    self._psf_convolutors[energy_bin_id].extended_source_image(this_ext_model_map)
+                    self._psf_convolutors[energy_bin_id].extended_source_image(
+                        this_ext_model_map
+                    )
                     * data_analysis_bin.n_transits
                 )
+            # time_stats['psf_convolve'] = time.perf_counter() - psf_start
 
+        # 统计坐标转换时间
+        # transform_start = time.perf_counter()
         # Now transform from the flat sky projection to HEALPiX
-
         if this_model_map is not None:
-
             # First divide for the pixel area because we need to interpolate brightness
-            # this_model_map = old_div(this_model_map, self._flat_sky_projection.project_plane_pixel_area)
-            this_model_map = this_model_map / self._flat_sky_projection.project_plane_pixel_area
+            this_model_map = (
+                this_model_map / self._flat_sky_projection.project_plane_pixel_area
+            )
 
             this_model_map_hpx = self._flat_sky_to_healpix_transform[energy_bin_id](
                 this_model_map, fill_value=0.0
@@ -1114,12 +1104,23 @@ class HAL(PluginPrototype):
 
             # Now multiply by the pixel area of the new map to go back to flux
             this_model_map_hpx *= hp.nside2pixarea(data_analysis_bin.nside, degrees=True)
-
         else:
-
             # No sources
-
             this_model_map_hpx = 0.0
+        # time_stats['coordinate_transform'] = time.perf_counter() - transform_start
+
+        # 计算总时间
+        # time_stats['total'] = time.perf_counter() - total_start
+
+        # 打印时间统计信息
+        # print("\n_get_expectation 时间统计:")
+        # print(f"总耗时: {time_stats['total']:.4f}秒")
+        # print(f"  点源处理: {time_stats['point_sources']:.4f}秒 ({time_stats['point_sources']/time_stats['total']*100:.1f}%)")
+        # if n_ext_sources > 0:
+        #     print(f"  延展源计算: {time_stats['ext_sources_compute']:.4f}秒 ({time_stats['ext_sources_compute']/time_stats['total']*100:.1f}%)")
+        #     print(f"  延展源reshape: {time_stats['ext_sources_reshape']:.4f}秒 ({time_stats['ext_sources_reshape']/time_stats['total']*100:.1f}%)")
+        #     print(f"  PSF卷积: {time_stats['psf_convolve']:.4f}秒 ({time_stats['psf_convolve']/time_stats['total']*100:.1f}%)")
+        # print(f"  坐标转换: {time_stats['coordinate_transform']:.4f}秒 ({time_stats['coordinate_transform']/time_stats['total']*100:.1f}%)")
 
         return this_model_map_hpx
 
@@ -1607,3 +1608,165 @@ class HAL(PluginPrototype):
             source1 = PointSource("s%d"%(i),ra=ra_, dec=dec_,spectral_shape=spectrum)
             source.append(source1)
         return source
+    
+    def calcu_flux_of_every_bins(self,source_array,instrument):
+        '''Only fit the spectrum.K for plotting  points on the spectra'''
+        '''prarm1: source array [src1,src2,...] '''
+        '''prarm2: instrument[WCDA or KM2A]'''
+        '''return: spectrum.K'''        
+
+        lm_=Model()
+        instrument_copy= copy.copy(instrument)
+        source_copy_array=[]
+         
+        for source in source_array:
+            source_copy = copy.copy(source)
+            if(str(source_copy.free_parameters.keys()).find("Cutoff_powerlaw")>0):
+                source_copy.spectrum.main.Cutoff_powerlaw.index.fix=True
+                source_copy.spectrum.main.Cutoff_powerlaw.xc.fix=True
+            elif(str(source_copy.free_parameters.keys()).find("Powerlaw")>0):
+                source_copy.spectrum.main.Powerlaw.index.fix=True
+            elif(str(source_copy.free_parameters.keys()).find("Log_parabola")>0):
+                source_copy.spectrum.main.Log_parabola.alpha.fix=True
+                source_copy.spectrum.main.Log_parabola.beta.fix=True
+            if(str(source_copy.free_parameters.keys()).find("position")>0):
+                source_copy.position.ra.fix=True
+                source_copy.position.dec.fix=True
+            if(str(source_copy.free_parameters.keys()).find("Disk_on_sphere")>0):
+                source_copy.Disk_on_sphere.lon0.fix=True
+                source_copy.Disk_on_sphere.lat0.fix=True
+                source_copy.Disk_on_sphere.radius.fix=True
+            if(str(source_copy.free_parameters.keys()).find("Gaussian_on_sphere")>0):
+                source_copy.Gaussian_on_sphere.lon0.fix=True
+                source_copy.Gaussian_on_sphere.lat0.fix=True
+                source_copy.Gaussian_on_sphere.sigma.fix=True
+
+        #source_copy = copy.deepcopy(source)
+            lm_.add_source(source_copy)
+        #lm_.display(complete=True )
+            source_copy_array.append(source_copy)
+
+        source_flux_array = [[0] * len(instrument._active_planes) for _ in range(len(source_array))]
+        for i_,inhit in enumerate(instrument._active_planes):
+            instrument_copy.set_active_measurements(inhit,inhit)
+            datalist_ = DataList(instrument_copy)
+            jl_ = JointLikelihood(lm_, datalist_, verbose=False)
+            jl_.set_minimizer("minuit")
+            param_df1, like_df1 = jl_.fit()
+
+            b=instrument._response.get_response_dec_bin(instrument._roi.ra_dec_center[1])[inhit]
+            flux_yy=np.zeros(len(b.sim_signal_events_per_bin), dtype=float)
+            iii=np.linspace(-3,4,len(b.sim_signal_events_per_bin))
+            th1=ROOT.TH1D("","",len(b.sim_signal_events_per_bin)\
+                  ,np.log10(b.sim_energy_bin_low[0]),np.log10(b.sim_energy_bin_hi[len(b.sim_signal_events_per_bin)-1]))
+
+            for isrc,src in enumerate(source_copy_array):
+                for j in range(len(b.sim_signal_events_per_bin)):
+
+                #print(np.sqrt(b.sim_energy_bin_hi[j]*b.sim_energy_bin_low[j]))
+                    if(str(src.free_parameters.keys()).find("Cutoff")>0):
+                        _flux =  b.sim_signal_events_per_bin[j] \
+                            * src.spectrum.main.Cutoff_powerlaw(1e9*np.sqrt(b.sim_energy_bin_hi[j]*b.sim_energy_bin_low[j]))/b.sim_differential_photon_fluxes[j]
+                    elif(str(src.free_parameters.keys()).find("Pow")>0):
+                        _flux =  b.sim_signal_events_per_bin[j] \
+                            * src.spectrum.main.Powerlaw(1e9*np.sqrt(b.sim_energy_bin_hi[j]*b.sim_energy_bin_low[j]))/b.sim_differential_photon_fluxes[j]
+                    elif(str(src.free_parameters.keys()).find("Log_")>0):
+                        _flux =  b.sim_signal_events_per_bin[j] \
+                            * src.spectrum.main.Log_parabola(1e9*np.sqrt(b.sim_energy_bin_hi[j]*b.sim_energy_bin_low[j]))/b.sim_differential_photon_fluxes[j]
+                    th1.SetBinContent(j+1,1e9*_flux)
+                    flux_yy[j]=_flux
+
+                x_ = ctypes.c_double(1.0)
+                quanti_ = ctypes.c_double(0.5)
+            #fig=plt.figure(figsize=(10,8))
+            #plt.scatter(iii,flux_yy)
+                th1.GetQuantiles(1,x_,quanti_)
+                #print("median= %f , %f TeV"%(np.double(x_),pow(10.,np.double(x_))))
+                if(str(src.free_parameters.keys()).find("Cutoff_powerlaw")>0):
+                    source_flux_array[isrc][i_]=[(pow(10.,np.double(x_))),\
+                                             src.spectrum.main.Cutoff_powerlaw(1e9*pow(10.,np.double(x_))),\
+                                             src.spectrum.main.Cutoff_powerlaw(1e9*pow(10.,np.double(x_)))*param_df1.values[isrc][3]/param_df1.values[isrc][0]]
+                elif(str(src.free_parameters.keys()).find("Pow")>0):
+                    source_flux_array[isrc][i_]=[(pow(10.,np.double(x_))),\
+                                             src.spectrum.main.Powerlaw(1e9*pow(10.,np.double(x_))),\
+                                             src.spectrum.main.Powerlaw(1e9*pow(10.,np.double(x_)))*param_df1.values[isrc][3]/param_df1.values[isrc][0]]
+                elif(str(src.free_parameters.keys()).find("Log_")>0):
+                    source_flux_array[isrc][i_]=[pow(10.,np.double(x_)),\
+                                             src.spectrum.main.Log_parabola(1e9*pow(10.,np.double(x_))),\
+                                             src.spectrum.main.Log_parabola(1e9*pow(10.,np.double(x_)))*param_df1.values[isrc][3]/param_df1.values[isrc][0]]
+
+        for source in source_array:
+            source_copy = copy.copy(source)
+            if(str(source_copy.parameters.keys()).find("Cutoff_powerlaw")>0):
+                source_copy.spectrum.main.Cutoff_powerlaw.index.fix=False
+                source_copy.spectrum.main.Cutoff_powerlaw.xc.fix=False
+
+            elif(str(source_copy.parameters.keys()).find("Powerlaw")>0):
+                source_copy.spectrum.main.Powerlaw.index.fix=False
+            elif(str(source_copy.parameters.keys()).find("Log_parabola")>0):
+                source_copy.spectrum.main.Log_parabola.alpha.fix=False
+                source_copy.spectrum.main.Log_parabola.beta.fix=False
+            if(str(source_copy.parameters.keys()).find("position")>0):
+                source_copy.position.ra.free=True
+                source_copy.position.dec.free=True
+            if(str(source_copy.parameters.keys()).find("Disk_on_sphere")>0):
+                source_copy.Disk_on_sphere.lon0.free=True
+                source_copy.Disk_on_sphere.lat0.free=True
+                source_copy.Disk_on_sphere.radius.free=True
+            if(str(source_copy.parameters.keys()).find("Gaussian_on_sphere")>0):
+                source_copy.Gaussian_on_sphere.lon0.free=True
+                source_copy.Gaussian_on_sphere.lat0.free=True
+                source_copy.Gaussian_on_sphere.sigma.free=True
+
+        return source_flux_array
+
+
+
+    #def write_expectation(self, data_analysis_bin, energy_bin_id, n_point_sources, n_ext_sources):
+    def write_Model_map(self,filename ,binid_start,binid_stop,n_point_sources,n_ext_sources):
+
+        # write the expectation from the model
+        pixid=self._roi.active_pixels(1024)
+        NUM_of_sources=n_point_sources+n_ext_sources
+        model_    = [0] * NUM_of_sources
+        #model_hpx = [0] * NUM_of_sources
+        map_hpx   = [np.zeros(1024*1024*12)] * NUM_of_sources
+        for bid in range(binid_start,binid_stop+1):
+            energy_bin_id=str(bid)
+            data_analysis_bin=self._maptree._analysis_bins[energy_bin_id]
+
+            if(n_point_sources > 0):
+                for pts_id in range(n_point_sources):
+
+                    this_conv_src = self._convolved_point_sources[pts_id]
+
+                    expectation_per_transit = this_conv_src.get_source_map(energy_bin_id,
+                                                                           tag=None,
+                                                                           psf_integration_method=self._psf_integration_method)
+
+                    expectation_from_this_source = expectation_per_transit * data_analysis_bin.n_transits
+
+                    model_[pts_id] +=expectation_from_this_source
+
+            # Now process extended sources
+            if(n_ext_sources > 0):
+                for ext_id in range(n_ext_sources):
+                    this_conv_src = self._convolved_ext_sources[ext_id]
+                    expectation_per_transit = this_conv_src.get_source_map(energy_bin_id)
+                    # Now convolve with the PSF
+                    this_model_map = (self._psf_convolutors[energy_bin_id].extended_source_image(expectation_per_transit) *
+                                        data_analysis_bin.n_transits)
+                    
+                    model_[n_point_sources+ext_id] += this_model_map
+
+            # Now transform from the flat sky projection to HEALPiX
+            # First divide for the pixel area because we need to interpolate brightness
+        for srcs in range(NUM_of_sources):
+            this_model_map = old_div(model_[srcs], self._flat_sky_projection.project_plane_pixel_area)
+
+            this_model_map_hpx = self._flat_sky_to_healpix_transform[energy_bin_id](this_model_map, fill_value=0.0)
+
+            #model_hpx[srcs] = this_model_map_hpx * hp.nside2pixarea(data_analysis_bin.nside, degrees=True)
+            map_hpx[srcs][pixid] = this_model_map_hpx * hp.nside2pixarea(data_analysis_bin.nside, degrees=True)
+
+        hp.write_map("%s_bin_%d_to_%d.fits.gz"%(filename,binid_start,binid_stop),map_hpx,overwrite=True)

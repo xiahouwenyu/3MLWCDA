@@ -1,5 +1,8 @@
 from threeML import *
-from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+try:
+    from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+except:
+    from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 from time import *
 from Mymodels import *
 import os
@@ -23,13 +26,13 @@ from Mylightcurve import p2sigma
 log = setup_logger(__name__)
 log.propagate = False
 
-deltatime = 3
+deltatimek = 0.5  # default delta time for the parameters
 
 #####   Model
 def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             sigma=None,sf=False,sb=None,radius=None,rf=False,rb=None, sigmar=None, sigmarf=False, sigmarb=None,
             ################################ Spectrum
-            k=1.3e-13,kf=False,kb=None,piv=3,pf=True,index=-2.6,indexf=False,indexb=None,alpha=-2.6,alphaf=False,alphab=None,beta=0,betaf=False,betab=None,
+            k=None,kf=False,kb=None,piv=3,pf=True,index=-2.6,indexf=False,indexb=None,alpha=-2.6,alphaf=False,alphab=None,beta=0,betaf=False,betab=None,
             kn=None,
             fitrange=None,
             xc=None, xcf=None, xcb=None,
@@ -48,6 +51,9 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
 
             ################################ EBL
             redshift=None, ebl_model="franceschini",
+
+            ################################ Other parameters
+            deltatimek = deltatimek,  deltap=0.05, deltas=0.05, deltaspec=0.05, # delta time for the parameters
             
             spec=None,
             spat=None,
@@ -69,6 +75,8 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
     
     # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
     fluxUnit = 1e-9
+    if k is None:
+        k = fun_Logparabola(x=piv, K=2.5e-13, alpha=-2.7, belta=0.15, Piv=3)
 
     if spec is None:
         if kn is not None:
@@ -111,6 +119,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             spat.radius.fix = rf
             if rb != None:
                 spat.radius.bounds = rb
+            spat.radius.delta = deltas
     elif spat == "Beta":
         spat = Beta_function()
     elif spat == "DBeta":
@@ -122,6 +131,7 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
             spat.radius.fix = rf
             if rb != None:
                 spat.radius.bounds = rb
+            spat.radius.delta = deltas
     elif spat == "Asymm":
         spat=Asymm_Gaussian_on_sphere()
     elif spat == "Ellipse":
@@ -142,10 +152,14 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
                 source = PointSource(name,ra,dec,spectral_shape=spec*eblfunc)
         else:
             source = PointSource(name,ra,dec,spectral_shape=spec)
-        source.position.ra.free=True
-        source.position.dec.free=True
+        source.position.ra = ra #* u.deg
+        # source.position.ra.free=True
+        # source.position.dec = dec
+        # source.position.dec.free=True
         source.position.ra.fix = raf
         source.position.dec.fix = decf
+        source.position.ra.delta = deltap
+        source.position.dec.delta = deltap
         if rab !=None:
             source.position.ra.bounds=rab
         if decb !=None:
@@ -164,25 +178,30 @@ def setsorce(name,ra,dec,raf=False,decf=False,rab=None,decb=None,
        
 
 
-    def setspatParameter(parname,par,parf,parb,unit=""):
+    def setspatParameter(parname,par,parf,parb,unit="",delta=None):
         nonlocal spat
         nonlocal spec
         prompt = f"""
 if par != None:
     spat.{parname} = par {unit}
     spat.{parname}.fix = parf
+    if delta != None:
+        spat.{parname}.delta = delta {unit}
 if parb != None:
     spat.{parname}.bounds = np.array(parb) {unit}
+
         """
         exec(prompt)
 
-    def setspecParameter(parname,par,parf,parb,unit=""):
+    def setspecParameter(parname,par,parf,parb,unit="",delta=None):
         nonlocal spat
         nonlocal spec
         prompt = f"""
 if par != None:
     spec.{parname} = par {unit}
     spec.{parname}.fix = parf
+    if delta != None:
+        spec.{parname}.delta = delta {unit}
 if parb != None:
     spec.{parname}.bounds = np.array(parb) {unit}
         """
@@ -192,7 +211,7 @@ if parb != None:
     spec.K = k * fluxUnit
     spec.K.fix = kf
     if setdeltabypar:
-        spec.K.delta = deltatime*k * fluxUnit
+        spec.K.delta = deltatimek*k * fluxUnit
     if kn is not None:
         spec.Kn = kn
         spec.Kn.fix = True
@@ -203,19 +222,21 @@ if parb != None:
     spec.piv.fix = pf
 
     if spec.name == "Log_parabola":
-        setspecParameter("alpha",alpha,alphaf,alphab)
-        setspecParameter("beta",beta,betaf,betab)
+        setspecParameter("alpha",alpha,alphaf,alphab,delta=deltaspec)
+        setspecParameter("beta",beta,betaf,betab,delta=deltaspec)
     elif spec.name == "Cutoff_powerlaw" or spec.name == "Cutoff_powerlawM":
         xc=xc*1e9
         xcb=(xcb[0]*1e9, xcb[1]*1e9)
-        setspecParameter("index",index,indexf,indexb)
-        setspecParameter("xc",xc,xcf,xcb)
+        setspecParameter("index",index,indexf,indexb,delta=deltaspec)
+        setspecParameter("xc",xc,xcf,xcb,1e9)
     elif spec.name == "Powerlaw" or spec.name == "PowerlawM" or spec.name == "PowerlawN":
-        setspecParameter("index",index,indexf,indexb)
+        setspecParameter("index",index,indexf,indexb,delta=deltaspec)
     #### set spatial
 
     spat.lon0 = ra
     spat.lat0 = dec
+    spat.lon0.delta = deltap #*u.degree
+    spat.lat0.delta = deltap #*u.degree
     spat.lon0.fix = raf
     spat.lat0.fix = decf
     if rab !=None:
@@ -229,11 +250,12 @@ if parb != None:
     if sigma != None:
         spat.sigma = sigma #*u.degree
         spat.sigma.fix = sf
+        spat.sigma.delta = deltas #*u.degree
     if sb != None:
         spat.sigma.bounds = sb #*u.degree
 
     
-    setspatParameter("rdiff0",rdiff0,rdiff0f,rdiff0b) #,"* u.degree"
+    setspatParameter("rdiff0",rdiff0,rdiff0f,rdiff0b, delta=deltas) #,"* u.degree"
     setspatParameter("delta",delta,deltaf,deltab)
     setspatParameter("uratio",uratio,uratiof,uratiob)
     setspatParameter("b",b,bf,bb)
@@ -1672,7 +1694,7 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepath=None):
+def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepath=None, plot=False, region_name=None, Modelname=None, ra1=None, dec1=None):
     """
         获取简单慢速的拟合残差显著性天图,LIMA显著性
 
@@ -1742,7 +1764,117 @@ def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepat
     # resu = (ON-BK)/np.sqrt(ON)
     if savepath is not None:
         hp.write_map(savepath, resu,  overwrite=True)
-    return resu
+
+    new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
+    new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
+    print(new_source_lon_lat)
+
+    if plot:
+        plt.figure()
+        hp.gnomview(resu,norm='',rot=[ra1,dec1],xsize=200,ysize=200,reso=6,title=Modelname)
+        plt.scatter(new_source_lon_lat[0],new_source_lon_lat[1],marker='x',color='red', label=f"{new_source_lon_lat}")
+        plt.legend()
+        plt.show()
+        plt.savefig(f"../res/{region_name}/{Modelname}WCDA_res_init.png",dpi=300)
+    return resu, new_source_lon_lat
+
+def get_weighted_significance_map(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5,
+                                   savepath=None, plot=False, region_name=None, Modelname=None, ra1=None, dec1=None):
+    """
+    按每个能量bin的信噪比加权合成总的显著性图，并可视化
+    """
+    import numpy as np
+    import healpy as hp
+    import matplotlib.pyplot as plt
+
+    WCDA.set_model(lm)
+    nside = 1024
+    npix = hp.nside2npix(nside)
+    
+    resu_all = []
+    weights = []
+
+    npt = lm.get_number_of_point_sources()
+    next = lm.get_number_of_extended_sources()
+
+    theta, phi = hp.pix2ang(nside, np.arange(npix))
+    theta = np.pi / 2 - theta
+    if alpha is None:
+        alpha = 2 * smooth_sigma * 1.51 / 60. / np.sin(theta)
+
+    for plane_id in WCDA._active_planes:
+        data_map, background_map = WCDA._get_excess(WCDA._maptree[plane_id], all_maps=True)[1:]
+        model_map = WCDA._get_model_map(plane_id, npt, next).as_dense()
+
+        on = data_map
+        off = background_map + model_map
+
+        on[np.isnan(on)] = hp.UNSEEN
+        off[np.isnan(off)] = hp.UNSEEN
+
+        on = hp.ma(on)
+        off = hp.ma(off)
+
+        # 平滑
+        pixarea = 4 * np.pi / npix
+        on1 = hp.smoothing(on, sigma=np.radians(smooth_sigma))
+        on2 = (1. / (4. * np.pi * np.radians(smooth_sigma)**2)) * hp.smoothing(on, sigma=np.radians(smooth_sigma / np.sqrt(2))) * pixarea
+        off1 = hp.smoothing(off, sigma=np.radians(smooth_sigma))
+        off2 = (1. / (4. * np.pi * np.radians(smooth_sigma)**2)) * hp.smoothing(off, sigma=np.radians(smooth_sigma / np.sqrt(2))) * pixarea
+
+        scale = (on1 + off1) / (on2 + off2)
+        ON = on1 * scale
+        BK = off1 * scale
+
+        # 显著性计算
+        if signif == 5:
+            resu = (ON - BK) / np.sqrt(ON + alpha * BK)
+        elif signif == 9:
+            resu = (ON - BK) / np.sqrt(ON * alpha + BK)
+        elif signif == 17:
+            resu = np.sqrt(2) * np.sqrt(
+                ON * np.log((1. + alpha) / alpha * ON / (ON + BK / alpha)) +
+                BK / alpha * np.log((1. + alpha) * BK / alpha / (ON + BK / alpha))
+            )
+            resu[ON < BK] *= -1
+        else:
+            resu = (ON - BK) / np.sqrt(BK)
+
+        resu = hp.ma(resu)
+        resu[np.isnan(resu)] = 0.0
+
+        weight = ON - BK
+        weights.append(weight)
+        resu_all.append(resu)
+
+    # 合并
+    weights = np.array(weights)
+    resu_all = np.array(resu_all)
+
+    total_weight = np.sqrt(np.sum(weights**2, axis=0))
+    total_weight[total_weight == 0] = 1
+    weighted_resu = np.sum(weights * resu_all, axis=0) / total_weight
+
+    if savepath:
+        hp.write_map(savepath, weighted_resu, overwrite=True)
+
+    new_source_idx = np.argmax(weighted_resu)
+    new_source_lon_lat = hp.pix2ang(nside, new_source_idx, lonlat=True)
+    print("New source peak @ (RA, Dec) =", new_source_lon_lat)
+
+    if plot:
+        import os
+        plt.figure()
+        hp.gnomview(weighted_resu, norm='', rot=[ra1, dec1], xsize=200, ysize=200, reso=6, title=Modelname)
+        plt.scatter(new_source_lon_lat[0], new_source_lon_lat[1], marker='x', color='red', label=f"{new_source_lon_lat}")
+        plt.legend()
+        plt.show()
+        if region_name and Modelname:
+            outdir = f"../res/{region_name}"
+            os.makedirs(outdir, exist_ok=True)
+            plt.savefig(f"{outdir}/{Modelname}_weighted_residual.png", dpi=300)
+
+    return weighted_resu, new_source_lon_lat
 
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
     """
@@ -2127,7 +2259,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         hdu = fits.PrimaryHDU(data=dataneed/sa, header=header)
 
         # 保存为 FITS 文件
-        file = f'../../data/{name}_dust_bkg_template.fits'
+        file = f'../../data/Diffusedata/{name}_dust_bkg_template.fits'
         log.info(f"diffuse file path: {file}")
         hdu.writeto(file, overwrite=True)
     # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
@@ -2142,7 +2274,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Diffusespec.K = kk * fluxUnit
         Diffusespec.K.fix=Kf
         if setdeltabypar:
-            Diffusespec.K.delta = deltatime*kk * fluxUnit
+            Diffusespec.K.delta = deltatimek*kk * fluxUnit
 
         if Kb is not None:
             Diffusespec.K.bounds=np.array(Kb) * fluxUnit
@@ -2160,7 +2292,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Diffusespec.K = K * fluxUnit
         Diffusespec.K.fix=Kf
         if setdeltabypar:
-            Diffusespec.K.delta = deltatime*K * fluxUnit
+            Diffusespec.K.delta = deltatimek*K * fluxUnit
         if Kb is not None:
             Diffusespec.K.bounds=np.array(Kb) * fluxUnit
         else:
