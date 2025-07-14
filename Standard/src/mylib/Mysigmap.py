@@ -136,8 +136,8 @@ def getmap(WCDA, roi, name="J0248", signif=17, smoothsigma = [0.42, 0.32, 0.25, 
             log.info("Save!")
             hp.mollview(signal_smoothed,title="Mollview image RING",norm='hist',unit='Excess')
             hp.graticule()
-            plt.savefig("../res/%s_excess_nHit0%s_%.2f.pdf"%(name, bin, smooth_sigma))
-            hp.write_map("../data/%s_nHit0%s_%.2f.fits.gz"%(name, bin, smooth_sigma),[signal, background, signal_smoothed, background_smoothed, signal_smoothed2, background_smoothed2, modelmap, alpha],overwrite=True)
+            plt.savefig(f"{libdir}/../res/%s_excess_nHit0%s_%.2f.pdf"%(name, bin, smooth_sigma))
+            hp.write_map(f"{libdir}/../data/%s_nHit0%s_%.2f.fits.gz"%(name, bin, smooth_sigma),[signal, background, signal_smoothed, background_smoothed, signal_smoothed2, background_smoothed2, modelmap, alpha],overwrite=True)
 
         amap.append([signal, background, modelbkg, 
                      signal_smoothed, background_smoothed, modelbkg_smoothed,
@@ -681,8 +681,8 @@ def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae
     plt.xlabel(r'Significance($\sigma$)')
     plt.ylabel("entries")
     plt.legend()
-    plt.savefig(f"../res/{region_name}/{Modelname}/hist_sig_{name}.pdf")
-    plt.savefig(f"../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
+    plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.pdf")
+    plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
 
 def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908", alpha=None):
     """put in a smooth map and get a sig map.
@@ -773,7 +773,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
     #             kk+=1
 
     ## outfile
-    fout = ROOT.TFile.Open(f"../res/{region_name}/{Modelname}/{outname}.root", 'recreate')
+    fout = ROOT.TFile.Open(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", 'recreate')
     # bininfoout = bininfo.CloneTree()
     # bininfoout = bininfo.CopyTree(f'name >= "{binc[0]}" && name <= "{binc[-1]}"')
     # bininfoout.Write()
@@ -792,7 +792,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
     #         if str(i) not in binc:  
     #             bininfoout.DeleteEntry(i)            
     bininfoout.Write()
-    fout.Write(f"../res/{region_name}/{Modelname}/{outname}.root", ROOT.TFile.kOverwrite)
+    fout.Write(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", ROOT.TFile.kOverwrite)
     fout.Close()
 
 
@@ -800,7 +800,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
     for bin in binc:
         log.info(f'processing at nHit0{bin}')
         ## outfile
-        fout = ROOT.TFile.Open(f"../res/{region_name}/{Modelname}/{outname}.root", 'UPDATE')
+        fout = ROOT.TFile.Open(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", 'UPDATE')
         active_bin = WCDA._maptree._analysis_bins[bin]
 
         # model = WCDA._get_expectation(active_bin,bin,ptid,extid)
@@ -854,7 +854,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
         bkg_dict = {"count": toFill_m["count"]}
 
         # 使用uproot写入树
-        with uproot.update(f"../res/{region_name}/{Modelname}/{outname}.root") as file:
+        with uproot.update(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root") as file:
             file[f"nHit{int(bin):02d}/data"] = data_dict
             file[f"nHit{int(bin):02d}/bkg"] = bkg_dict
 
@@ -872,7 +872,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
         fout.Close()
     forg.Close()
 
-    os.system(f'./tools/llh_skymap/Add_UserInfo ../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
+    os.system(f'./tools/llh_skymap/Add_UserInfo {libdir}/../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
         try:
             from hawc_hal import HealpixConeROI
@@ -883,7 +883,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
             s=int(binc[0])
         if e is None:
             e=int(binc[-1])
-        runllhskymap(roi2, f"../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=s, e=e,jc=jc, sn=sn)
+        runllhskymap(roi2, f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=s, e=e,jc=jc, sn=sn)
     return outname+"_res"
 
 def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
@@ -920,7 +920,7 @@ def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detecto
     skymap=hp.ma(skymap)
     if ifsave:
         print("save")
-        hp.write_map(f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits.gz", skymap, overwrite=True)
+        hp.write_map(f"{libdir}/../res/{region_name}/{Modelname}/{detector}_{inname}.fits.gz", skymap, overwrite=True)
     if ifdraw:
         print("Draw")
         sources={}
@@ -934,7 +934,7 @@ def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detecto
     if tofits:
         print("Draw_fits")
         plt.figure()
-        heal2fits(skymap, f"../res/{region_name}/{Modelname}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
+        heal2fits(skymap, f"{libdir}/../res/{region_name}/{Modelname}/{detector}_{inname}.fits", ra1-data_radius/np.cos(np.radians(dec1)), ra1+data_radius/np.cos(np.radians(dec1)), 0.01/np.cos(np.radians(dec1)), dec1-data_radius, dec1+data_radius, 0.01, ifplot=1, ifnorm=0)
     return skymap
 
 
