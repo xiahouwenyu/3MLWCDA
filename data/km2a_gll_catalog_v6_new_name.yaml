@@ -1,0 +1,65 @@
+source_dict:
+  J1905+0630:
+    sed_model:
+      sed_type: PL
+      norm: [0.7899, 0.0321, 0.0321, 1e-15]
+      index: [3.3454, 0.0626, 0.0626]
+      E_0: 50
+    spatial_model:
+      src_map: J1905+0630_srcmap.root
+      spatial_type: gaussian
+      ra: [286.4007, 0.0768, 0.0768]
+      dec: [6.5000, 0.0763, 0.0763]
+      ext: [1.5866, 0.0611, 0.0611]
+      is_fast_calculating: yes
+    TS: 724.6
+    ts_ext: 693.7
+    ts_100: 90.00
+  J2004+3252:
+    sed_model:
+      sed_type: PL
+      norm: [0.3285, 0.0281, 0.0281, 1e-15]
+      index: [3.0890, 0.1064, 0.1064]
+      E_0: 50
+    spatial_model:
+      src_map: J2004+3252_srcmap.root
+      spatial_type: gaussian
+      ra: [301.0833, 0.4295, 0.4295]
+      dec: [32.8710, 0.3608, 0.3608]
+      ext: [2.3160, 0.1680, 0.1680]
+      is_fast_calculating: yes
+    TS: 148.5
+    ts_ext: 138.1
+    ts_100: 46.90
+  J2028+4052:
+    sed_model:
+      sed_type: PL
+      norm: [1.0484, 0.0342, 0.0342, 1e-15]
+      index: [3.1741, 0.0461, 0.0461]
+      E_0: 50
+    spatial_model:
+      src_map: J2028+4052_srcmap.root
+      spatial_type: gaussian
+      ra: [307.1720, 0.1322, 0.1322]
+      dec: [40.8710, 0.1322, 0.1322]
+      ext: [2.7150, 0.0550, 0.0550]
+      is_fast_calculating: yes
+    TS: 1081.3
+    ts_ext: 1063.2
+    ts_100: 229.40
+  J0633+1647:
+    sed_model:
+      sed_type: PL
+      norm: [1.9778, 0.0493, 0.0493, 1e-15]
+      index: [3.9454, 0.0500, 0.0500]
+      E_0: 50
+    spatial_model:
+      src_map: J0633+1647_srcmap.root
+      spatial_type: gaussian
+      ra: [98.2982, 0.1365, 0.1365]
+      dec: [16.7932, 0.1201, 0.1201]
+      ext: [3.8669, 0.0965, 0.0965]
+      is_fast_calculating: yes
+    TS: 1789.7
+    ts_ext: 1789.7
+    ts_100: 19.30
