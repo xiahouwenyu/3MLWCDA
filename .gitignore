@@ -39,7 +39,6 @@ Standard/src/runtest*
 Standard/src/*.par
 Standard/src/*.pdf
 Standard/src/*.txt
-Standard/src/*.yaml
 Standard/src/*.root
 Standard/src/*.out
 Standard/src/*.png
