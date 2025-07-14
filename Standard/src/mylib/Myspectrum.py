@@ -551,7 +551,7 @@ def Draw_sepctrum_points(region_name, Modelname, FFlux_WCDA, label = "Coma_data"
     else:
         ax = plt.gca()
 
-    np.savetxt(f'../res/{region_name}/{Modelname}/Spectrum_{label}.txt', Fluxdata, delimiter='\t', fmt='%e')
+    np.savetxt(f'{libdir}/../res/{region_name}/{Modelname}/Spectrum_{label}.txt', Fluxdata, delimiter='\t', fmt='%e')
     if ncut==True:
         Flux_WCDA[:,3][Flux_WCDA[:,3]<0]=0
         Flux_WCDA[:,3][Flux_WCDA[:,7]<=0]=0

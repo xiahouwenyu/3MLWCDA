@@ -9,6 +9,7 @@ from Mycatalog import *
 from Mysigmap import *
 import MapPalette
 from tqdm import tqdm
+from Myspeedup import libdir
 
 from Mycoord import *
 from matplotlib.ticker import FormatStrFormatter
@@ -26,9 +27,9 @@ def settransWCDA(WCDA, ra1, dec1, data_radius=None, tansit=None, detector="WCDA"
     if tansit is None:
         import ROOT as rt
         if detector == "WCDA":
-            file = rt.TFile("../../data/Periods_67periods_20240731.root", "READ")
+            file = rt.TFile(f"{libdir}/../../data/Periods_67periods_20240731.root", "READ")
         else:
-            file = rt.TFile("../../data/sky20-cs3_process.root", "READ")
+            file = rt.TFile(f"{libdir}/../../data/sky20-cs3_process.root", "READ")
         hside = file.Get("hSide")
         tsecs = hside.GetNbinsX()
         wbinside = hside.GetXaxis().GetBinWidth(1)
@@ -65,7 +66,7 @@ def settransWCDA(WCDA, ra1, dec1, data_radius=None, tansit=None, detector="WCDA"
     for i in range(6):           
         WCDA._maptree._analysis_bins[str(i)]._n_transits=tansit
 
-def Drawgascontour(file='../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22, oldmethod=0, cmap="Greys", ax=None, coord="C2C", smoothsigma=None):
+def Drawgascontour(file=f'{libdir}/../../data/J0248_co_-55--30_all.fits', levels=np.array([0.2,0.3,0.5,0.7,1,1.5,2,3,4])*1e22, vmin=0.2e22, vmax=1e22, oldmethod=0, cmap="Greys", ax=None, coord="C2C", smoothsigma=None):
     """
         叠加fitscontour
 
@@ -227,7 +228,7 @@ def Draw_diffuse(num = 9, levels=np.array([0.1, 1, 3, 5, 8, 10, 14, 16, 20])*1e-
 
     num=len(levels)
 
-    root_file=ROOT.TFile.Open(("../../data/gll_dust.root"),"read")
+    root_file=ROOT.TFile.Open((f"{libdir}/../../data/gll_dust.root"),"read")
     root_th2d=root_file.Get("gll_region")
     X_nbins=root_th2d.GetNbinsX()
     Y_nbins=root_th2d.GetNbinsY()
@@ -415,11 +416,11 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
 
     if save:
         if plotres:
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}_res.png",dpi=dpi)
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}_res.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/{savename}_res.png",dpi=dpi)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/{savename}_res.pdf")
         else:
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.png",dpi=dpi)
-            plt.savefig(f"../res/{region_name}/{Modelname}/{savename}.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/{savename}.png",dpi=dpi)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/{savename}.pdf")
 
     return fig
 
@@ -570,8 +571,8 @@ def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, 
         plt.ylabel(r"$\frac{excess}{N_{pix}}$")
         plt.legend()
         if ifsave:
-            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.png",dpi=300)
-            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/all_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/all_profile_{region_name}.pdf")
         fig2 = plt.figure()
         plt.errorbar(psfdata[0],psfdata[7],psfdata[2],fmt='o',label="excess", c="black")
         plt.errorbar(psfdata[0],psfdata[8],psfdata[2],fmt='o',label="residual", c="tab:red")
@@ -579,8 +580,8 @@ def Draw_lateral_distribution(region_name, Modelname, map, ra, dec, num, width, 
         plt.ylabel(r"$\frac{excess}{N_{pix}}$")
         plt.legend()
         if ifsave:
-            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
-            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
     return psfdata, pixel_areas
 
 def Draw_lateral_distribution_deg2(region_name, Modelname, map, ra, dec, num, width, ifdraw=False, ifsave=True):
@@ -671,8 +672,8 @@ def Draw_lateral_distribution_deg2(region_name, Modelname, map, ra, dec, num, wi
         plt.ylabel(r"$\frac{excess}{N_{pix}}$")
         plt.legend()
         if ifsave:
-            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.png",dpi=300)
-            plt.savefig(f"../res/{region_name}/{Modelname}/all_profile_{region_name}.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/all_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/all_profile_{region_name}.pdf")
         fig2 = plt.figure()
         plt.errorbar(psfdata[0],psfdata[7],psfdata[2],fmt='o',label="excess", c="black")
         plt.errorbar(psfdata[0],psfdata[8],psfdata[2],fmt='o',label="residual", c="tab:red")
@@ -680,8 +681,8 @@ def Draw_lateral_distribution_deg2(region_name, Modelname, map, ra, dec, num, wi
         plt.ylabel(r"$\frac{excess}{N_{pix}}$")
         plt.legend()
         if ifsave:
-            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
-            plt.savefig(f"../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/eandr_profile_{region_name}.png",dpi=300)
+            plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/eandr_profile_{region_name}.pdf")
     return psfdata, pixel_areas
 
 def getmaskedroi(ra1, dec1, data_radius, maskp=[]):

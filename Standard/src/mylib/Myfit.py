@@ -22,6 +22,7 @@ except:
     pass
 from scipy.optimize import minimize
 from Mylightcurve import p2sigma
+from Myspeedup import libdir
 
 log = setup_logger(__name__)
 log.propagate = False
@@ -820,7 +821,7 @@ def convert_3ml_to_lhaaso(three_ml_model, region_name, Modelname, piv=50, save=T
     
     if save:
         # 保存到文件
-        save_lhaaso_model(lhaaso_model, f"../res/{region_name}/{Modelname}/Model_hsc.yaml")
+        save_lhaaso_model(lhaaso_model, f"{libdir}/../res/{region_name}/{Modelname}/Model_hsc.yaml")
         # import yamA
         # with open(f"../res/{region_name}/{Modelname}/Model_hsc.yaml", "w") as f:
         #     yaml.dump(lhaaso_model, f, default_flow_style=False, sort_keys=False, indent=2)
@@ -1065,12 +1066,12 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
             >>> [jl,result]
     """ 
     activate_progress_bars()
-    if not os.path.exists(f'../res/{regionname}/'):
-        os.system(f'mkdir ../res/{regionname}/')
-    if not os.path.exists(f'../res/{regionname}/{modelname}/'):
-        os.system(f'mkdir ../res/{regionname}/{modelname}/')
+    if not os.path.exists(f'{libdir}/../res/{regionname}/'):
+        os.system(f'mkdir {libdir}/../res/{regionname}/')
+    if not os.path.exists(f'{libdir}/../res/{regionname}/{modelname}/'):
+        os.system(f'mkdir {libdir}/../res/{regionname}/{modelname}/')
 
-    Model.save(f"../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
+    Model.save(f"{libdir}/../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
     if s is not None and e is not None:
         Detector.set_active_measurements(s,e)
     datalist = DataList(Detector)
@@ -1166,20 +1167,20 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
 
     if savefit:
         time1 = strftime("%m-%d-%H", localtime())
-        if not os.path.exists(f'../res/{regionname}/'):
-            os.system(f'mkdir ../res/{regionname}/')
-        if not os.path.exists(f'../res/{regionname}/{modelname}/'):
-            os.system(f'mkdir ../res/{regionname}/{modelname}/')
+        if not os.path.exists(f'{libdir}/../res/{regionname}/'):
+            os.system(f'mkdir {libdir}/../res/{regionname}/')
+        if not os.path.exists(f'{libdir}/../res/{regionname}/{modelname}/'):
+            os.system(f'mkdir {libdir}/../res/{regionname}/{modelname}/')
         
         try:
             fig = Detector.display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True)
-            fig.savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+            fig.savefig(f"{libdir}/../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
         except:
             pass
-        Model.save(f"../res/{regionname}/{modelname}/Model.yml", overwrite=True)
+        Model.save(f"{libdir}/../res/{regionname}/{modelname}/Model.yml", overwrite=True)
         jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
-        jl.results.optimized_model.save(f"../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
-        with open(f"../res/{regionname}/{modelname}/Results.txt", "w") as f:
+        jl.results.optimized_model.save(f"{libdir}/../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
+        with open(f"{libdir}/../res/{regionname}/{modelname}/Results.txt", "w") as f:
             f.write("\nFree parameters:\n")
             for l in freepars:
                 f.write("%s\n" % l)
@@ -1190,8 +1191,8 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
             f.write(str(result[1].iloc[0])+"\n")
             f.write(str(jl.results.get_statistic_measure_frame().to_dict()))
             
-        result[0].to_html(f"../res/{regionname}/{modelname}/Results_detail.html")
-        result[0].to_csv(f"../res/{regionname}/{modelname}/Results_detail.csv")
+        result[0].to_html(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.html")
+        result[0].to_csv(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.csv")
         # new_model_reloaded = load_model("./%s/Model.yml"%(time1))
         # results_reloaded = load_analysis_results("./%s/Results.fits"%(time1))
 
@@ -1343,29 +1344,29 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
 
     if savefit:
         time1 = strftime("%m-%d-%H", localtime())
-        if not os.path.exists(f'../res/{regionname}/'):
-            os.system(f'mkdir ../res/{regionname}/')
-        if not os.path.exists(f'../res/{regionname}/{modelname}/'):
-            os.system(f'mkdir ../res/{regionname}/{modelname}/')
+        if not os.path.exists(f'{libdir}/../res/{regionname}/'):
+            os.system(f'mkdir {libdir}/../res/{regionname}/')
+        if not os.path.exists(f'{libdir}/../res/{regionname}/{modelname}/'):
+            os.system(f'mkdir {libdir}/../res/{regionname}/{modelname}/')
         fig=[]
         for i in range(len(Detector)):
             try:
                 fig.append(Detector[i].display_fit(smoothing_kernel_sigma=0.25, display_colorbar=True))
-                fig[i].savefig(f"../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
+                fig[i].savefig(f"{libdir}/../res/{regionname}/{modelname}/fit_result_{s}_{e}.pdf")
             except:
                 pass
-        Model.save(f"../res/{regionname}/{modelname}/Model.yml", overwrite=True)
-        jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
-        jl.results.optimized_model.save(f"../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
-        with open(f"../res/{regionname}/{modelname}/Results.txt", "w") as f:
+        Model.save(f"{libdir}/../res/{regionname}/{modelname}/Model.yml", overwrite=True)
+        jl.results.write_to(f"{libdir}/../res/{regionname}/{modelname}/Results.fits", overwrite=True)
+        jl.results.optimized_model.save(f"{libdir}/../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
+        with open(f"{libdir}/../res/{regionname}/{modelname}/Results.txt", "w") as f:
             f.write("\nFree parameters:\n")
             for l in freepars:
                 f.write("%s\n" % l)
             f.write("\nFixed parameters:\n")
             for l in fixedpars:
                 f.write("%s\n" % l)
-        result[0].to_html(f"../res/{regionname}/{modelname}/Results_detail.html")
-        result[0].to_csv(f"../res/{regionname}/{modelname}/Results_detail.csv")
+        result[0].to_html(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.html")
+        result[0].to_csv(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.csv")
         # new_model_reloaded = load_model("./%s/Model.yml"%(time1))
         # results_reloaded = load_analysis_results("./%s/Results.fits"%(time1))
 
@@ -2136,9 +2137,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
 
     sources = get_sources(lm)
     if detector=="WCDA":
-        map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
     else:
-        map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
     map2 = maskroi(map2, roi)
     fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi", savename="Oorg")
     plt.show()
@@ -2152,9 +2153,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
     sources = get_sources(lm,bestresult)
     sources.pop("Diffuse")
     if detector=="WCDA":
-        map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
     else:
-        map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
     map2 = maskroi(map2, roi)
     fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
     plt.show()
@@ -2171,9 +2172,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         plt.figure()
         hp.gnomview(resu,norm='',rot=[ra1,dec1],xsize=200,ysize=200,reso=6,title=Modelname)
         plt.scatter(lon_array,lat_array,marker='x',color='red')
-        if not os.path.exists(f'../res/{region_name}_iter/'):
-            os.system(f'mkdir ../res/{region_name}_iter/')
-        plt.savefig(f"../res/{region_name}_iter/{Modelname}_{N_src}.png",dpi=300)
+        if not os.path.exists(f'{libdir}/../res/{region_name}_iter/'):
+            os.system(f'mkdir {libdir}/../res/{region_name}_iter/')
+        plt.savefig(f"{libdir}/../res/{region_name}_iter/{Modelname}_{N_src}.png",dpi=300)
         plt.show()
 
         if not ifnopt:
@@ -2200,9 +2201,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             sources = get_sources(lm,ptresult)
             sources.pop("Diffuse")
             if detector=="WCDA":
-                map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
             else:
-                map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
             map2 = maskroi(map2, roi)
             fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
             plt.show()
@@ -2235,9 +2236,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         sources = get_sources(lm,result)
         sources.pop("Diffuse")
         if detector=="WCDA":
-            map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
         else:
-            map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+            map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
         map2 = maskroi(map2, roi)
         fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
         plt.show()
@@ -2277,12 +2278,12 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
         
         plt.show()
         if(N_src==0):
-            with open(f'../res/{region_name}_iter/{region_name}_TS.txt', "w") as f:
+            with open(f'{libdir}/../res/{region_name}_iter/{region_name}_TS.txt', "w") as f:
                 f.write("\n")
                 f.write("Iter%d TS_total: %f"%(N_src+1,TS_all[-1]) )
                 f.write("\n")
         else:
-            with open(f'../res/{region_name}_iter/{region_name}_TS.txt', "a") as f:
+            with open(f'{libdir}/../res/{region_name}_iter/{region_name}_TS.txt', "a") as f:
                 f.write("\n")
                 f.write("Iter%d TS_total: %f"%(N_src+1,TS_all[-1]) )
                 f.write("\n")
@@ -2298,9 +2299,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  
             sources = get_sources(bestmodel,bestresult)
             sources.pop("Diffuse")
             if detector=="WCDA":
-                map2, skymapHeader = hp.read_map("../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
             else:
-                map2, skymapHeader = hp.read_map("../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
+                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
             map2 = maskroi(map2, roi)
             fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
             plt.show()
