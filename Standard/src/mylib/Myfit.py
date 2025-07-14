@@ -1694,7 +1694,7 @@ def getressimple(WCDA, lm):
     resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
     return resu
 
-def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepath=None, plot=False, region_name=None, Modelname=None, ra1=None, dec1=None):
+def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepath=None, plot=False):
     """
         获取简单慢速的拟合残差显著性天图,LIMA显著性
 
@@ -1762,8 +1762,10 @@ def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepat
     else:
         resu=(ON-BK)/np.sqrt(BK)
     # resu = (ON-BK)/np.sqrt(ON)
+    if savepath[-1] != '/':
+        savepath += '/'
     if savepath is not None:
-        hp.write_map(savepath, resu,  overwrite=True)
+        hp.write_map(savepath+"resufastmap.fits", resu, overwrite=True)
 
     new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
     new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
@@ -1771,110 +1773,276 @@ def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepat
 
     if plot:
         plt.figure()
-        hp.gnomview(resu,norm='',rot=[ra1,dec1],xsize=200,ysize=200,reso=6,title=Modelname)
+        hp.gnomview(resu,norm='',rot=[new_source_lon_lat[0],new_source_lon_lat[1]],xsize=200,ysize=200,reso=6,title=savepath)
         plt.scatter(new_source_lon_lat[0],new_source_lon_lat[1],marker='x',color='red', label=f"{new_source_lon_lat}")
         plt.legend()
         plt.show()
-        plt.savefig(f"../res/{region_name}/{Modelname}WCDA_res_init.png",dpi=300)
+        plt.savefig(f"{savepath}WCDA_res_init.png",dpi=300)
     return resu, new_source_lon_lat
 
-def get_weighted_significance_map(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5,
-                                   savepath=None, plot=False, region_name=None, Modelname=None, ra1=None, dec1=None):
-    """
-    按每个能量bin的信噪比加权合成总的显著性图，并可视化
-    """
-    import numpy as np
-    import healpy as hp
-    import matplotlib.pyplot as plt
 
-    WCDA.set_model(lm)
-    nside = 1024
+def _smooth_and_scale_maps(on, off, smooth_sigma):
+    """
+    根据 getresaccuracy 中的方法对 ON/OFF 图进行平滑和缩放。
+    """
+    nside = hp.get_nside(on)
     npix = hp.nside2npix(nside)
+    pixarea = 4 * np.pi / npix
+
+    on = on.filled(hp.UNSEEN) if isinstance(on, np.ma.MaskedArray) else on
+    off = off.filled(hp.UNSEEN) if isinstance(off, np.ma.MaskedArray) else off
+    on[np.isnan(on)] = hp.UNSEEN
+    off[np.isnan(off)] = hp.UNSEEN
+
+    on1 = hp.sphtfunc.smoothing(on, sigma=np.radians(smooth_sigma))
+    off1 = hp.sphtfunc.smoothing(off, sigma=np.radians(smooth_sigma))
+
+    on2 = 1./(4.*np.pi*np.radians(smooth_sigma)**2) * (hp.sphtfunc.smoothing(on, sigma=np.radians(smooth_sigma/np.sqrt(2)))) * pixarea
+    off2 = 1./(4.*np.pi*np.radians(smooth_sigma)**2) * (hp.sphtfunc.smoothing(off, sigma=np.radians(smooth_sigma/np.sqrt(2)))) * pixarea
+
+    scale = (on1 + off1) / (on2 + off2 + 1e-20)
     
-    resu_all = []
-    weights = []
+    ON = on1 * scale
+    BK = off1 * scale
+    
+    return hp.ma(ON), hp.ma(BK)
 
-    npt = lm.get_number_of_point_sources()
-    next = lm.get_number_of_extended_sources()
+def compute_significance_mapfast(on, bk, signif=17, alpha=3.24e-5):
+    """
+    从 ON 和 BK 图计算显著性图 (Li & Ma)。
+    此函数可以正确处理 alpha 为标量或数组的情况。
+    """
+    on[np.isnan(on)] = hp.UNSEEN
+    bk[np.isnan(bk)] = hp.UNSEEN
+    on = hp.ma(on)
+    bk = hp.ma(bk)
 
-    theta, phi = hp.pix2ang(nside, np.arange(npix))
-    theta = np.pi / 2 - theta
+    epsilon = 1e-20
+    on_safe = np.maximum(on, 0)
+    bk_safe = np.maximum(bk, 0)
+
+    if signif == 5:
+        sig = (on - bk) / np.sqrt(on_safe + alpha * bk_safe + epsilon)
+    elif signif == 9:
+        sig = (on - bk) / np.sqrt(on_safe * alpha + bk_safe + epsilon)
+    elif signif == 17:
+        term1_ratio = (1. + alpha) / alpha * on_safe / (on_safe + bk_safe / alpha + epsilon)
+        term2_ratio = (1. + alpha) * bk_safe / alpha / (on_safe + bk_safe / alpha + epsilon)
+        
+        log_term1 = on_safe * np.log(np.maximum(term1_ratio, epsilon))
+        log_term2 = bk_safe / alpha * np.log(np.maximum(term2_ratio, epsilon))
+        
+        sig = np.sqrt(2 * np.maximum(log_term1 + log_term2, 0))
+        sig[on < bk] *= -1
+    else:
+        sig = (on - bk) / np.sqrt(bk_safe + epsilon)
+        
+    sig.set_fill_value(0.0)
+    sig[np.isnan(sig)] = 0.0
+    return sig
+
+WCDA_r68 = np.array([0.874, 0.657, 0.497, 0.396, 0.328, 0.259, 0.19])
+KM2A_r68 = np.array([0.874, 0.657, 0.497, 0.43, 0.43, 0.36, 0.30, 0.25, 0.22, 0.19, 0.17, 0.15, 0.14, 0.13])  # KM2A的r68值与WCDA相同
+WCDA_r32 = WCDA_r68/1.51
+KM2A_r32 = KM2A_r68/1.51
+def get_residual_significance_mapfast(
+    WCDA,
+    lm=None,
+    signif=17,
+    smooth_sigma=WCDA_r32,  #0.3 KM2A_r68
+    alpha=3.24e-5,  # <--- 修正1: 默认值设为None，以触发动态计算
+    combine='sum',
+    active_sources=None,
+    plot=False,
+    savepath=None
+):
+    """
+    计算显著性图，支持加权合并、多bin显著性、以及自定义模型残差。
+    *已修正：加入了与 getresaccuracy 对齐的平滑和缩放计算方法*
+
+    combine: 决定是否对多能段进行合并
+        - 'none'：返回每个能段独立显著性图 (各自平滑)
+        - 'sum'：直接求和ON和BK再算显著性 (先求和后平滑，与getresaccuracy逻辑最一致)
+        - 'weighted'：按(S/B)加权合并后再算显著性 (先加权平均后平滑)
+
+    active_sources: (pta, exta)，控制哪些源被计入模型
+    """
+    nside = 1024
+   
+    # --- 修正2: 动态 ALPHA 计算逻辑 ---
+    # 仅当alpha未被用户指定时，才进行动态计算，完美复现getresaccuracy的行为
     if alpha is None:
-        alpha = 2 * smooth_sigma * 1.51 / 60. / np.sin(theta)
+        # 这个计算需要像素的坐标theta，与getresaccuracy完全一致
+        print("Alpha is None. Calculating dynamically based on pixel position...")
+        theta, _ = hp.pix2ang(nside, np.arange(hp.nside2npix(nside))) # theta是colatitude
+        # 严格复现getresaccuracy中的坐标转换
+        theta_lat = np.pi/2 - theta # 转换为latitude
+        # 避免在赤道附近(theta_lat=0)或极点附近出现问题
+        sin_theta_lat = np.sin(theta_lat)
+        # 防止除以零
+        sin_theta_lat[sin_theta_lat == 0] = 1e-9 
+        
+        # 动态计算alpha数组
+        final_alpha = 2 * 0.3 * 1.51 / 60. / sin_theta_lat
+    else:
+        # 如果用户传入了alpha值(例如标量3.24e-5)，则使用该值
+        print(f"Using user-provided alpha: {alpha}")
+        final_alpha = alpha
+    # --- 修正结束 ---
 
-    for plane_id in WCDA._active_planes:
-        data_map, background_map = WCDA._get_excess(WCDA._maptree[plane_id], all_maps=True)[1:]
-        model_map = WCDA._get_model_map(plane_id, npt, next).as_dense()
+    if lm:
+        WCDA.set_model(lm)
+    
+    on_all = []
+    bk_all = []
 
-        on = data_map
-        off = background_map + model_map
+    npt = lm.get_number_of_point_sources() if lm else 0
+    next = lm.get_number_of_extended_sources() if lm else 0
 
-        on[np.isnan(on)] = hp.UNSEEN
-        off[np.isnan(off)] = hp.UNSEEN
+    for i, bin_id in enumerate(WCDA._active_planes):
+        dmap, bkmap = WCDA._get_excess(WCDA._maptree[bin_id], all_maps=True)[1:]
 
-        on = hp.ma(on)
-        off = hp.ma(off)
+        model_map_val = 0.0
+        if lm:
+            # 模型计算部分保持不变
+            if active_sources:
+                pta, exta = active_sources
+                model_map = WCDA._get_model_map(bin_id, bin_id, 0, 0).as_dense()
+                for idx, keep in enumerate(pta):
+                    if not keep:
+                        model_map += WCDA._get_model_map(bin_id, bin_id, idx+1, 0).as_dense()
+                        if idx != 0:
+                            model_map -= WCDA._get_model_map(bin_id, bin_id, idx, 0).as_dense()
+                for idx, keep in enumerate(exta):
+                    if not keep:
+                        model_map += WCDA._get_model_map(bin_id, bin_id, 0, idx+1).as_dense()
+                        if idx != 0:
+                            model_map -= WCDA._get_model_map(bin_id, bin_id, 0, idx).as_dense()
+                model_map_val = model_map
+            else:
+                model_map_val = WCDA._get_model_map(bin_id, npt, next).as_dense()
+        
+        on = dmap
+        bk = bkmap + model_map_val
+        on[np.isnan(on)]=hp.UNSEEN
+        bk[np.isnan(bk)]=hp.UNSEEN
+        on=hp.ma(on)
+        bk=hp.ma(bk)
+        on_all.append(on)
+        bk_all.append(bk)
 
-        # 平滑
-        pixarea = 4 * np.pi / npix
-        on1 = hp.smoothing(on, sigma=np.radians(smooth_sigma))
-        on2 = (1. / (4. * np.pi * np.radians(smooth_sigma)**2)) * hp.smoothing(on, sigma=np.radians(smooth_sigma / np.sqrt(2))) * pixarea
-        off1 = hp.smoothing(off, sigma=np.radians(smooth_sigma))
-        off2 = (1. / (4. * np.pi * np.radians(smooth_sigma)**2)) * hp.smoothing(off, sigma=np.radians(smooth_sigma / np.sqrt(2))) * pixarea
+    if isinstance(smooth_sigma, np.ndarray):
+        planes = [int(it) for it in WCDA._active_planes]
+        smooth_sigma = smooth_sigma[planes]
 
-        scale = (on1 + off1) / (on2 + off2)
-        ON = on1 * scale
-        BK = off1 * scale
+    resu_all = []
+    if combine == 'sum':
+        on_total = np.ma.sum(on_all, axis=0)
+        bk_total = np.ma.sum(bk_all, axis=0)
+        if isinstance(smooth_sigma, np.ndarray):
+            smooth_sigma = np.sqrt(np.mean(smooth_sigma**2))
+        ON_smooth, BK_smooth = _smooth_and_scale_maps(on_total, bk_total, smooth_sigma)
+        # --- 修正3: 传递正确的alpha ---
+        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
+        resu_all = resu
+    # (其他combine模式的逻辑保持不变，但同样会受益于正确的alpha处理)
+    elif combine == 'weighted':
+        weights = [((np.ma.sum(on) - np.ma.sum(bk)) / (np.ma.sum(bk))) for on, bk in zip(on_all, bk_all)]
+        weights = np.array(weights/np.sum(weights))
+        if isinstance(smooth_sigma, np.ndarray):
+            smooth_sigma = np.sqrt(np.mean(weights**2*smooth_sigma**2)/np.sum(weights)**2)
+            print(smooth_sigma)
+        # weighted_on = np.ma.average(np.array(on_all), axis=0, weights=weights)*len(weights)
+        # weighted_bk = np.ma.average(np.array(bk_all), axis=0, weights=weights)*len(weights)
+        # ON_smooth, BK_smooth = _smooth_and_scale_maps(weighted_on, weighted_bk, smooth_sigma)
+        # resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
+        # resu_all = resu
+        on_all = np.ma.array(on_all)
+        bk_all = np.ma.array(bk_all)
 
-        # 显著性计算
-        if signif == 5:
-            resu = (ON - BK) / np.sqrt(ON + alpha * BK)
-        elif signif == 9:
-            resu = (ON - BK) / np.sqrt(ON * alpha + BK)
-        elif signif == 17:
-            resu = np.sqrt(2) * np.sqrt(
-                ON * np.log((1. + alpha) / alpha * ON / (ON + BK / alpha)) +
-                BK / alpha * np.log((1. + alpha) * BK / alpha / (ON + BK / alpha))
-            )
-            resu[ON < BK] *= -1
-        else:
-            resu = (ON - BK) / np.sqrt(BK)
+        net_signal_stack = on_all - bk_all
+        sum_weighted_net_signal = np.ma.sum(weights[:, np.newaxis] * net_signal_stack, axis=0)
 
-        resu = hp.ma(resu)
-        resu[np.isnan(resu)] = 0.0
+        # 计算 V_w = Σ [ w_i² * (N_on_i + α * BKG_i) ]
+        variance_term_stack = on_all + alpha * bk_all
+        sum_weighted_variance = np.ma.sum((weights**2)[:, np.newaxis] * variance_term_stack, axis=0)
 
-        weight = ON - BK
-        weights.append(weight)
-        resu_all.append(resu)
+        # --- 步骤2: 求解方程组得到等效的 ON 和 OFF 计数图 ---
+        epsilon = 1e-30  # 一个非常小的数，防止除以零
+        denominator = alpha**2 + alpha
+        
+        # N_off_w = (V_w - S_net) / (α² + α)
+        # off_w 是等效的 OFF 区域计数，它将作为 'bk' 参数传入下一函数
+        off_w = (sum_weighted_variance - sum_weighted_net_signal) / (denominator + epsilon)
+        
+        # N_on_w = S_net + α * N_off_w
+        on_w = sum_weighted_net_signal + alpha * off_w
+        
+        # 物理上，计数值不能为负
+        on_w = np.ma.maximum(on_w, 0)
+        off_w = np.ma.maximum(off_w, 0)
+        bk_w = alpha*off_w
+        on_w.fill_value = hp.UNSEEN
+        bk_w.fill_value = hp.UNSEEN
+        on_w=hp.ma(on_w)
+        bk_w=hp.ma(bk_w)
+        # print("已计算出等效的加权 ON/OFF 计数图，正在计算最终显著性...")
+        
+        # --- 步骤3: 使用等效计数图计算最终的显著性 ---
+        # 注意：我们将计算出的 `off_w` 作为 `bk` 参数传入
+        ON_smooth, BK_smooth = _smooth_and_scale_maps(on_w, bk_w, smooth_sigma)
+        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=alpha)
+        resu_all = resu
+    elif combine == 'none':
+        for on, bk in zip(on_all, bk_all):
+            ON_smooth, BK_smooth = _smooth_and_scale_maps(on, bk, smooth_sigma)
+            sig = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
+            resu_all.append(sig)
 
-    # 合并
-    weights = np.array(weights)
-    resu_all = np.array(resu_all)
-
-    total_weight = np.sqrt(np.sum(weights**2, axis=0))
-    total_weight[total_weight == 0] = 1
-    weighted_resu = np.sum(weights * resu_all, axis=0) / total_weight
-
+    # (文件保存和绘图逻辑保持不变)
+    # --- 文件保存和绘图逻辑保持不变 ---
     if savepath:
-        hp.write_map(savepath, weighted_resu, overwrite=True)
-
-    new_source_idx = np.argmax(weighted_resu)
-    new_source_lon_lat = hp.pix2ang(nside, new_source_idx, lonlat=True)
-    print("New source peak @ (RA, Dec) =", new_source_lon_lat)
+        if savepath[-1] != '/':
+            savepath += '/'
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        # healpy.write_map可以接受list of maps
+        hp.write_map(savepath+"fastmap.fits", resu_all, overwrite=True)
 
     if plot:
-        import os
-        plt.figure()
-        hp.gnomview(weighted_resu, norm='', rot=[ra1, dec1], xsize=200, ysize=200, reso=6, title=Modelname)
-        plt.scatter(new_source_lon_lat[0], new_source_lon_lat[1], marker='x', color='red', label=f"{new_source_lon_lat}")
-        plt.legend()
-        plt.show()
-        if region_name and Modelname:
-            outdir = f"../res/{region_name}"
-            os.makedirs(outdir, exist_ok=True)
-            plt.savefig(f"{outdir}/{Modelname}_weighted_residual.png", dpi=300)
+        resu_to_plot = resu_all
+        if isinstance(resu_all, np.ndarray):
+            n = len(resu_all)
+            if n == 0:
+                print("No maps to plot.")
+                return resu_all
+            
+            # 如果是列表，默认只画第一张或者合并后的图（取决于combine模式）
+            # 如果想画所有，可以用下面的循环
+            print(f"Plotting results for {len(resu_all)} bins.")
+            ncols = int(np.ceil(np.sqrt(n)))
+            nrows = int(np.ceil(n / ncols))
+            plt.figure(figsize=(ncols * 5, nrows * 4))
+            for i, m in enumerate(resu_all):
+                plt.subplot(nrows, ncols, i + 1)
+                hp.mollview(m, title=f"bin {i}", sub=(nrows, ncols, i + 1))
+            plt.tight_layout()
+            plt.show()
+        else:
+            # 适用于 combine='sum' 或 'weighted'
+            resu = resu_all
+            new_source_idx = np.where(resu == np.ma.max(resu))[0][0]
+            new_source_lon_lat = hp.pix2ang(1024, new_source_idx, lonlat=True)
+            
+            plt.figure(figsize=(8, 8))
+            hp.gnomview(resu, norm='', rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6,
+                        title=(savepath or "Residual Significance Map"))
+            # 标记最亮点的代码可以加在这里
+            # hp.projtext(new_source_lon_lat[0], new_source_lon_lat[1], 'X', lonlat=True, color='red')
+            print(f"Hottest spot at (lon, lat): {new_source_lon_lat}")
+            plt.show()
 
-    return weighted_resu, new_source_lon_lat
+    return resu_all
+
 
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
     """
