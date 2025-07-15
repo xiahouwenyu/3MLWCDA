@@ -1766,26 +1766,27 @@ def find_and_update_fits_model_paths(
     except Exception as e:
         print(f"处理FITS文件时发生错误: {e}")
 
-def load_modelpath(modelpath):
+def load_modelpath(modelpath, changediffusedir=False):
     # silence_warnings()
     if modelpath[-1] == "/":
         modelpath = modelpath[:-1]
-    try:
+    if changediffusedir:
         find_and_update_fits_model_paths(modelpath+"/Results.fits")
+        process_yaml_file(modelpath+"/Model_init.yml")
+        process_yaml_file(modelpath+"/Model_opt.yml")
+    try:
         results = load_analysis_results(modelpath+"/Results.fits")
     except Exception as e:
         print("No results found:", e)
         results = None
 
     try:
-        process_yaml_file(modelpath+"/Model_init.yml")
         lmini = load_model(modelpath+"/Model_init.yml")
     except Exception as e:
         print("No initial model found", e)
         lmini = None
 
     try:
-        process_yaml_file(modelpath+"/Model_opt.yml")
         lmopt = load_model(modelpath+"/Model_opt.yml")
     except Exception as e:
         print("No optimized model found", e)

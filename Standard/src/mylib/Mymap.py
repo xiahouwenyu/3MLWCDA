@@ -272,7 +272,7 @@ def smooth_array(arr):
             arr[i] = np.mean([arr[max(0, i-1)], arr[min(len(arr), i+1)]])
     return arr
 
-def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False, dpi=300, threshold=3):
+def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad=5, radx=5,rady=2.5,contours=[3,5],colorlabel="Excess",color="Fermi", plotres=False, save=False, cat={"TeVCat":[1,"s"],"PSR":[0,"*"],"SNR":[1,"o"], "size":20, "markercolor": "black",  "labelcolor": "black","angle": 60, "catext": 0}, ifDrawgascontour=False, Drawdiff=False, zmin=None, zmax=None, xsize = 2048, plotmol=False, savename="", grid=False, dpi=300, threshold=3, tiks=None):
     """Draw healpixmap.
 
         Args:
@@ -323,7 +323,12 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
         hp.graticule()
         plt.savefig(f"fullskymol+{savename}.pdf", dpi=dpi)\
         
-    fig = plt.figure(dpi=dpi, figsize=figsize)
+    
+    if tiks:
+        img[img>=np.max(tiks)]=np.max(tiks)-0.01      
+        img[img<=np.min(tiks)]=np.min(tiks)+0.01
+
+    fig = plt.figure(dpi=dpi, figsize=figsize)  
     plt.imshow(img, origin="lower",extent=[xmin,xmax,ymin,ymax],vmin=dMin,vmax=dMax, cmap=colormap) #
 
     if grid:
@@ -332,57 +337,56 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
                             fraction=0.1,
                             #aspect=25,
                             pad=0.15)
+    if tiks is None:
+        if np.max(img)<4:
+            tiks = np.concatenate(([np.min(img)],[np.mean(img)],[np.max(img)]))
+        elif np.max(img)<6:
+            tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[np.max(img)]))
+        elif np.max(img)<20:
+            tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[5],[np.max(img)]))
+        elif np.max(img)<30:
+            tiks = np.concatenate(([np.min(img)],[5],[np.max(img)]))
+        else:
+            tiks = np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)]))
+        
+        if zmax !=None:
+            if tiks[tiks>=zmax] != []:
+                tiks[-1]=zmax
+            else:
+                tiks=np.concatenate((tiks,[zmax]))
+        if zmin !=None:
+            if tiks[tiks<=zmin] != []:
+                tiks[0]=zmin
+            else:
+                
+                tiks= np.concatenate(([zmin],tiks))
+        j=0
+        for i in range(len(tiks)):
+            # if i<=len(tiks):
+            if (zmin is not None and (tiks[j]-zmin)<=1.5 and (tiks[j]-zmin)>0) or (zmax is not None and (zmax-tiks[j])<=1.5 and (zmax-tiks[j])>0):
+                tiks = np.delete(tiks, j)
+                j-=1
+            j+=1
 
     cbar.set_label(colorlabel)
-    if np.max(img)<4:
-        tiks = np.concatenate(([np.min(img)],[np.mean(img)],[np.max(img)]))
-    elif np.max(img)<6:
-        tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[np.max(img)]))
-    elif np.max(img)<20:
-        tiks = np.concatenate(([np.min(img)],[np.mean(img)],[3],[5],[np.max(img)]))
-    elif np.max(img)<30:
-        tiks = np.concatenate(([np.min(img)],[5],[np.max(img)]))
-    else:
-        tiks = np.concatenate(([np.min(img)],[np.mean([np.min(img),np.max(img)])],[np.max(img)]))
-    
-    if zmax !=None:
-        if tiks[tiks>=zmax] != []:
-            tiks[-1]=zmax
-        else:
-            tiks=np.concatenate((tiks,[zmax]))
-    if zmin !=None:
-        if tiks[tiks<=zmin] != []:
-            tiks[0]=zmin
-        else:
-            
-            tiks= np.concatenate(([zmin],tiks))
-    j=0
-    for i in range(len(tiks)):
-        # if i<=len(tiks):
-        if (zmin is not None and (tiks[j]-zmin)<=1.5 and (tiks[j]-zmin)>0) or (zmax is not None and (zmax-tiks[j])<=1.5 and (zmax-tiks[j])>0):
-            tiks = np.delete(tiks, j)
-            j-=1
-        j+=1
-        
     # tiks = [f'{tick:.1f}' for tick in tiks]
     cbar.set_ticks(tiks)
     cbar.ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     #,cbar.get_ticks()
+    if contours is not None:
+        contp = plt.contour(img,levels=np.sort(contours),colors='g',linestyles = '-',linewidths = 2,origin='upper',extent=[xmin, xmax, ymax, ymin])
+        fmt = {}
+        strs=[]
+        for i in range(len(contours)):
+            strs.append('%d$\sigma$'%(contours[i]))
+        for l, s in zip(contp.levels, strs):
+            fmt[l] = s
 
-    contp = plt.contour(img,levels=np.sort(contours),colors='g',linestyles = '-',linewidths = 2,origin='upper',extent=[xmin, xmax, ymax, ymin])
-    fmt = {}
-    strs=[]
-    for i in range(len(contours)):
-        strs.append('%d$\sigma$'%(contours[i]))
-    for l, s in zip(contp.levels, strs):
-        fmt[l] = s
+        CLabel = plt.clabel(contp, contp.levels, use_clabeltext=True, rightside_up=True, inline=1, fmt=fmt, fontsize=10)
 
-    CLabel = plt.clabel(contp, contp.levels, use_clabeltext=True, rightside_up=True, inline=1, fmt=fmt, fontsize=10)
-
-    for l in CLabel:
-        l.set_rotation(180)
-
+        for l in CLabel:
+            l.set_rotation(180)
 
     plt.xlabel(r"$\alpha$ [$^\circ$]")
     plt.ylabel(r"$\delta$ [$^\circ$]")
@@ -394,7 +398,6 @@ def hpDraw(region_name, Modelname, map, ra, dec, coord = 'C', skyrange=None, rad
     if Drawdiff:
         Draw_diffuse()
     
-
     plt.gca().set_aspect(1./np.cos((ymax+ymin)/2*np.pi/180))
     plt.gca().invert_xaxis()
     # plt.scatter(ra, dec, s=20**2,marker="+", facecolor="#000000", color="#000000")

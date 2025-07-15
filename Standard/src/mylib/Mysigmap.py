@@ -1209,8 +1209,6 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
     pixid=roi.active_pixels(1024)
     npix = hp.nside2npix(1024)
 
-    ptid = len(pta)
-    extid = len(exta)
     if binc=="all":
         binc = WCDA._active_planes
 
@@ -1354,7 +1352,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
         fout.Close()
     forg.Close()
 
-    os.system(f'./tools/llh_skymap/Add_UserInfo {libdir}/../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
+    os.system(f'{libdir}/tools/llh_skymap/Add_UserInfo {libdir}/../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
     if ifrunllh:
         try:
             from hawc_hal import HealpixConeROI
