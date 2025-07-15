@@ -1597,24 +1597,74 @@ def hDparscan(pars, nums, GRBlike, altr_hypo):
     custom_corner_plot(-result,trails,pars)
     return result, trails
 
+def process_yaml_file(file_path: str) -> None:
+    """
+    处理 YAML 文件，修改所有 fits_file.value 路径
+    
+    Args:
+        file_path: YAML 文件路径
+        libdir: 要添加的库目录路径
+    """
+    import yaml
+    def process_value(path: str) -> str:
+        """处理单个路径字符串"""
+        # 处理 ../data/ 但缺少 Diffusedata 的情况
+        if '../data/' in path and 'Diffusedata' not in path:
+            parts = path.split('../data/')
+            path = f"../data/Diffusedata/{parts[1]}"
+        
+        print("here", path)
+        # 处理 ../../ 开头的情况
+        if '../' in path and '/../../' not in path:
+            path = f"{libdir}/../../{path.replace('../', '')}"
+            print("here2", path)
+        return path
+
+    def traverse(node) -> None:
+        """递归遍历 YAML 结构"""
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == 'fits_file' and isinstance(value, dict) and 'value' in value.keys():
+                    value['value'] = process_value(value['value'])
+                else:
+                    traverse(value)
+        elif isinstance(node, list):
+            for item in node:
+                traverse(item)
+
+    # 读取 YAML 文件
+    with open(file_path, 'r') as f:
+        data = yaml.safe_load(f) or {}
+
+    # 处理所有嵌套的 fits_file
+    traverse(data)
+
+    # 保存修改后的 YAML 文件
+    with open(file_path, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
 def load_modelpath(modelpath):
     # silence_warnings()
+    if modelpath[-1] == "/":
+        modelpath = modelpath[:-1]
     try:
         results = load_analysis_results(modelpath+"/Results.fits")
-    except:
-        print("No results found")
+    except Exception as e:
+        print("No results found:", e)
         results = None
 
     try:
+        process_yaml_file(modelpath+"/Model_init.yml")
         lmini = load_model(modelpath+"/Model_init.yml")
-    except:
-        print("No initial model found")
+    except Exception as e:
+        print("No initial model found", e)
         lmini = None
 
     try:
+        process_yaml_file(modelpath+"/Model_opt.yml")
         lmopt = load_model(modelpath+"/Model_opt.yml")
-    except:
-        print("No optimized model found")
+    except Exception as e:
+        print("No optimized model found", e)
         lmopt = None
 
     # activate_warnings()
@@ -1794,6 +1844,8 @@ def _smooth_and_scale_maps(on, off, smooth_sigma):
     off = off.filled(hp.UNSEEN) if isinstance(off, np.ma.MaskedArray) else off
     on[np.isnan(on)] = hp.UNSEEN
     off[np.isnan(off)] = hp.UNSEEN
+    on[np.isinf(on)] = hp.UNSEEN
+    off[np.isinf(off)] = hp.UNSEEN
 
     on1 = hp.sphtfunc.smoothing(on, sigma=np.radians(smooth_sigma))
     off1 = hp.sphtfunc.smoothing(off, sigma=np.radians(smooth_sigma))
@@ -1905,6 +1957,7 @@ def get_residual_significance_mapfast(
 
         model_map_val = 0.0
         if lm:
+            Residual = "Residual"
             # 模型计算部分保持不变
             if active_sources:
                 pta, exta = active_sources
@@ -1922,6 +1975,8 @@ def get_residual_significance_mapfast(
                 model_map_val = model_map
             else:
                 model_map_val = WCDA._get_model_map(bin_id, npt, next).as_dense()
+        else:
+            Residual = ""
         
         on = dmap
         bk = bkmap + model_map_val
@@ -1948,57 +2003,55 @@ def get_residual_significance_mapfast(
         resu_all = resu
     # (其他combine模式的逻辑保持不变，但同样会受益于正确的alpha处理)
     elif combine == 'weighted':
-        weights = [((np.ma.sum(on) - np.ma.sum(bk)) / (np.ma.sum(bk))) for on, bk in zip(on_all, bk_all)]
-        weights = np.array(weights/np.sum(weights))
+        # --- 步骤 1: 计算权重 (Signal-to-Background Ratio) ---
+        # 这个权重计算是合理的，我们保留它。
+        # 使用 BKG 作为背景的估计值，计算每个能段的 S/B 值作为权重。
+        # 为防止分母为0，增加一个极小值epsilon。
+        # 注意：这里我们使用非归一化的 S/B 比值作为权重，这样更能体现高 S/B 能段的贡献。
+        weights = [(np.ma.sum(on - bk)) / (np.ma.sum(bk) + 1e-9) for on, bk in zip(on_all, bk_all)]
+        weights = np.maximum(0, np.array(weights)) # 权重不能是负数
+
+        # 计算加权平均的平滑尺度
         if isinstance(smooth_sigma, np.ndarray):
-            smooth_sigma = np.sqrt(np.mean(weights**2*smooth_sigma**2)/np.sum(weights)**2)
-            print(smooth_sigma)
-        # weighted_on = np.ma.average(np.array(on_all), axis=0, weights=weights)*len(weights)
-        # weighted_bk = np.ma.average(np.array(bk_all), axis=0, weights=weights)*len(weights)
-        # ON_smooth, BK_smooth = _smooth_and_scale_maps(weighted_on, weighted_bk, smooth_sigma)
-        # resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
-        # resu_all = resu
-        on_all = np.ma.array(on_all)
-        bk_all = np.ma.array(bk_all)
+            # 使用权重本身(w)或其平方(w^2)作为加权平均的“权”都是常见的选择
+            # 这里我们用权重的平方来计算，给高S/B的能段更大影响力
+            if np.sum(weights**2) > 0:
+                avg_sigma_sq = np.sum(weights**2 * smooth_sigma**2) / np.sum(weights**2)
+                smooth_sigma = np.sqrt(avg_sigma_sq)
+            else:
+                smooth_sigma = np.mean(smooth_sigma)
+            print(f"Calculated weighted average sigma: {smooth_sigma}")
 
-        net_signal_stack = on_all - bk_all
-        sum_weighted_net_signal = np.ma.sum(weights[:, np.newaxis] * net_signal_stack, axis=0)
+        # --- 步骤 2: 【全新方法】直接对 ON 图和 BKG 图进行加权求和 ---
+        # 这是最核心的修正。我们不再求解复杂的方程，而是直接构建加权的 on_w 和 bkg_w。
+        
+        on_all_np = np.ma.array(on_all)
+        bk_all_np = np.ma.array(bk_all) # bk_all_np 是 BKG 地图列表
 
-        # 计算 V_w = Σ [ w_i² * (N_on_i + α * BKG_i) ]
-        variance_term_stack = on_all + alpha * bk_all
-        sum_weighted_variance = np.ma.sum((weights**2)[:, np.newaxis] * variance_term_stack, axis=0)
+        # 对每个像素，将其在所有能段的计数值按 S/B 权重进行加权求和
+        # weights[:, np.newaxis] 将一维权重数组扩展成 (n_bins, 1)，以便与 (n_bins, n_pixels) 的地图数组进行广播乘法
+        on_w = np.ma.sum(weights[:, np.newaxis] * on_all_np, axis=0)
+        bkg_w = np.ma.sum(weights[:, np.newaxis] * bk_all_np, axis=0)
+        
+        print("已通过直接加权求和方法，生成合并后的 ON 和 BKG 地图。")
 
-        # --- 步骤2: 求解方程组得到等效的 ON 和 OFF 计数图 ---
-        epsilon = 1e-30  # 一个非常小的数，防止除以零
-        denominator = alpha**2 + alpha
-        
-        # N_off_w = (V_w - S_net) / (α² + α)
-        # off_w 是等效的 OFF 区域计数，它将作为 'bk' 参数传入下一函数
-        off_w = (sum_weighted_variance - sum_weighted_net_signal) / (denominator + epsilon)
-        
-        # N_on_w = S_net + α * N_off_w
-        on_w = sum_weighted_net_signal + alpha * off_w
-        
-        # 物理上，计数值不能为负
-        on_w = np.ma.maximum(on_w, 0)
-        off_w = np.ma.maximum(off_w, 0)
-        bk_w = alpha*off_w
-        on_w.fill_value = hp.UNSEEN
-        bk_w.fill_value = hp.UNSEEN
-        on_w=hp.ma(on_w)
-        bk_w=hp.ma(bk_w)
-        # print("已计算出等效的加权 ON/OFF 计数图，正在计算最终显著性...")
-        
-        # --- 步骤3: 使用等效计数图计算最终的显著性 ---
-        # 注意：我们将计算出的 `off_w` 作为 `bk` 参数传入
-        ON_smooth, BK_smooth = _smooth_and_scale_maps(on_w, bk_w, smooth_sigma)
-        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=alpha)
+        # --- 步骤 3: 平滑合并后的 ON 图和 BKG 图 ---
+        # 将我们新生成的、统计上稳健的 on_w 和 bkg_w 传入平滑函数
+        ON_smooth, BK_smooth = _smooth_and_scale_maps(on_w, bkg_w, smooth_sigma)
+
+        # --- 步骤 4: 使用平滑后的地图计算最终显著性 ---
+        # 将平滑后的 on 和 bkg 传入显著性计算函数
+        # final_alpha 此处作为整个合并后数据集的平均alpha的估计值
+        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
         resu_all = resu
     elif combine == 'none':
+        ii=0
         for on, bk in zip(on_all, bk_all):
-            ON_smooth, BK_smooth = _smooth_and_scale_maps(on, bk, smooth_sigma)
+            sigma = smooth_sigma[ii] if isinstance(smooth_sigma, np.ndarray) else smooth_sigma
+            ON_smooth, BK_smooth = _smooth_and_scale_maps(on, bk, sigma)
             sig = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
             resu_all.append(sig)
+            ii+=1
 
     # (文件保存和绘图逻辑保持不变)
     # --- 文件保存和绘图逻辑保持不变 ---
@@ -2011,7 +2064,7 @@ def get_residual_significance_mapfast(
 
     if plot:
         resu_to_plot = resu_all
-        if isinstance(resu_all, np.ndarray):
+        if isinstance(resu_all, list):
             n = len(resu_all)
             if n == 0:
                 print("No maps to plot.")
@@ -2025,21 +2078,59 @@ def get_residual_significance_mapfast(
             plt.figure(figsize=(ncols * 5, nrows * 4))
             for i, m in enumerate(resu_all):
                 plt.subplot(nrows, ncols, i + 1)
-                hp.mollview(m, title=f"bin {i}", sub=(nrows, ncols, i + 1))
+                # hp.mollview(m, title=f"bin {i}", sub=(nrows, ncols, i + 1))
+                new_source_idx = np.where(m == np.ma.max(m))[0][0]
+                new_source_lon_lat = hp.pix2ang(1024, new_source_idx, lonlat=True)
+                map = hp.gnomview(m, rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6, title=f"bin {i}", sub=(nrows, ncols, i + 1),return_projected_map=True,cbar=False)
+                # 强制隐藏所有坐标轴元素
+                ax = plt.gca()
+                ax.set_xticks([])  # 隐藏x轴刻度
+                ax.set_yticks([])  # 隐藏y轴刻度
+                ax.set_xlabel('')  # 隐藏x轴标签
+                ax.set_ylabel('')  # 隐藏y轴标签
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['bottom'].set_visible(False)
+                ax.spines['left'].set_visible(False)
+                ax.tick_params(axis='both', which='both', length=0)  # 隐藏刻度线
+                hp.graticule(dpar=1, dmer=1, verbose=False, color='gray', alpha=0.5)
+                # 创建右侧 colorbar（关键修改）
+                from matplotlib.cm import ScalarMappable
+                sm = ScalarMappable(norm=plt.Normalize(vmin=m.min(), vmax=m.max()), 
+                                cmap=plt.get_cmap())  # 使用当前默认colormap
+                sm.set_array([])  # 必须设置空数组
+                
+                cax = ax.inset_axes([1.05, 0.1, 0.03, 0.8])
+                plt.colorbar(sm, cax=cax, orientation='vertical')
+                
+                if new_source_lon_lat and len(new_source_lon_lat) == 2:
+                     hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
+                else:
+                    log.warning("new_source_lon_lat is not properly defined or has invalid values.")
+                # plt.legend()
             plt.tight_layout()
+            plt.axis('off') 
             plt.show()
         else:
             # 适用于 combine='sum' 或 'weighted'
             resu = resu_all
             new_source_idx = np.where(resu == np.ma.max(resu))[0][0]
             new_source_lon_lat = hp.pix2ang(1024, new_source_idx, lonlat=True)
-            
+            resu.set_fill_value(hp.UNSEEN)
+            resu = hp.ma(resu)
             plt.figure(figsize=(8, 8))
             hp.gnomview(resu, norm='', rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6,
-                        title=(savepath or "Residual Significance Map"))
+                        title=(f"{Residual} Significance Map {combine} {signif}"))
+            hp.graticule(dpar=1, dmer=1, verbose=False)
+            if new_source_lon_lat and len(new_source_lon_lat) == 2:
+                 hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
+                # plt.scatter(x, y, marker='x', color='red', s=100, label=f'Hottest Spot {new_source_lon_lat}')
+            else:
+                log.warning("new_source_lon_lat is not properly defined or has invalid values.")
+            # plt.legend()
             # 标记最亮点的代码可以加在这里
             # hp.projtext(new_source_lon_lat[0], new_source_lon_lat[1], 'X', lonlat=True, color='red')
-            print(f"Hottest spot at (lon, lat): {new_source_lon_lat}")
+            print(f"Hottest spot at (lo1n, lat): {new_source_lon_lat}")
             plt.show()
 
     return resu_all
@@ -2327,7 +2418,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         Returns:
             弥散源
     """ 
-    with uproot.open("../../data/gll_dust.root") as root_file:
+    with uproot.open(f"{libdir}/../../data/gll_dust.root") as root_file:
         root_th2d = root_file["gll_region"]
         
         # 获取直方图信息
@@ -2428,7 +2519,7 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
         hdu = fits.PrimaryHDU(data=dataneed/sa, header=header)
 
         # 保存为 FITS 文件
-        file = f'../../data/Diffusedata/{name}_dust_bkg_template.fits'
+        file = f'{libdir}/../../data/Diffusedata/{name}_dust_bkg_template.fits'
         log.info(f"diffuse file path: {file}")
         hdu.writeto(file, overwrite=True)
     # fluxUnit = 1. / (u.TeV * u.cm**2 * u.s)
