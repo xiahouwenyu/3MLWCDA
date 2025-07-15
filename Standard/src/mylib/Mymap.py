@@ -27,9 +27,9 @@ def settransWCDA(WCDA, ra1, dec1, data_radius=None, tansit=None, detector="WCDA"
     if tansit is None:
         import ROOT as rt
         if detector == "WCDA":
-            file = rt.TFile(f"{libdir}/../../data/Periods_67periods_20240731.root", "READ")
+            file = rt.TFile(f"{libdir}/../../data/others/Periods_67periods_20240731.root", "READ")
         else:
-            file = rt.TFile(f"{libdir}/../../data/sky20-cs3_process.root", "READ")
+            file = rt.TFile(f"{libdir}/../../data/others/sky20-cs3_process.root", "READ")
         hside = file.Get("hSide")
         tsecs = hside.GetNbinsX()
         wbinside = hside.GetXaxis().GetBinWidth(1)

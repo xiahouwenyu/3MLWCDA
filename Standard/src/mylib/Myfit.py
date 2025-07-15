@@ -274,6 +274,49 @@ if parb != None:
 
     return source
 
+def set_all_parameters_free_or_fixed(model, free=True):
+    """
+    设置 astromodels 模型中所有参数为固定或自由状态
+    
+    参数:
+    ----------
+    model : astromodels.Model
+        输入的 astromodels 模型
+    free : bool, optional (默认=True)
+        - 如果 True，放开所有参数（设置为自由状态）
+        - 如果 False，固定所有参数（设置为固定状态）
+    """
+    # 遍历所有参数
+    for param_name, param in model.parameters.items():
+        param.free = free
+
+def find_source_id(lm, source_name: str) -> str:
+    """
+    使用 get_*_name 和 get_number_of_* 方法，判断一个源在模型中是第几个展源或点源。
+
+    :param lm: 一个拥有 get_... 系列方法的分析模型对象。
+    :param source_name: 要查询的源的名称。
+    :return: 一个描述源身份的字符串。
+    """
+    
+    # 首先，在点源中查找
+    num_point_sources = lm.get_number_of_point_sources()
+    for i in range(num_point_sources):
+        current_name = lm.get_point_source_name(i)
+        if current_name == source_name:
+            # 索引 i 是从0开始的，所以序号是 i + 1
+            return i, None
+
+    # 如果不是点源，则在展源中查找
+    num_extended_sources = lm.get_number_of_extended_sources()
+    for i in range(num_extended_sources):
+        current_name = lm.get_extended_source_name(i)
+        if current_name == source_name:
+            return None, i
+
+    # 如果两个循环都结束了还没找到
+    return None, None
+
 def copy_free_parameters(source_model, target_model):
     for param_name, source_param in source_model.free_parameters.items():
         if param_name in target_model.free_parameters:
@@ -597,11 +640,8 @@ lm.add_source({name})
     return lm
 
 
-
-
-
 def save_lhaaso_model(lhaaso_model, filepath):
-    """保存LHAASO模型为YAML格式，使用紧凑数组表示法"""
+    """保存LHAASO模型为hsc格式，使用紧凑数组表示法"""
     from ruamel.yaml import YAML
     from ruamel.yaml.comments import CommentedSeq
     yaml = YAML()
@@ -657,9 +697,9 @@ def split_sci_num(num):
     
     return coeff, exp
 
-def convert_3ml_to_lhaaso(three_ml_model, region_name, Modelname, piv=50, save=True):
+def convert_3ml_to_hsc(three_ml_model, region_name, Modelname, piv=50, save=True):
     """
-    将3ML模型转换为与示例完全匹配的LHAASO格式
+    将3ML模型转换为与示例完全匹配的hsc格式
     
     参数:
         three_ml_model (dict): 3ML模型字典
@@ -1243,12 +1283,12 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
             >>> [jl,result]
     """ 
     activate_progress_bars()
-    if not os.path.exists(f'../res/{regionname}/'):
-        os.system(f'mkdir ../res/{regionname}/')
-    if not os.path.exists(f'../res/{regionname}/{modelname}/'):
-        os.system(f'mkdir ../res/{regionname}/{modelname}/')
+    if not os.path.exists(f'{libdir}/../res/{regionname}/'):
+        os.system(f'mkdir {libdir}/../res/{regionname}/')
+    if not os.path.exists(f'{libdir}/../res/{regionname}/{modelname}/'):
+        os.system(f'mkdir {libdir}/../res/{regionname}/{modelname}/')
 
-    Model.save(f"../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
+    Model.save(f"{libdir}/../res/{regionname}/{modelname}/Model_init.yml", overwrite=True)
     if s is not None and e is not None:
         for i in range(len(Detector)):
             Detector[i].set_active_measurements(s[i],e[i])
@@ -1609,15 +1649,9 @@ def process_yaml_file(file_path: str) -> None:
     def process_value(path: str) -> str:
         """处理单个路径字符串"""
         # 处理 ../data/ 但缺少 Diffusedata 的情况
-        if '../data/' in path and 'Diffusedata' not in path:
-            parts = path.split('../data/')
-            path = f"../data/Diffusedata/{parts[1]}"
-        
-        print("here", path)
-        # 处理 ../../ 开头的情况
-        if '../' in path and '/../../' not in path:
-            path = f"{libdir}/../../{path.replace('../', '')}"
-            print("here2", path)
+        if 'data/' in path and 'Diffusedata' not in path:
+            parts = path.split('data/')
+            path = f"{libdir}/../../data/Diffusedata/{parts[1]}"
         return path
 
     def traverse(node) -> None:
@@ -1643,11 +1677,101 @@ def process_yaml_file(file_path: str) -> None:
     with open(file_path, 'w') as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
+def find_and_update_fits_model_paths(
+    input_fits_path: str, 
+) -> None:
+    """
+    打开一个FITS文件，自动查找并根据指定逻辑修改HDU 1头部中的模型文件路径，
+    并将结果保存到新的FITS文件中。
+
+    它会查找所有以一个或多个 '../' 开头，后跟 'data/' 的路径。
+
+    Args:
+        input_fits_path (str): 输入的原始FITS文件路径。
+        output_fits_path (str): 修改后要保存的新FITS文件路径。
+        libdir (str): 用于构建新路径的库目录 (library directory)。
+    """
+    import re
+    # 检查输入文件是否存在
+    if not os.path.exists(input_fits_path):
+        print(f"错误：输入文件不存在 -> '{input_fits_path}'")
+        return
+    output_fits_path = input_fits_path
+    # 定义一个正则表达式来查找所有匹配的路径
+    # 这个模式匹配: (任意数量的'../') + 'data/' + (文件名)
+    # 文件名被假定为包含字母、数字、下划线、破折号和点
+    path_pattern = re.compile(r"((?:\.\./)+data/[a-zA-Z0-9_./-]+\.fits)")
+
+    try:
+        # 使用 with 语句安全地打开 FITS 文件
+        with fits.open(input_fits_path) as hdul:
+            # 检查文件是否至少有两个HDU
+            if len(hdul) < 2:
+                print(f"错误：文件 '{input_fits_path}' 不包含至少两个HDU。")
+                return
+
+            # 获取第二个HDU的头部（索引为1）
+            header = hdul[1].header
+
+            # 检查 'MODEL' 关键字是否存在
+            if 'MODEL' not in header:
+                print(f"错误：在HDU 1中未找到 'MODEL' 关键字。")
+                return
+            
+            # astropy会自动将所有 'CONTINUE' 卡片合并成一个完整的字符串
+            model_string = header['MODEL']
+
+            # 使用正则表达式查找所有匹配的路径
+            # 使用 set 来存储找到的唯一路径，以防同一个路径在文件中出现多次
+            found_paths = set(path_pattern.findall(model_string))
+
+            if not found_paths:
+                print("未找到符合'../../data/...'模式的路径。")
+                # 如果没有找到匹配的路径，可以选择直接复制文件或不执行任何操作
+                hdul.writeto(output_fits_path, overwrite=True)
+                print(f"已将原始文件直接复制到 '{output_fits_path}'。")
+                return
+
+            print("在文件中找到以下需处理的路径:")
+            
+            # 对每个找到的唯一路径应用替换逻辑
+            updated_model_string = model_string
+            for original_path in found_paths:
+                print(f"  - 正在处理: {original_path}")
+                
+                # 应用您的替换逻辑
+                new_path = original_path # 默认为原始路径
+                if 'data/' in original_path and 'Diffusedata' not in original_path:
+                    parts = original_path.split('data/')
+                    if len(parts) > 1:
+                        # 使用 f-string 构建新路径
+                        new_path = f"{libdir}/../../data/Diffusedata/{parts[1]}"
+                        print(f"    -> 替换为: {new_path}")
+                else:
+                    print("    -> 路径不符合替换条件，保持不变。")
+
+                # 在整个模型字符串中替换这个路径
+                updated_model_string = updated_model_string.replace(original_path, new_path)
+            
+            # 更新头部中的 'MODEL' 关键字
+            # astropy 会自动处理长字符串，并根据需要重新创建 'CONTINUE' 卡片
+            header['MODEL'] = updated_model_string
+            
+            # 将修改后的HDUs保存到新文件
+            hdul.writeto(output_fits_path, overwrite=True)
+            
+            print(f"\n成功更新所有找到的路径。")
+            print(f"已将修改后的文件保存到: '{output_fits_path}'")
+
+    except Exception as e:
+        print(f"处理FITS文件时发生错误: {e}")
+
 def load_modelpath(modelpath):
     # silence_warnings()
     if modelpath[-1] == "/":
         modelpath = modelpath[:-1]
     try:
+        find_and_update_fits_model_paths(modelpath+"/Results.fits")
         results = load_analysis_results(modelpath+"/Results.fits")
     except Exception as e:
         print("No results found:", e)
@@ -1703,438 +1827,6 @@ def getTSall(TSlist, region_name, Modelname, result, WCDAs):
     TSresults.to_csv(f'../res/{region_name}/{Modelname}/Results.txt', sep='\t', mode='a', index=False)
     TSresults
     return TS, TSresults
-
-def getressimple(WCDA, lm):
-    """
-        获取简单快速的拟合残差显著性天图,但是显著性y值完全是错的,仅仅看形态分布等
-
-        Parameters:
-
-
-        Returns:
-            残差healpix
-    """ 
-    WCDA.set_model(lm)
-    data=np.zeros(1024*1024*12)
-    bkg =np.zeros(1024*1024*12)
-    model=np.zeros(1024*1024*12)
-    next = lm.get_number_of_extended_sources()
-    npt=lm.get_number_of_point_sources()
-    for i, plane_id in enumerate(WCDA._active_planes):
-        data_analysis_bin = WCDA._maptree[plane_id]
-        # try:
-        this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next).as_dense()
-        # except:
-        #     this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next-1).as_dense()
-        bkg_subtracted, data_map, background_map = WCDA._get_excess(data_analysis_bin, all_maps=True)
-        model += this_model_map_hpx
-        bkg   += background_map
-        data  += data_map
-
-
-    data[np.isnan(data)]=hp.UNSEEN
-    bkg[np.isnan(bkg)]=hp.UNSEEN
-    model[np.isnan(model)]=hp.UNSEEN
-    data=hp.ma(data)
-    bkg=hp.ma(bkg)
-    model=hp.ma(model)
-    # resu=data-bkg-model
-    on = data
-    off = bkg+model
-    resu = (on-off)/np.sqrt(on+off)
-    resu=hp.sphtfunc.smoothing(resu,sigma=np.radians(0.3))
-    return resu
-
-def getresaccuracy(WCDA, lm, signif=17, smooth_sigma=0.3, alpha=3.24e-5, savepath=None, plot=False):
-    """
-        获取简单慢速的拟合残差显著性天图,LIMA显著性
-
-        Parameters:
-
-        Returns:
-            残差healpix
-    """ 
-    WCDA.set_model(lm)
-    data=np.zeros(1024*1024*12)
-    bkg =np.zeros(1024*1024*12)
-    model=np.zeros(1024*1024*12)
-
-    next = lm.get_number_of_extended_sources()
-    npt=lm.get_number_of_point_sources()
-    for i, plane_id in enumerate(WCDA._active_planes):
-        data_analysis_bin = WCDA._maptree[plane_id]
-        # try:
-        this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next).as_dense()
-        # except:
-        #     this_model_map_hpx = WCDA._get_model_map(plane_id, npt, next-1).as_dense()
-        bkg_subtracted, data_map, background_map = WCDA._get_excess(data_analysis_bin, all_maps=True)
-        model += this_model_map_hpx
-        bkg   += background_map
-        data  += data_map
-    
-    nside=1024
-    theta, phi = hp.pix2ang(nside, np.arange(0, 1024*1024*12, 1))
-    theta = np.pi/2 - theta
-    if alpha is None:
-        alpha=2*smooth_sigma*1.51/60./np.sin(theta)
-
-
-    data[np.isnan(data)]=hp.UNSEEN
-    bkg[np.isnan(bkg)]=hp.UNSEEN
-    model[np.isnan(model)]=hp.UNSEEN
-    data=hp.ma(data)
-    bkg=hp.ma(bkg)
-    model=hp.ma(model)
-    # resu=data-bkg-model
-    on = data
-    off = bkg+model
-
-    nside=2**10
-    npix=hp.nside2npix(nside)
-    pixarea = 4 * np.pi/npix
-    on1 = hp.sphtfunc.smoothing(on,sigma=np.radians(smooth_sigma))
-    on2 = 1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(on,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
-    off1 = hp.sphtfunc.smoothing(off,sigma=np.radians(smooth_sigma))
-    off2 = 1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(off,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
-
-    
-    # resu2=hp.sphtfunc.smoothing(resu,sigma=np.radians(smooth_sigma))
-    # resu3=1./(4.*np.pi*np.radians(smooth_sigma)*np.radians(smooth_sigma))*(hp.sphtfunc.smoothing(resu,sigma=np.radians(smooth_sigma/np.sqrt(2))))*pixarea
-    scale=(on1+off1)/(on2+off2)
-    ON=on1*scale
-    BK=off1*scale
-    if signif==5:
-        resu=(ON-BK)/np.sqrt(ON+alpha*BK)
-    elif signif==9:
-        resu=(ON-BK)/np.sqrt(ON*alpha+BK)
-    elif signif==17:
-        resu=np.sqrt(2.)*np.sqrt(ON*np.log((1.+alpha)/alpha*ON/(ON+BK/alpha))+BK/alpha*np.log((1.+alpha)*BK/alpha/(ON+BK/alpha)))
-        resu[ON<BK] *= -1
-    else:
-        resu=(ON-BK)/np.sqrt(BK)
-    # resu = (ON-BK)/np.sqrt(ON)
-    if savepath[-1] != '/':
-        savepath += '/'
-    if savepath is not None:
-        hp.write_map(savepath+"resufastmap.fits", resu, overwrite=True)
-
-    new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
-    new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
-    print(new_source_lon_lat)
-
-    if plot:
-        plt.figure()
-        hp.gnomview(resu,norm='',rot=[new_source_lon_lat[0],new_source_lon_lat[1]],xsize=200,ysize=200,reso=6,title=savepath)
-        plt.scatter(new_source_lon_lat[0],new_source_lon_lat[1],marker='x',color='red', label=f"{new_source_lon_lat}")
-        plt.legend()
-        plt.show()
-        plt.savefig(f"{savepath}WCDA_res_init.png",dpi=300)
-    return resu, new_source_lon_lat
-
-
-def _smooth_and_scale_maps(on, off, smooth_sigma):
-    """
-    根据 getresaccuracy 中的方法对 ON/OFF 图进行平滑和缩放。
-    """
-    nside = hp.get_nside(on)
-    npix = hp.nside2npix(nside)
-    pixarea = 4 * np.pi / npix
-
-    on = on.filled(hp.UNSEEN) if isinstance(on, np.ma.MaskedArray) else on
-    off = off.filled(hp.UNSEEN) if isinstance(off, np.ma.MaskedArray) else off
-    on[np.isnan(on)] = hp.UNSEEN
-    off[np.isnan(off)] = hp.UNSEEN
-    on[np.isinf(on)] = hp.UNSEEN
-    off[np.isinf(off)] = hp.UNSEEN
-
-    on1 = hp.sphtfunc.smoothing(on, sigma=np.radians(smooth_sigma))
-    off1 = hp.sphtfunc.smoothing(off, sigma=np.radians(smooth_sigma))
-
-    on2 = 1./(4.*np.pi*np.radians(smooth_sigma)**2) * (hp.sphtfunc.smoothing(on, sigma=np.radians(smooth_sigma/np.sqrt(2)))) * pixarea
-    off2 = 1./(4.*np.pi*np.radians(smooth_sigma)**2) * (hp.sphtfunc.smoothing(off, sigma=np.radians(smooth_sigma/np.sqrt(2)))) * pixarea
-
-    scale = (on1 + off1) / (on2 + off2 + 1e-20)
-    
-    ON = on1 * scale
-    BK = off1 * scale
-    
-    return hp.ma(ON), hp.ma(BK)
-
-def compute_significance_mapfast(on, bk, signif=17, alpha=3.24e-5):
-    """
-    从 ON 和 BK 图计算显著性图 (Li & Ma)。
-    此函数可以正确处理 alpha 为标量或数组的情况。
-    """
-    on[np.isnan(on)] = hp.UNSEEN
-    bk[np.isnan(bk)] = hp.UNSEEN
-    on = hp.ma(on)
-    bk = hp.ma(bk)
-
-    epsilon = 1e-20
-    on_safe = np.maximum(on, 0)
-    bk_safe = np.maximum(bk, 0)
-
-    if signif == 5:
-        sig = (on - bk) / np.sqrt(on_safe + alpha * bk_safe + epsilon)
-    elif signif == 9:
-        sig = (on - bk) / np.sqrt(on_safe * alpha + bk_safe + epsilon)
-    elif signif == 17:
-        term1_ratio = (1. + alpha) / alpha * on_safe / (on_safe + bk_safe / alpha + epsilon)
-        term2_ratio = (1. + alpha) * bk_safe / alpha / (on_safe + bk_safe / alpha + epsilon)
-        
-        log_term1 = on_safe * np.log(np.maximum(term1_ratio, epsilon))
-        log_term2 = bk_safe / alpha * np.log(np.maximum(term2_ratio, epsilon))
-        
-        sig = np.sqrt(2 * np.maximum(log_term1 + log_term2, 0))
-        sig[on < bk] *= -1
-    else:
-        sig = (on - bk) / np.sqrt(bk_safe + epsilon)
-        
-    sig.set_fill_value(0.0)
-    sig[np.isnan(sig)] = 0.0
-    return sig
-
-WCDA_r68 = np.array([0.874, 0.657, 0.497, 0.396, 0.328, 0.259, 0.19])
-KM2A_r68 = np.array([0.874, 0.657, 0.497, 0.43, 0.43, 0.36, 0.30, 0.25, 0.22, 0.19, 0.17, 0.15, 0.14, 0.13])  # KM2A的r68值与WCDA相同
-WCDA_r32 = WCDA_r68/1.51
-KM2A_r32 = KM2A_r68/1.51
-def get_residual_significance_mapfast(
-    WCDA,
-    lm=None,
-    signif=17,
-    smooth_sigma=WCDA_r32,  #0.3 KM2A_r68
-    alpha=3.24e-5,  # <--- 修正1: 默认值设为None，以触发动态计算
-    combine='sum',
-    active_sources=None,
-    plot=False,
-    savepath=None
-):
-    """
-    计算显著性图，支持加权合并、多bin显著性、以及自定义模型残差。
-    *已修正：加入了与 getresaccuracy 对齐的平滑和缩放计算方法*
-
-    combine: 决定是否对多能段进行合并
-        - 'none'：返回每个能段独立显著性图 (各自平滑)
-        - 'sum'：直接求和ON和BK再算显著性 (先求和后平滑，与getresaccuracy逻辑最一致)
-        - 'weighted'：按(S/B)加权合并后再算显著性 (先加权平均后平滑)
-
-    active_sources: (pta, exta)，控制哪些源被计入模型
-    """
-    nside = 1024
-   
-    # --- 修正2: 动态 ALPHA 计算逻辑 ---
-    # 仅当alpha未被用户指定时，才进行动态计算，完美复现getresaccuracy的行为
-    if alpha is None:
-        # 这个计算需要像素的坐标theta，与getresaccuracy完全一致
-        print("Alpha is None. Calculating dynamically based on pixel position...")
-        theta, _ = hp.pix2ang(nside, np.arange(hp.nside2npix(nside))) # theta是colatitude
-        # 严格复现getresaccuracy中的坐标转换
-        theta_lat = np.pi/2 - theta # 转换为latitude
-        # 避免在赤道附近(theta_lat=0)或极点附近出现问题
-        sin_theta_lat = np.sin(theta_lat)
-        # 防止除以零
-        sin_theta_lat[sin_theta_lat == 0] = 1e-9 
-        
-        # 动态计算alpha数组
-        final_alpha = 2 * 0.3 * 1.51 / 60. / sin_theta_lat
-    else:
-        # 如果用户传入了alpha值(例如标量3.24e-5)，则使用该值
-        print(f"Using user-provided alpha: {alpha}")
-        final_alpha = alpha
-    # --- 修正结束 ---
-
-    if lm:
-        WCDA.set_model(lm)
-    
-    on_all = []
-    bk_all = []
-
-    npt = lm.get_number_of_point_sources() if lm else 0
-    next = lm.get_number_of_extended_sources() if lm else 0
-
-    for i, bin_id in enumerate(WCDA._active_planes):
-        dmap, bkmap = WCDA._get_excess(WCDA._maptree[bin_id], all_maps=True)[1:]
-
-        model_map_val = 0.0
-        if lm:
-            Residual = "Residual"
-            # 模型计算部分保持不变
-            if active_sources:
-                pta, exta = active_sources
-                model_map = WCDA._get_model_map(bin_id, bin_id, 0, 0).as_dense()
-                for idx, keep in enumerate(pta):
-                    if not keep:
-                        model_map += WCDA._get_model_map(bin_id, bin_id, idx+1, 0).as_dense()
-                        if idx != 0:
-                            model_map -= WCDA._get_model_map(bin_id, bin_id, idx, 0).as_dense()
-                for idx, keep in enumerate(exta):
-                    if not keep:
-                        model_map += WCDA._get_model_map(bin_id, bin_id, 0, idx+1).as_dense()
-                        if idx != 0:
-                            model_map -= WCDA._get_model_map(bin_id, bin_id, 0, idx).as_dense()
-                model_map_val = model_map
-            else:
-                model_map_val = WCDA._get_model_map(bin_id, npt, next).as_dense()
-        else:
-            Residual = ""
-        
-        on = dmap
-        bk = bkmap + model_map_val
-        on[np.isnan(on)]=hp.UNSEEN
-        bk[np.isnan(bk)]=hp.UNSEEN
-        on=hp.ma(on)
-        bk=hp.ma(bk)
-        on_all.append(on)
-        bk_all.append(bk)
-
-    if isinstance(smooth_sigma, np.ndarray):
-        planes = [int(it) for it in WCDA._active_planes]
-        smooth_sigma = smooth_sigma[planes]
-
-    resu_all = []
-    if combine == 'sum':
-        on_total = np.ma.sum(on_all, axis=0)
-        bk_total = np.ma.sum(bk_all, axis=0)
-        if isinstance(smooth_sigma, np.ndarray):
-            smooth_sigma = np.sqrt(np.mean(smooth_sigma**2))
-        ON_smooth, BK_smooth = _smooth_and_scale_maps(on_total, bk_total, smooth_sigma)
-        # --- 修正3: 传递正确的alpha ---
-        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
-        resu_all = resu
-    # (其他combine模式的逻辑保持不变，但同样会受益于正确的alpha处理)
-    elif combine == 'weighted':
-        # --- 步骤 1: 计算权重 (Signal-to-Background Ratio) ---
-        # 这个权重计算是合理的，我们保留它。
-        # 使用 BKG 作为背景的估计值，计算每个能段的 S/B 值作为权重。
-        # 为防止分母为0，增加一个极小值epsilon。
-        # 注意：这里我们使用非归一化的 S/B 比值作为权重，这样更能体现高 S/B 能段的贡献。
-        weights = [(np.ma.sum(on - bk)) / (np.ma.sum(bk) + 1e-9) for on, bk in zip(on_all, bk_all)]
-        weights = np.maximum(0, np.array(weights)) # 权重不能是负数
-
-        # 计算加权平均的平滑尺度
-        if isinstance(smooth_sigma, np.ndarray):
-            # 使用权重本身(w)或其平方(w^2)作为加权平均的“权”都是常见的选择
-            # 这里我们用权重的平方来计算，给高S/B的能段更大影响力
-            if np.sum(weights**2) > 0:
-                avg_sigma_sq = np.sum(weights**2 * smooth_sigma**2) / np.sum(weights**2)
-                smooth_sigma = np.sqrt(avg_sigma_sq)
-            else:
-                smooth_sigma = np.mean(smooth_sigma)
-            print(f"Calculated weighted average sigma: {smooth_sigma}")
-
-        # --- 步骤 2: 【全新方法】直接对 ON 图和 BKG 图进行加权求和 ---
-        # 这是最核心的修正。我们不再求解复杂的方程，而是直接构建加权的 on_w 和 bkg_w。
-        
-        on_all_np = np.ma.array(on_all)
-        bk_all_np = np.ma.array(bk_all) # bk_all_np 是 BKG 地图列表
-
-        # 对每个像素，将其在所有能段的计数值按 S/B 权重进行加权求和
-        # weights[:, np.newaxis] 将一维权重数组扩展成 (n_bins, 1)，以便与 (n_bins, n_pixels) 的地图数组进行广播乘法
-        on_w = np.ma.sum(weights[:, np.newaxis] * on_all_np, axis=0)
-        bkg_w = np.ma.sum(weights[:, np.newaxis] * bk_all_np, axis=0)
-        
-        print("已通过直接加权求和方法，生成合并后的 ON 和 BKG 地图。")
-
-        # --- 步骤 3: 平滑合并后的 ON 图和 BKG 图 ---
-        # 将我们新生成的、统计上稳健的 on_w 和 bkg_w 传入平滑函数
-        ON_smooth, BK_smooth = _smooth_and_scale_maps(on_w, bkg_w, smooth_sigma)
-
-        # --- 步骤 4: 使用平滑后的地图计算最终显著性 ---
-        # 将平滑后的 on 和 bkg 传入显著性计算函数
-        # final_alpha 此处作为整个合并后数据集的平均alpha的估计值
-        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
-        resu_all = resu
-    elif combine == 'none':
-        ii=0
-        for on, bk in zip(on_all, bk_all):
-            sigma = smooth_sigma[ii] if isinstance(smooth_sigma, np.ndarray) else smooth_sigma
-            ON_smooth, BK_smooth = _smooth_and_scale_maps(on, bk, sigma)
-            sig = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=final_alpha)
-            resu_all.append(sig)
-            ii+=1
-
-    # (文件保存和绘图逻辑保持不变)
-    # --- 文件保存和绘图逻辑保持不变 ---
-    if savepath:
-        if savepath[-1] != '/':
-            savepath += '/'
-        os.makedirs(os.path.dirname(savepath), exist_ok=True)
-        # healpy.write_map可以接受list of maps
-        hp.write_map(savepath+"fastmap.fits", resu_all, overwrite=True)
-
-    if plot:
-        resu_to_plot = resu_all
-        if isinstance(resu_all, list):
-            n = len(resu_all)
-            if n == 0:
-                print("No maps to plot.")
-                return resu_all
-            
-            # 如果是列表，默认只画第一张或者合并后的图（取决于combine模式）
-            # 如果想画所有，可以用下面的循环
-            print(f"Plotting results for {len(resu_all)} bins.")
-            ncols = int(np.ceil(np.sqrt(n)))
-            nrows = int(np.ceil(n / ncols))
-            plt.figure(figsize=(ncols * 5, nrows * 4))
-            for i, m in enumerate(resu_all):
-                plt.subplot(nrows, ncols, i + 1)
-                # hp.mollview(m, title=f"bin {i}", sub=(nrows, ncols, i + 1))
-                new_source_idx = np.where(m == np.ma.max(m))[0][0]
-                new_source_lon_lat = hp.pix2ang(1024, new_source_idx, lonlat=True)
-                map = hp.gnomview(m, rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6, title=f"bin {i}", sub=(nrows, ncols, i + 1),return_projected_map=True,cbar=False)
-                # 强制隐藏所有坐标轴元素
-                ax = plt.gca()
-                ax.set_xticks([])  # 隐藏x轴刻度
-                ax.set_yticks([])  # 隐藏y轴刻度
-                ax.set_xlabel('')  # 隐藏x轴标签
-                ax.set_ylabel('')  # 隐藏y轴标签
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.spines['bottom'].set_visible(False)
-                ax.spines['left'].set_visible(False)
-                ax.tick_params(axis='both', which='both', length=0)  # 隐藏刻度线
-                hp.graticule(dpar=1, dmer=1, verbose=False, color='gray', alpha=0.5)
-                # 创建右侧 colorbar（关键修改）
-                from matplotlib.cm import ScalarMappable
-                sm = ScalarMappable(norm=plt.Normalize(vmin=m.min(), vmax=m.max()), 
-                                cmap=plt.get_cmap())  # 使用当前默认colormap
-                sm.set_array([])  # 必须设置空数组
-                
-                cax = ax.inset_axes([1.05, 0.1, 0.03, 0.8])
-                plt.colorbar(sm, cax=cax, orientation='vertical')
-                
-                if new_source_lon_lat and len(new_source_lon_lat) == 2:
-                     hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
-                else:
-                    log.warning("new_source_lon_lat is not properly defined or has invalid values.")
-                # plt.legend()
-            plt.tight_layout()
-            plt.axis('off') 
-            plt.show()
-        else:
-            # 适用于 combine='sum' 或 'weighted'
-            resu = resu_all
-            new_source_idx = np.where(resu == np.ma.max(resu))[0][0]
-            new_source_lon_lat = hp.pix2ang(1024, new_source_idx, lonlat=True)
-            resu.set_fill_value(hp.UNSEEN)
-            resu = hp.ma(resu)
-            plt.figure(figsize=(8, 8))
-            hp.gnomview(resu, norm='', rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6,
-                        title=(f"{Residual} Significance Map {combine} {signif}"))
-            hp.graticule(dpar=1, dmer=1, verbose=False)
-            if new_source_lon_lat and len(new_source_lon_lat) == 2:
-                 hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
-                # plt.scatter(x, y, marker='x', color='red', s=100, label=f'Hottest Spot {new_source_lon_lat}')
-            else:
-                log.warning("new_source_lon_lat is not properly defined or has invalid values.")
-            # plt.legend()
-            # 标记最亮点的代码可以加在这里
-            # hp.projtext(new_source_lon_lat[0], new_source_lon_lat[1], 'X', lonlat=True, color='red')
-            print(f"Hottest spot at (lo1n, lat): {new_source_lon_lat}")
-            plt.show()
-
-    return resu_all
-
 
 def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
     """
