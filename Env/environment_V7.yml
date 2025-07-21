@@ -1,4 +1,4 @@
-name: 3ML
+name: 3MLhal
 channels:
   - conda-forge
   - defaults
@@ -34,6 +34,9 @@ dependencies:
   - cfitsio=4.1.0
   - spectral-cube
   - root=6.24.6
+  - astropy
+  - fftw
+  - pyfftw
   - pip:
       - astromodels
       - threeML

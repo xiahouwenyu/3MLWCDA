@@ -64,7 +64,7 @@ class FuncWrapper(ROOT.Math.IMultiGenFunction):
 
 class ROOTMinimizer(LocalMinimizer):
 
-    valid_setup_keys = ("ftol", "max_function_calls", "strategy")
+    valid_setup_keys = ("ftol", "max_function_calls", "strategy", "verbosity", "minimizer", "precision") #"ForcePosDef",
 
     def __init__(self, function, parameters, verbosity=0, setup_dict=None):
 
@@ -74,7 +74,8 @@ class ROOTMinimizer(LocalMinimizer):
 
         # Defaults
 
-        setup_dict = {"ftol": 1.0, "max_function_calls": 100000, "strategy": 1}
+        setup_dict = {"ftol": 1.0, "max_function_calls": 100000, "strategy": 1,  "verbosity": 1, "minimizer": "Minimize", "precision": -1} #"ForcePosDef": False,
+        # Minimize Migrad Simplex Combined Scan Fumili
 
         # Update defaults if needed
         if user_setup_dict is not None:
@@ -87,16 +88,21 @@ class ROOTMinimizer(LocalMinimizer):
 
         self.functor = FuncWrapper()
         self.functor.setup(self.function, self.Npar)
-        self.minimizer = ROOT.Minuit2.Minuit2Minimizer("Minimize")
+        self.minimizer = ROOT.Minuit2.Minuit2Minimizer(setup_dict["minimizer"])
         self.minimizer.Clear()
         self.minimizer.SetMaxFunctionCalls(setup_dict["max_function_calls"])
-        self.minimizer.SetPrintLevel(self.verbosity)
+        # self.minimizer.SetPrintLevel(self.verbosity)
         self.minimizer.SetErrorDef(0.5)
         self.minimizer.SetStrategy(setup_dict["strategy"])
         self.minimizer.SetTolerance(setup_dict["ftol"])
 
         self.minimizer.SetFunction(self.functor)
-        self.minimizer.SetPrintLevel(int(self.verbosity))
+        self.minimizer.SetPrintLevel(int(setup_dict["verbosity"]))
+
+        # self.minimizer.SetForcePosDefCovMatrix(setup_dict["ForcePosDef"])  # This is not available in ROOT 6.20
+
+        if setup_dict["precision"] > 0:
+            self.minimizer.SetPrecision(setup_dict["precision"])
 
         # Set up the parameters in internal reference
 

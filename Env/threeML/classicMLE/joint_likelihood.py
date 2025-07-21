@@ -112,6 +112,12 @@ class JointLikelihood(object):
 
         self._minimizer = None
 
+        # log.debug("starting local optimization")
+
+        # self._minimizer = self._get_minimizer(
+        #     self.minus_log_like_profile, self._free_parameters
+        # )
+
         self._minimizer_callback = None
 
         self._analysis_results = None
@@ -331,6 +337,7 @@ class JointLikelihood(object):
 
             if log_likelihood_minimum == minimization.FIT_FAILED:
                 log.error("The fit failed to converge.")
+                self._minimizer.restore_best_fit()
                 raise FitFailed()
 
             # Store the current minimum for the -log likelihood

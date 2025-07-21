@@ -1,4 +1,4 @@
-name: 3ML
+name: 3MLhal
 channels:
   - conda-forge
   - defaults
@@ -33,7 +33,12 @@ dependencies:
   - hdf5
   - cfitsio=4.1.0
   - spectral-cube
-  - root=6.24.6
+  - root=6.26.6
+  - astropy
+  - fftw
+  - pyfftw
+  - bottleneck
+  - boost-histogram==0.11.1
   - pip:
       - astromodels
       - threeML

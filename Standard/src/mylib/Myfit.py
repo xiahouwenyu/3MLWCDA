@@ -290,6 +290,69 @@ def set_all_parameters_free_or_fixed(model, free=True):
     for param_name, param in model.parameters.items():
         param.free = free
 
+from matplotlib import gridspec
+def plot_all_model_maps(WCDA, lm, ra1, dec1, max_component_id=None, xsize=200, ysize=200, reso=6):
+    """
+    绘制模型的所有组成部分（如点源、扩展源、diffuse等），并拼接为一张大图。
+
+    Args:
+        WCDA: 模型所属对象，需实现 _get_model_map 方法。
+        lm: 模型管理器，需实现 get_number_of_point_sources 和 get_number_of_extended_sources 方法。
+        ra1, dec1: 中心经度和纬度 (deg)
+        max_component_id (int): 最大组件编号（如为None，则自动尝试遍历最多10个）
+        xsize, ysize: 每幅图的像素大小
+        reso: 每像素角分辨率（arcmin）
+
+    Returns:
+        fig: Matplotlib Figure 对象
+    """
+    if max_component_id is None:
+        max_component_id = 10  # 默认尝试最多10个，直到失败为止
+
+    maps = []
+    valid_ids = []
+    for i in range(max_component_id + 1):
+        try:
+            m = WCDA._get_model_map(str(i), lm.get_number_of_point_sources(), lm.get_number_of_extended_sources()).as_dense()
+            maps.append(m)
+            valid_ids.append(i)
+        except Exception as e:
+            print(f"Component {i} skipped: {e}")
+
+    n_maps = len(maps)
+    if n_maps == 0:
+        raise ValueError("没有成功加载任何模型组件地图。")
+
+    ncols = int(np.ceil(np.sqrt(n_maps)))
+    nrows = int(np.ceil(n_maps / ncols))
+
+    fig = plt.figure(figsize=(4 * ncols, 4 * nrows))
+    spec = gridspec.GridSpec(nrows, ncols, figure=fig)
+
+    for idx, (m, comp_id) in enumerate(zip(maps, valid_ids)):
+        row = idx // ncols
+        col = idx % ncols
+
+        ax = fig.add_subplot(spec[row, col])
+        hp.gnomview(
+            m,
+            rot=[ra1, dec1],
+            xsize=xsize,
+            ysize=ysize,
+            reso=reso,
+            norm='',
+            title=f"Component {comp_id}",
+            notext=True,
+            cbar=False,
+            hold=True,
+            return_projected_map=False,
+            sub=(nrows, ncols, idx + 1),
+        )
+        ax.set_title(f"Component {comp_id}", fontsize=10)
+
+    plt.tight_layout()
+    return fig
+
 def find_source_id(lm, source_name: str) -> str:
     """
     使用 get_*_name 和 get_number_of_* 方法，判断一个源在模型中是第几个展源或点源。
@@ -1040,6 +1103,173 @@ lm.add_source({name})
                 """
                     exec(prompt)
     return lm
+
+
+
+def convert_xsq_to_3ml(input_file_path, output_file_path):
+    """
+    将 WCDA.yaml 文件转换为 Model_opt.yml 格式，确保标记点源和延展源，并保留 Diffuse 和 WCDA_bkg_renorm。
+    
+    Args:
+        input_file_path (str): 输入 WCDA.yaml 文件路径
+        output_file_path (str): 输出 Model_opt.yml 文件路径
+    """
+    import yaml
+    # 加载 WCDA.yaml 文件
+    with open(input_file_path, 'r') as file:
+        wcda_data = yaml.safe_load(file)
+    
+    # 初始化输出字典
+    converted_data = {}
+    
+    # 处理源信息
+    source_dict = wcda_data.get('source_dict', {})
+    for source_name, source_info in source_dict.items():
+        spatial_model = source_info.get('spatial_model', {})
+        spatial_type = spatial_model.get('spatial_type', '')
+        sed_model = source_info.get('sed_model', {})
+        
+        # 通用光谱模型（Power Law 转换为 Log_parabola）
+        spectrum = {
+            'main': {
+                'Log_parabola': {
+                    'K': {
+                        'value': sed_model['norm'][0] * float(sed_model['norm'][3]) * 1e-9,
+                        'desc': 'Normalization',
+                        'min_value': sed_model['norm'][0] * 0.1 * float(sed_model['norm'][3]) * 1e-9,
+                        'max_value': sed_model['norm'][0] * 10 * float(sed_model['norm'][3]) * 1e-9,
+                        'unit': 'keV-1 s-1 cm-2',
+                        'is_normalization': True,
+                        'delta': sed_model['norm'][1] * float(sed_model['norm'][3]) * 1e-9,
+                        'free': True
+                    },
+                    'piv': {
+                        'value': sed_model['E_0'] / 1e-9,
+                        'desc': 'Pivot (keep this fixed)',
+                        'unit': 'keV',
+                        'is_normalization': False,
+                        'delta': 0.1 / 1e-9,
+                        'free': False
+                    },
+                    'alpha': {
+                        'value': -sed_model['index'][0],  # Power Law 指数取负
+                        'desc': 'index',
+                        'min_value': -5.0,
+                        'max_value': 0.0,
+                        'unit': '',
+                        'is_normalization': False,
+                        'delta': 0.2,
+                        'free': True
+                    },
+                    'beta': {
+                        'value': 0.0,  # Power Law 的 beta 默认为 0
+                        'desc': 'curvature',
+                        'min_value': 0.0,
+                        'max_value': 1.0,
+                        'unit': '',
+                        'is_normalization': False,
+                        'delta': 0.1,
+                        'free': False
+                    }
+                },
+                'polarization': {}
+            }
+        }
+        source_name = source_name.replace('+', 'P')  # 替换空格为下划线，确保兼容性
+        source_name = source_name.replace('-', 'M')
+        
+        # 处理不同类型的源
+        if source_name == 'iso_bg':
+            # 等同于 WCDA_bkg_renorm 的背景源
+            converted_data['WCDA_bkg_renorm (Parameter)'] = {
+            "value": 1.0,
+            "desc": "Renormalization for background map",
+            "min_value": 0.5,
+            "max_value": 1.5,
+            "unit": '',
+            "is_normalization": False,
+            "delta": 0.01,
+            "free": False
+            }
+        # elif source_name == 'gll_bg':
+        #     # 等同于 Diffuse 的背景源
+        #     converted_data['Diffuse (extended source)'] = {
+        #         'spectrum': spectrum
+        #     }
+        elif spatial_type == 'ps':
+            # 点源
+            ra = spatial_model['ra'][0]
+            dec = spatial_model['dec'][0]
+            converted_data[source_name + " (point source)"] = {
+                'position': {
+                    'ra': {
+                        'value': ra,
+                        'desc': 'Right Ascension',
+                        'min_value': ra - 0.5,
+                        'max_value': ra + 0.5,
+                        'unit': 'deg',
+                        'is_normalization': False,
+                        'delta': 0.1,
+                        'free': True
+                    },
+                    'dec': {
+                        'value': dec,
+                        'desc': 'Declination',
+                        'min_value': dec - 0.5,
+                        'max_value': dec + 0.5,
+                        'unit': 'deg',
+                        'is_normalization': False,
+                        'delta': 0.1,
+                        'free': True
+                    },
+                    'equinox': 'J2000'
+                },
+                'spectrum': spectrum
+            }
+        elif spatial_type == 'gaussian':
+            # 延展源
+            lon0 = spatial_model['ra'][0]
+            lat0 = spatial_model['dec'][0]
+            sigma = spatial_model['ext'][0]
+            converted_data[source_name + " (extended source)"] = {
+                'Gaussian_on_sphere': {
+                    'lon0': {
+                        'value': lon0,
+                        'desc': 'Longitude of center',
+                        'min_value': lon0 - 0.5,
+                        'max_value': lon0 + 0.5,
+                        'unit': 'deg',
+                        'is_normalization': False,
+                        'delta': 0.1,
+                        'free': True
+                    },
+                    'lat0': {
+                        'value': lat0,
+                        'desc': 'Latitude of center',
+                        'min_value': lat0 - 0.5,
+                        'max_value': lat0 + 0.5,
+                        'unit': 'deg',
+                        'is_normalization': False,
+                        'delta': 0.1,
+                        'free': True
+                    },
+                    'sigma': {
+                        'value': sigma,
+                        'desc': 'Standard deviation',
+                        'min_value': max(sigma - 1, 0),
+                        'max_value': sigma + 1,
+                        'unit': 'deg',
+                        'is_normalization': False,
+                        'delta': 0.1,
+                        'free': True
+                    }
+                },
+                'spectrum': spectrum
+            }
+    
+    # 将转换结果写入文件
+    with open(output_file_path, 'w') as file:
+        yaml.dump(converted_data, file, default_flow_style=False)
 
 def model2bayes(model):
     """
@@ -1829,268 +2059,299 @@ def getTSall(TSlist, region_name, Modelname, result, WCDAs):
     TSresults
     return TS, TSresults
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,  mini = "ROOT", ifDGE=1,freeDGE=1,DGEk=1.8341549e-12,DGEfile="../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=False, startfromfile=None, startfrommodel=None, fromcatalog=False, cat = { "TeVCat": [0, "s"],"PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"]}, detector="WCDA", fixcatall=False, extthereshold=9, rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
-    """
-        在一个区域搜索新源
-
-        Parameters:
-            ifDGE: 是否考虑弥散
-            freeDGE: 是否放开弥散
-            ifAsymm: 是否使用非对称高斯
-            ifnopt: 是否不用点源
-            startfrom: 从什么模型开始迭代?
-            fromcatalog: 从catalog模型开始迭代?
-            cat: 中间图所画的catalog信息
-            detector: KM2A还是WCDA!!!!!!
-            fixcatall: 是否固定catalog源,如果从catalog开始的话
-            extthereshold: 判定延展的阈值
-
-        Returns:
-            >>> bestmodel, [jl, result
-    """ 
-    source=[]
-    pts=[]
-    exts=[]
-    npt=0
-    next=0
-    TS_all=[]
-    lm=Model()
-    lon_array=[]
-    lat_array=[]
-    Modelname="Original"
-    smooth_sigma=0.3
-    bestmodelname="Original"
-    
-    tDGE=""
-
-    if detector=="WCDA":
-        kbs=(1e-15, 1e-11)
-        indexbs=(-4, -1)
-        kb=(1e-18, 1e-10)
-        indexb=(-4.5, -0.5)
+def get_detector_params(detector):
+    """根据探测器类型返回其参数配置"""
+    if detector == "WCDA":
+        kbs = (1e-15, 1e-11)
+        indexbs = (-4, -1)
+        kb = (1e-18, 1e-10)
+        indexb = (-4.5, -0.5)
+        piv = 3
+        return kbs, indexbs, kb, indexb, piv
+    elif detector == "KM2A":
+        kbs = (1e-18, 1e-13)
+        indexbs = (-5.5, -1.5)
+        kb = (1e-18, 1e-13)
+        indexb = (-5.5, -0.5)
+        piv = 50
+        return kbs, indexbs, kb, indexb, piv
+    elif detector == "jf":
+        kbs = (1e-15, 1e-11)
+        indexbs = (-4, -1)
+        kb = (1e-18, 1e-10)
+        indexb = (-4.5, -0.5)
+        piv = 20
+        return kbs, indexbs, kb, indexb, piv
     else:
-        kbs=(1e-18, 1e-13)
-        indexbs=(-5.5, -1.5)
-        kb=(1e-18, 1e-13)
-        indexb=(-5.5, -0.5)
+        raise ValueError("未知的探测器类型: %s" % detector)
 
-    if startfromfile is not None:
+def initialize_model(startfromfile, startfrommodel, fromcatalog, ra1, dec1, data_radius, model_radius, fixcatall, detector, rtsigma, rtflux, rtindex, rtp, ifext_mt_2):
+    """根据输入参数初始化模型，并返回模型及源的计数"""
+    lm = Model()
+    if startfromfile:
         lm = load_model(startfromfile)
-        exts=[]
-        next = lm.get_number_of_extended_sources()
-        if 'Diffuse' in lm.sources.keys():
-            next-=1
-        npt=lm.get_number_of_point_sources()
-
-    if startfrommodel is not None:
+    elif startfrommodel:
         lm = startfrommodel
-        exts=[]
-        next = lm.get_number_of_extended_sources()
-        if 'Diffuse' in lm.sources.keys():
-            next-=1
-        npt=lm.get_number_of_point_sources()
+    elif fromcatalog:
+        lm = getcatModel(ra1, dec1, data_radius, model_radius, fixall=fixcatall, detector=detector, rtsigma=rtsigma, rtflux=rtflux, rtindex=rtindex, rtp=rtp, ifext_mt_2=ifext_mt_2)
     
-    if fromcatalog:
-        lm = getcatModel(ra1, dec1, data_radius, model_radius, fixall=fixcatall, detector=detector,  rtsigma=rtsigma, rtflux=rtflux, rtindex=rtindex, rtp=rtp, ifext_mt_2=ifext_mt_2)
-        next = lm.get_number_of_extended_sources()
-        if 'Diffuse' in lm.sources.keys():
-            next-=1
-        npt=lm.get_number_of_point_sources()
+    # 计算初始的点源和展源数量
+    npt = lm.get_number_of_point_sources()
+    next = lm.get_number_of_extended_sources()
+    if 'Diffuse' in lm.sources:
+        next -= 1 # 弥散背景不计入展源计数
 
-    if ifDGE and ('Diffuse' not in lm.sources.keys()):
-        if detector=="WCDA":
-            piv=3
-        else:
-            piv=50
-        if freeDGE:
-            tDGE="_DGE_free"
-            Diffuse = set_diffusebkg(
-                            ra1, dec1, model_radius, model_radius,
-                            Kf=False, indexf=False, indexb=indexb,
-                            name = region_name, Kb=kb, piv=piv
-                            )
-        else:
-            tDGE="_DGE_fix"
-            Diffuse = set_diffusebkg(
-                            ra1, dec1, model_radius, model_radius,
-                            file=DGEfile, piv=piv,
-                            name = region_name
-                            )
-        lm.add_source(Diffuse)
-        exts.append(Diffuse)
+    return lm, npt, next
 
-    sources = get_sources(lm)
-    if detector=="WCDA":
-        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
-    else:
-        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
-    map2 = maskroi(map2, roi)
-    fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi", savename="Oorg")
-    plt.show()
-
-    bestmodel=copy.deepcopy(lm)
-    bestresult = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
-    bestresultc = copy.deepcopy(bestresult)
-    TS, TSdatafram = getTSall([], region_name+"_iter", Modelname, bestresult, WCDA)
-    TSorg = TS["TS_all"]
-    TS_all.append(TS["TS_all"])
-    sources = get_sources(lm,bestresult)
-    sources.pop("Diffuse")
-    if detector=="WCDA":
-        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
-    else:
-        map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
-    map2 = maskroi(map2, roi)
-    fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
-    plt.show()
-
-    # WCDA.set_model(lm)
-    for N_src in range(100):
-        # resu = getressimple(WCDA, lm)
-        resu = getresaccuracy(WCDA, lm)
-        new_source_idx = np.where(resu==np.ma.max(resu))[0][0]
-        new_source_lon_lat=hp.pix2ang(1024,new_source_idx,lonlat=True)
-        lon_array.append(new_source_lon_lat[0])
-        lat_array.append(new_source_lon_lat[1])
-        log.info(f"Maxres ra,dec: {lon_array},{lat_array}")
-        plt.figure()
-        hp.gnomview(resu,norm='',rot=[ra1,dec1],xsize=200,ysize=200,reso=6,title=Modelname)
-        plt.scatter(lon_array,lat_array,marker='x',color='red')
-        if not os.path.exists(f'{libdir}/../res/{region_name}_iter/'):
-            os.system(f'mkdir {libdir}/../res/{region_name}_iter/')
-        plt.savefig(f"{libdir}/../res/{region_name}_iter/{Modelname}_{N_src}.png",dpi=300)
-        plt.show()
-
-        if not ifnopt:
-            npt+=1
-            name=f"pt{npt}"
-            bestmodelnamec=copy.copy(Modelname)
-            pt = setsorce(name,lon_array[N_src],lat_array[N_src], 
-                        indexb=indexbs,kb=kbs,
-                        fitrange=data_radius)
-            lm.add_source(pt)
-            bestcache=copy.deepcopy(lm)
-            Modelname=f"{npt}pt+{next}ext"+tDGE
-            lm.display()
-            ptresult = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
-            TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, ptresult, WCDA)
-
-            # if TS["TS_all"]-TSorg<25:
-            #     log.info("worst than original, stop!")
-            #     return bestmodel,bestresult
-            
-            TS_all.append(TS["TS_all"])
-            TS_allpt = TS["TS_all"]
-
-            sources = get_sources(lm,ptresult)
-            sources.pop("Diffuse")
-            if detector=="WCDA":
-                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
-            else:
-                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
-            map2 = maskroi(map2, roi)
-            fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
-            plt.show()
-
-        if not ifnopt:
-            lm.remove_source(name)
-            next+=1; npt-=1
-        else:
-            next+=1
-
-        name=f"ext{next}"
-        Modelname=f"{npt}pt+{next}ext"+tDGE
-        if ifAsymm:
-            ext = setsorce(name,lon_array[N_src],lat_array[N_src], a=0.1, ae=(0,5), e=0.1, eb=(0,1), theta=10, thetab=(-90,90),
-                        indexb=indexbs,kb=kbs,
-                        fitrange=data_radius, spat="Asymm")
-        else:
-            ext = setsorce(name,lon_array[N_src],lat_array[N_src], sigma=0.1, sb=(0,5),
-                        indexb=indexbs,kb=kbs,
-                        fitrange=data_radius)
-        lm.add_source(ext)
-        source.append(ext)
-        lm.display()
-        result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini=mini)
-        TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
-        if TS["TS_all"]-TSorg<25:
-            log.info("worst than original, stop!")
-            return bestmodel,bestresult
-
-        sources = get_sources(lm,result)
-        sources.pop("Diffuse")
-        if detector=="WCDA":
-            map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
-        else:
-            map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
-        map2 = maskroi(map2, roi)
-        fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
-        plt.show()
-
-        if not ifnopt:
-            if(TS["TS_all"]-TS_all[-1]>=extthereshold):
-                deltaTS = TS["TS_all"]-TS_all[-1]
-                log.info(f"Ext is better!! deltaTS={deltaTS:.2f}")
-                bestresultc = copy.deepcopy(result)
-                bestcache=copy.deepcopy(lm)
-                bestmodelnamec=copy.copy(Modelname)
-                TS_all[-1]=TS["TS_all"]
-                exts.append(ext)
-            else:
-                deltaTS = TS["TS_all"]-TS_all[-1]
-                log.info(f"pt is better!! deltaTS={deltaTS:.2f}")
-                npt+=1
-                next-=1
-                Modelname=f"{npt}pt+{next}ext"+tDGE
-                bestresultc = copy.deepcopy(ptresult)
-                lm = copy.deepcopy(bestcache)
-                WCDA.set_model(lm)
-                pts.append(pt)
-                # lm.remove_source(name)
-                # lm.add_source(pts[-1])
-                name=f"pt{npt}"
-                # result = fit(region_name+"_iter", Modelname, WCDA, lm, s, e,mini="ROOT")
-                # TS, TSdatafram = getTSall([name], region_name+"_iter", Modelname, result, WCDA)
-                TS_all[-1]=TS_allpt #TS["TS_all"]
-                source[-1]=pt
-        else:
-            bestcache=copy.deepcopy(lm)
-            bestresultc = copy.deepcopy(result)
-            bestmodelnamec=copy.copy(Modelname)
-            TS_all.append(TS["TS_all"])
-            exts.append(ext)
+def add_diffuse(lm, ifDGE, freeDGE, indexb, kb, piv, ra1, dec1, model_radius, region_name, DGEk, DGEfile):
+    """向模型中添加弥散背景"""
+    if not ifDGE or 'Diffuse' in lm.sources:
+        return lm, "", None
         
-        plt.show()
-        if(N_src==0):
-            with open(f'{libdir}/../res/{region_name}_iter/{region_name}_TS.txt', "w") as f:
-                f.write("\n")
-                f.write("Iter%d TS_total: %f"%(N_src+1,TS_all[-1]) )
-                f.write("\n")
+    if freeDGE:
+        diffuse_source = set_diffusebkg(ra1, dec1, model_radius, model_radius, K=DGEk, Kf=False, indexf=False, indexb=indexb, name=region_name, Kb=kb, piv=piv)
+        tag = "_DGE_free"
+    else:
+        diffuse_source = set_diffusebkg(ra1, dec1, model_radius, model_radius, file=DGEfile, piv=piv, name=region_name)
+        tag = "_DGE_fix"
+        
+    lm.add_source(diffuse_source)
+    return lm, tag, diffuse_source
+
+def draw_model_map(region_name, model_name, sources, libdir, roi, ra1, dec1, data_radius, detector, cat, suffix=""):
+    """绘制并保存当前模型的源分布图"""
+    detectors = []
+    if detector=="WCDA":
+        detectors.append("WCDA")
+        map_file = [f"{libdir}/../../data/sigmap_latest/fullsky_WCDA_20240731_0-6_2.6.fits.gz"]
+    elif detector=="KM2A":
+        detectors.append("KM2A")
+        map_file = [f"{libdir}/../../data/sigmap_latest/fullsky_KM2A_20240731_4-13_3.6.fits.gz"]
+    else:
+        detectors.append("WCDA")
+        detectors.append("KM2A")
+        map_file = [f"{libdir}/../../data/sigmap_latest/fullsky_WCDA_20240731_0-6_2.6.fits.gz", f"{libdir}/../../data/sigmap_latest/fullsky_KM2A_20240731_4-13_3.6.fits.gz"]
+    
+    for map,det in zip(map_file, detectors):
+        map2, _ = hp.read_map(map, h=True)
+        map2 = maskroi(map2, roi)
+        drawmap(region_name, model_name, sources, map2, ra1, dec1, rad=data_radius, contours=[10000], save=True, cat=cat, color="Fermi", savename=suffix+det)
+    plt.show()
+
+def get_maxres_lonlat(resu_map, nside=1024):
+    """从残差图中找到最大值点的经纬度"""
+    new_source_idx = np.where(resu_map == np.ma.max(resu_map))[0][0]
+    lon, lat = hp.pix2ang(nside, new_source_idx, lonlat=True)
+    return lon, lat
+
+def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_name, iter_num, libdir):
+    """绘制并保存残差图"""
+    plt.figure()
+    hp.gnomview(resu_map, norm='', rot=[ra1, dec1], xsize=200, ysize=200, reso=6, title=model_name)
+    plt.scatter(lon_array, lat_array, marker='x', color='red')
+    
+    res_dir = f'{libdir}/../res/{region_name}_iter/'
+    os.makedirs(res_dir, exist_ok=True)
+    plt.savefig(f"{res_dir}/{model_name}_{iter_num}.png", dpi=300)
+    plt.show()
+
+def add_point_source(lm, name, lon, lat, indexb, kb, data_radius):
+    """向模型中添加一个点源"""
+    pt_source = setsorce(name, lon, lat, indexb=indexb, kb=kb, fitrange=data_radius)
+    lm.add_source(pt_source)
+    return pt_source
+
+def add_extended_source(lm, name, lon, lat, indexb, kb, data_radius, ifAsymm):
+    """向模型中添加一个展源（对称或非对称高斯）"""
+    if ifAsymm:
+        ext_source = setsorce(name, lon, lat, a=0.1, ae=(0,5), e=0.1, eb=(0,1), theta=10, thetab=(-90,90), indexb=indexb, kb=kb, fitrange=data_radius, spat="Asymm")
+    else:
+        ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,5), indexb=indexb, kb=kb, fitrange=data_radius)
+    lm.add_source(ext_source)
+    return ext_source
+
+def log_TS(region_name, iter_num, ts_value, libdir):
+    """记录每次迭代后的总TS值"""
+    path = f'{libdir}/../res/{region_name}_iter/{region_name}_TS.txt'
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    
+    # 第一次迭代时用 "w" (写入), 之后用 "a" (追加)
+    mode = "w" if iter_num == 1 else "a"
+    with open(path, mode) as f:
+        f.write("\nIter%d TS_total: %f\n" % (iter_num, ts_value))
+
+# --- 重构后的主函数 ---
+
+def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
+           mini="ROOT", verbose=False, ifDGE=1, freeDGE=1, DGEk=None,
+           DGEfile=f"{libdir}/../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=True,
+           startfromfile=None, startfrommodel=None, fromcatalog=False,
+           cat={"TeVCat": [0, "s"], "PSR": [0, "*"], "SNR": [0, "o"], "3FHL": [0, "D"], "4FGL": [0, "d"]},
+           detector="WCDA", fixcatall=False, extthereshold=9,
+           rtsigma=8, rtflux=15, rtindex=2, rtp=8, ifext_mt_2=True):
+
+    # 初始化
+    pts, exts = [], []
+    TS_all = []
+    lon_array, lat_array = [] ,[]
+    Modelname = "Original"
+
+    # 获取探测器参数
+    kbs, indexbs, kb, indexb, piv = get_detector_params(detector)
+
+    # 初始化模型
+    lm, npt, next = initialize_model(startfromfile, startfrommodel, fromcatalog, ra1, dec1,
+                                     data_radius, model_radius, fixcatall, detector,
+                                     rtsigma, rtflux, rtindex, rtp, ifext_mt_2)
+
+    # 添加弥散背景
+    lm, tDGE, diffuse_component = add_diffuse(lm, ifDGE, freeDGE, indexb, kb, piv, ra1, dec1, model_radius, region_name, DGEk, DGEfile)
+    if diffuse_component:
+        exts.append(diffuse_component)
+
+    # 绘制初始模型图
+    draw_model_map(region_name + "_iter", Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "Oorg")
+
+    lm.display(complete=True)
+    # 首次拟合
+    bestmodel = copy.deepcopy(lm)
+    try:
+        if detector == "jf":
+            bestresult = jointfit(region_name + "_iter", Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
         else:
-            with open(f'{libdir}/../res/{region_name}_iter/{region_name}_TS.txt', "a") as f:
-                f.write("\n")
-                f.write("Iter%d TS_total: %f"%(N_src+1,TS_all[-1]) )
-                f.write("\n")
-                
-        if(TS_all[N_src+1]-TS_all[N_src]>25):
-            log.info(f"{bestmodelnamec} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}")
-            bestmodelname= copy.copy(bestmodelnamec)
-            bestresult = copy.deepcopy(bestresultc)
-            bestmodel= copy.deepcopy(bestcache)
-        else:
-            log.info(f"{bestmodelname} is better!! deltaTS={TS_all[N_src+1]-TS_all[N_src]:.2f}, no need for more!")
-            bestmodel.display()
-            sources = get_sources(bestmodel,bestresult)
-            sources.pop("Diffuse")
-            if detector=="WCDA":
-                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_WCDA_20240131_2.6.fits.gz",h=True)
+            bestresult = fit(region_name + "_iter", Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
+    except Exception as e:
+        log.error(f"拟合失败: {e}")
+        return lm, None
+    TS, _ = getTSall([], region_name + "_iter", Modelname, bestresult, WCDA)
+    TSorg = TS["TS_all"]
+    TS_all.append(TSorg)
+
+    # 绘制初始拟合后的模型图 (去除弥散背景)
+    sources_no_diffuse = get_sources(lm, bestresult)
+    sources_no_diffuse.pop("Diffuse", None)
+    draw_model_map(region_name + "_iter", Modelname, sources_no_diffuse, libdir, roi, ra1, dec1, data_radius * 2, detector, cat, Modelname)
+
+    bestmodelname = Modelname
+    bestresultc = copy.deepcopy(bestresult)
+
+    # 开始迭代搜索新源
+    for N_src in range(100):
+        # 计算残差图并找到最大值位置
+        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}_iter/',savename=f"{current_model_name}_residual.png")
+        lon, lat = get_maxres_lonlat(resu)
+        lon_array.append(lon)
+        lat_array.append(lat)
+        plot_residual(resu, lon_array, lat_array, ra1, dec1, region_name, Modelname, N_src, libdir)
+        
+        ptresult, TS_allpt = None, None
+        
+        # 步骤1: 尝试添加点源 (如果ifnopt为False)
+        if not ifnopt:
+            npt_temp = npt + 1
+            pt_name = f"pt{npt_temp}"
+            lm_cache_for_pt = copy.deepcopy(lm) # 备份当前模型
+            pt = add_point_source(lm, pt_name, lon, lat, indexbs, kbs, data_radius)
+            
+            current_model_name = f"{npt_temp}pt+{next}ext" + tDGE
+            try:
+                if detector == "jf":
+                    ptresult = jointfit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+                else:
+                    ptresult = fit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+            except Exception as e:
+                log.error(f"点源拟合失败: {e}")
+                return lm, None
+            TSpt, _ = getTSall([], region_name + "_iter", current_model_name, ptresult, WCDA)
+            TS_allpt = TSpt["TS_all"]
+
+            # 绘制点源模型图
+            sources_pt = get_sources(lm, ptresult)
+            sources_pt.pop("Diffuse", None)
+            draw_model_map(region_name+"_iter", current_model_name, sources_pt, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+            
+            # 恢复模型以尝试展源
+            lm = lm_cache_for_pt
+
+        # 步骤2: 尝试添加展源
+        next_temp = next + 1
+        ext_name = f"ext{next_temp}"
+        if ifnopt:
+            current_model_name = f"{npt}pt+{next_temp}ext" + tDGE
+        else: # 从点源尝试恢复了模型
+            current_model_name = f"{npt}pt+{next_temp}ext" + tDGE
+        
+        ext = add_extended_source(lm, ext_name, lon, lat, indexbs, kbs, data_radius, ifAsymm)
+        try:
+            if detector == "jf":
+                extresult = jointfit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
             else:
-                map2, skymapHeader = hp.read_map(f"{libdir}/../../data/fullsky_KM2A_20240131_3.5.fits.gz",h=True)
-            map2 = maskroi(map2, roi)
-            fig = drawmap(region_name+"_iter", Modelname, sources, map2, ra1, dec1, rad=data_radius*2, contours=[10000],save=True, cat=cat, color="Fermi")
-            plt.show()
-            log.info(f"Best model is {bestmodelname}")
-            return bestmodel,bestresult
+                extresult = fit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+        except Exception as e:
+            log.error(f"展源拟合失败: {e}")
+            return lm, None
+        TSext, _ = getTSall([ext_name], region_name+"_iter", current_model_name, extresult, WCDA)
+        TS_allext = TSext["TS_all"]
+        
+        # 如果加入新源后TS提升小于25，则停止迭代
+        current_max_ts = max(TS_allpt if TS_allpt is not None else -1, TS_allext)
+        if current_max_ts - TS_all[0] < 25:
+            log.info("新源贡献过小(TS<25)，停止迭代!")
+            return bestmodel, bestresult
+
+        # 绘制展源模型图
+        sources_ext = get_sources(lm, extresult)
+        sources_ext.pop("Diffuse", None)
+        draw_model_map(region_name+"_iter", current_model_name, sources_ext, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+
+        # 步骤3: 比较点源和展源，确定本轮最佳模型
+        if not ifnopt:
+            # deltaTS 是展源模型和点源模型的TS差值
+            deltaTS = TS_allext - TS_allpt
+            if deltaTS >= extthereshold:
+                log.info(f"展源更优!! deltaTS={deltaTS:.2f}")
+                next += 1
+                bestresultc = copy.deepcopy(extresult)
+                bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
+                TS_all.append(TS_allext)
+                exts.append(ext)
+                # lm 已经是添加了展源的模型，无需改动
+            else:
+                log.info(f"点源更优!! deltaTS={deltaTS:.2f}")
+                npt += 1
+                lm.remove_source(ext_name) # 移除刚添加的展源
+                pt = add_point_source(lm, f"pt{npt}", lon, lat, indexbs, kbs, data_radius) # 重新添加点源
+                WCDA.set_model(lm)
+                bestresultc = copy.deepcopy(ptresult)
+                bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
+                TS_all.append(TS_allpt)
+                pts.append(pt)
+        else: # 只考虑展源的情况
+            next += 1
+            bestresultc = copy.deepcopy(extresult)
+            bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
+            TS_all.append(TS_allext)
+            exts.append(ext)
+
+        Modelname = bestmodelnamec # 更新当前最优的模型名
+        log_TS(region_name, N_src + 1, TS_all[-1], libdir)
+        
+        # 步骤4: 判断本轮迭代是否显著提升，并决定是否继续
+        if TS_all[N_src+1] - TS_all[N_src] > 25:
+            log.info(f"模型 {bestmodelnamec} 更优!! deltaTS={TS_all[N_src+1] - TS_all[N_src]:.2f}")
+            bestmodelname = bestmodelnamec
+            bestresult = copy.deepcopy(bestresultc)
+            bestmodel = copy.deepcopy(lm) # 保存当前模型状态
+        else:
+            log.info(f"模型 {bestmodelname} 已是最佳!! deltaTS={TS_all[N_src+1] - TS_all[N_src]:.2f}, 无需更多源!")
+            bestmodel.display()
+            final_sources = get_sources(bestmodel, bestresult)
+            final_sources.pop("Diffuse", None)
+            draw_model_map(region_name+"_iter", "BestModel_"+bestmodelname, final_sources, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+            log.info(f"最佳模型是 {bestmodelname}") 
+            return bestmodel, bestresult
+            
+    return bestmodel, bestresult
 
 def fun_Logparabola(x,K,alpha,belta,Piv):
     return K*pow(x/Piv,alpha-belta*np.log(x/Piv))
@@ -2183,6 +2444,8 @@ def set_diffusebkg(ra1, dec1, lr=6, br=6, K = None, Kf = False, Kb=None, index =
             K = F0*hss*(sa/hsa) #/ss
             Kz = F0*hss*(zsa/hsa) #/ss
             K = K.value
+
+        K = fun_Powerlaw(piv, K, index, 3)
 
         log.info(f"total sr: {ss}"+"\n"+f"ratio: {ss/2.745913003176557}")
         log.info(f"integration: {sa}"+"\n"+f"ratio: {sa/0.00012671770357488944}")

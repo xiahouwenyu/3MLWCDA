@@ -31,7 +31,7 @@ def add_method(self, method, name=None):
 
 class MinuitMinimizer(LocalMinimizer):
 
-    valid_setup_keys = ("ftol",)
+    valid_setup_keys = ("ftol","strategy","max_iter","iterate","print_level")
 
     # @TODO: Is this still relevant?
     # NOTE: this class is built to be able to work both with iMinuit and with a boost interface to SEAL
@@ -110,13 +110,47 @@ class MinuitMinimizer(LocalMinimizer):
 
         self.minuit.errordef = Minuit.LIKELIHOOD
 
-        self.minuit.print_level = self.verbosity
+        # self.minuit.print_level = self.verbosity
+
+        self.ncall = None
+
+        self.iterate = 1
+
+
 
         if user_setup_dict is not None:
 
             if "ftol" in user_setup_dict:
 
+                # This is the tolerance for the minimization
+                # (default is 0.1)
+
                 self.minuit.tol = user_setup_dict["ftol"]
+            if "strategy" in user_setup_dict:
+
+                # Strategy is not a tolerance, but a strategy for the minimization
+                # (0 = default, 1 = fast, 2 = more precise, 3 = very precise)
+
+                self.minuit.strategy = user_setup_dict["strategy"]
+            if "max_iter" in user_setup_dict:
+
+                # This is the maximum number of iterations for the minimization
+                # (default is 10000)
+
+                self.minuit.maxiter = user_setup_dict["max_iter"]
+                self.ncall = user_setup_dict["max_iter"]
+            if "iterate" in user_setup_dict:
+
+                # This is the number of iterations for the minimization
+                # (default is 1)
+
+                self.iterate = user_setup_dict["iterate"]
+            if "print_level" in user_setup_dict:
+
+                # This is the print level for the minimization
+                # (default is 0, i.e., no output)
+
+                self.minuit.print_level = user_setup_dict["print_level"]
 
         else:
 
@@ -190,7 +224,7 @@ class MinuitMinimizer(LocalMinimizer):
         # Try a maximum of 10 times and break as soon as the fit is ok
 
         self.minuit.reset()
-        self._last_migrad_results = self.minuit.migrad()
+        self._last_migrad_results = self.minuit.migrad(ncall = self.ncall, iterate = self.iterate)
 
         for i in range(9):
 
@@ -201,11 +235,13 @@ class MinuitMinimizer(LocalMinimizer):
             else:
 
                 # Try again
-                self._last_migrad_results = self.minuit.migrad()
+                self._last_migrad_results = self.minuit.migrad(ncall = self.ncall, iterate = self.iterate)
 
         if not self.minuit.valid:
 
             self._print_current_status()
+
+            self.restore_best_fit()
 
             raise FitFailed(
                 "MIGRAD call failed. This is usually due to unconstrained parameters."

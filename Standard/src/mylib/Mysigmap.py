@@ -187,72 +187,73 @@ def getresaccuracy(
         print(f"Using user-provided alpha: {alpha}")
         final_alpha = alpha
     # --- 修正结束 ---
+    if not isinstance(WCDA, list):
+        WCDA = [WCDA]
 
-    if lm:
-        WCDA.set_model(lm)
-    
     on_all = []
     bk_all = []
     nmbk_all = []
-
-    npt = int(lm.get_number_of_point_sources()) if lm else int(0)
-    next = int(lm.get_number_of_extended_sources()) if lm else int(0)
-    if npt == 0:
-        pta = []
-    else:
-        pta = np.zeros(int(npt))
-    if next == 0:
-        exta = []
-    else:
-        exta = np.zeros(int(next))
-
-    if active_sources:
-        for source in active_sources:
-            ids = find_source_id(lm, source)
-            if ids[0] is not None:
-                pta[ids[0]] = 1
-            if ids[1] is not None:
-                exta[ids[1]] = 1
-
-    for i, bin_id in enumerate(WCDA._active_planes):
-        dmap, bkmap = WCDA._get_excess(WCDA._maptree[bin_id], all_maps=True)[1:]
-
-        model_map_val = 0.0
-        keepsource = []
-        keepsourcename = "all"
+    for WCDA in WCDA:
         if lm:
-            keepsourcename = "None"
-            Residual = "Residual"
-            # 模型计算部分保持不变
-            if active_sources:
-                model_map = WCDA._get_model_map(bin_id,  0, 0).as_dense()
-                for idx, keep in enumerate(pta):
-                    if not keep:
-                        model_map += WCDA._get_model_map(bin_id, idx+1, 0).as_dense()
-                        if idx != 0:
-                            model_map -= WCDA._get_model_map(bin_id, idx, 0).as_dense()
-                for idx, keep in enumerate(exta):
-                    if not keep:
-                        model_map += WCDA._get_model_map(bin_id, 0, idx+1).as_dense()
-                        if idx != 0:
-                            model_map -= WCDA._get_model_map(bin_id, 0, idx).as_dense()
-                model_map_val = model_map
-            else:
-                model_map_val = WCDA._get_model_map(bin_id, npt, next).as_dense()
+            WCDA.set_model(lm)
+        npt = int(lm.get_number_of_point_sources()) if lm else int(0)
+        next = int(lm.get_number_of_extended_sources()) if lm else int(0)
+        if npt == 0:
+            pta = []
         else:
-            Residual = ""
-        
-        on = dmap
-        bk = bkmap + model_map_val
-        on[np.isnan(on)]=hp.UNSEEN
-        bk[np.isnan(bk)]=hp.UNSEEN
-        bkmap[np.isnan(bkmap)]=hp.UNSEEN
-        on=hp.ma(on)
-        bk=hp.ma(bk)
-        bkmap = hp.ma(bkmap)
-        on_all.append(on)
-        bk_all.append(bk)
-        nmbk_all.append(bkmap)
+            pta = np.zeros(int(npt))
+        if next == 0:
+            exta = []
+        else:
+            exta = np.zeros(int(next))
+
+        if active_sources:
+            for source in active_sources:
+                ids = find_source_id(lm, source)
+                if ids[0] is not None:
+                    pta[ids[0]] = 1
+                if ids[1] is not None:
+                    exta[ids[1]] = 1
+
+        for i, bin_id in enumerate(WCDA._active_planes):
+            dmap, bkmap = WCDA._get_excess(WCDA._maptree[bin_id], all_maps=True)[1:]
+
+            model_map_val = 0.0
+            keepsource = []
+            keepsourcename = "all"
+            if lm:
+                keepsourcename = "None"
+                Residual = "Residual"
+                # 模型计算部分保持不变
+                if active_sources:
+                    model_map = WCDA._get_model_map(bin_id,  0, 0).as_dense()
+                    for idx, keep in enumerate(pta):
+                        if not keep:
+                            model_map += WCDA._get_model_map(bin_id, idx+1, 0).as_dense()
+                            if idx != 0:
+                                model_map -= WCDA._get_model_map(bin_id, idx, 0).as_dense()
+                    for idx, keep in enumerate(exta):
+                        if not keep:
+                            model_map += WCDA._get_model_map(bin_id, 0, idx+1).as_dense()
+                            if idx != 0:
+                                model_map -= WCDA._get_model_map(bin_id, 0, idx).as_dense()
+                    model_map_val = model_map
+                else:
+                    model_map_val = WCDA._get_model_map(bin_id, npt, next).as_dense()
+            else:
+                Residual = ""
+            
+            on = dmap
+            bk = bkmap + model_map_val
+            on[np.isnan(on)]=hp.UNSEEN
+            bk[np.isnan(bk)]=hp.UNSEEN
+            bkmap[np.isnan(bkmap)]=hp.UNSEEN
+            on=hp.ma(on)
+            bk=hp.ma(bk)
+            bkmap = hp.ma(bkmap)
+            on_all.append(on)
+            bk_all.append(bk)
+            nmbk_all.append(bkmap)
 
     if isinstance(smooth_sigma, np.ndarray):
         planes = [int(it) for it in WCDA._active_planes]
@@ -404,13 +405,15 @@ def getresaccuracy(
                 hp.graticule(dpar=1, dmer=1, verbose=False, color='gray', alpha=0.5)
                 
                 if new_source_lon_lat and len(new_source_lon_lat) == 2:
-                     hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
+                    hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
                 else:
                     log.warning("new_source_lon_lat is not properly defined or has invalid values.")
                 # plt.legend()
             plt.tight_layout()
             plt.axis('off') 
             plt.show()
+            if savepath and savename:
+                plt.savefig(f"{savepath}{savename}.png",dpi=300)
         else:
             # 适用于 combine='sum' 或 'weighted'
             resu = resu_all
@@ -423,7 +426,7 @@ def getresaccuracy(
                         title=(f"{Residual} Significance Map {savename.replace('sigmapfast_', '').replace('_', ' ')}"))
             hp.graticule(dpar=1, dmer=1, verbose=False)
             if new_source_lon_lat and len(new_source_lon_lat) == 2:
-                 hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
+                hp.projplot(new_source_lon_lat[0], new_source_lon_lat[1], 'rx', lonlat=True, markersize=10)
                 # plt.scatter(x, y, marker='x', color='red', s=100, label=f'Hottest Spot {new_source_lon_lat}')
             else:
                 log.warning("new_source_lon_lat is not properly defined or has invalid values.")
@@ -432,7 +435,8 @@ def getresaccuracy(
             # hp.projtext(new_source_lon_lat[0], new_source_lon_lat[1], 'X', lonlat=True, color='red')
             print(f"Hottest spot at (lo1n, lat): {new_source_lon_lat}")
             plt.show()
-            plt.savefig(f"{savepath}{savename}.png",dpi=300)
+            if savepath and savename:
+                plt.savefig(f"{savepath}{savename}.png",dpi=300)
 
     return resu_all
 
@@ -1076,7 +1080,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
-def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=None):
+def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=None):
     """
         从healpix显著性天图S画一维显著性分布并保存
 
@@ -1140,8 +1144,9 @@ def getsig1D(S, region_name, Modelname, name, showexp=True, logy=True, ylimsclae
     plt.xlabel(r'Significance($\sigma$)')
     plt.ylabel("entries")
     plt.legend()
-    plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.pdf")
-    plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
+    if region_name is not None and Modelname is not None and name is not None:
+        plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.pdf")
+        plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
 
 def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908", alpha=None):
     """put in a smooth map and get a sig map.
@@ -1184,187 +1189,110 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
     return S
 
 def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1, data_radius, outname,
-                 active_sources=[], # [S147, PSR]
-                binc="all", ifrunllh=True, detector="WCDA", jc=10, sn=1000, s=None, e=None):
-    """write residual map to skymap root file.
+                 active_sources=[], binc="all", ifrunllh=True, detector="WCDA", jc=10, sn=1000, s=None, e=None):
+    """Write residual map to skymap root file."""
+    log.info(outname + "_res")
 
-        Args:
-            pta=[1,0,1], exta=[0,0]: if you have 3 pt sources and 2 ext sources, and you only want to keep 1st and 3st sources,you do like this.
-            ifrunllh: 顺便提交作业跑残差显著性天图
-    """
-    import os
-    log.info(outname+"_res")
-    # outname = "residual_all"
-
-    # root setting
-    ## infile
-    forg = ROOT.TFile.Open(maptree,'read')
-    bininfo = forg.Get("BinInfo")
-
-    # Healpix setting
-    colat = np.radians(90-dec1)
+    # Healpix region info
+    colat = np.radians(90 - dec1)
     lon = np.radians(ra1)
-    vec = hp.ang2vec(colat,lon)
-    holepixid = hp.query_disc(1024,vec,np.radians(data_radius))
-    pixid=roi.active_pixels(1024)
+    vec = hp.ang2vec(colat, lon)
+    holepixid = hp.query_disc(1024, vec, np.radians(data_radius))
+    pixid = roi.active_pixels(1024)
     npix = hp.nside2npix(1024)
 
-    if binc=="all":
-        binc = WCDA._active_planes
+    # Ensure binc is a list of integers
+    if binc == "all":
+        binc = [x for x in WCDA._active_planes]  # Convert to integers
 
-    # cut=""
-    # kk=0
-    # if detector=="WCDA":
-    #     for i in range(6):
-    #         if str(i) not in binc:
-    #             if kk==0:
-    #                 cut=cut+f"name!={binc}"
-    #             else:
-    #                 cut=cut+f"&&name!={binc}"
-    #             kk+=1
-    # elif detector=="KM2A":
-    #     for i in range(14):
-    #         if str(i) not in binc:
-    #             if kk==0:
-    #                 cut=cut+f"name!={binc}"
-    #             else:
-    #                 cut=cut+f"&&name!={binc}"
-    #             kk+=1
+    # Output file path
+    outroot = f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root"
 
-    ## outfile
-    fout = ROOT.TFile.Open(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", 'recreate')
-    # bininfoout = bininfo.CloneTree()
-    # bininfoout = bininfo.CopyTree(f'name >= "{binc[0]}" && name <= "{binc[-1]}"')
-    # bininfoout.Write()
+    # Read BinInfo with PyROOT (uproot doesn't support cloning complex objects)
+    forg_pyroot = ROOT.TFile.Open(maptree, 'read')
+    bininfo = forg_pyroot.Get("BinInfo")
+
+    # Write BinInfo to output file with PyROOT
+    fout_pyroot = ROOT.TFile.Open(outroot, 'recreate')
     bininfoout = bininfo.CloneTree(0)
     for entry in bininfo:
-        # 检查每个条目
-        if str(entry.name) in binc:  # 假设有一个bin_id的字段
-            bininfoout.Fill()  # 将符合条件的条目写入新树
-    # if detector=="WCDA":
-      
-        # for i in range(7):
-        #     if str(i) not in binc:  
-        #         bininfoout.DeleteEntry(i)
-    # elif detector=="KM2A":
-    #     for i in range(14):
-    #         if str(i) not in binc:  
-    #             bininfoout.DeleteEntry(i)            
+        if str(entry.name) in binc:
+            bininfoout.Fill()
     bininfoout.Write()
-    fout.Write(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", ROOT.TFile.kOverwrite)
-    fout.Close()
+    fout_pyroot.Close()  # Close PyROOT file
 
+    # Active source structure
     npt = WCDA._likelihood_model.get_number_of_point_sources() if WCDA._likelihood_model else 0
     next = WCDA._likelihood_model.get_number_of_extended_sources() if WCDA._likelihood_model else 0
     pta, exta = np.zeros(npt), np.zeros(next)
+
     for source in active_sources:
         ids = find_source_id(WCDA._likelihood_model, source)
         if ids[0] is not None:
             pta[ids[0]] = 1
         if ids[1] is not None:
             exta[ids[1]] = 1
-        
-    for bin in binc:
-        log.info(f'processing at nHit0{bin}')
-        ## outfile
-        fout = ROOT.TFile.Open(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", 'UPDATE')
-        active_bin = WCDA._maptree._analysis_bins[bin]
 
+    # Open input file with uproot
+    with uproot.open(maptree) as forg_uproot:
+        for bin in binc:
+            bin_int = int(bin)  # Ensure bin is an integer
+            log.info(f'Processing bin nHit0{bin_int:02d}')
+             
+            # Construct model map (point and extended sources)
+            model = WCDA._get_model_map(bin, 0, 0).as_dense()
+            for idx, keep in enumerate(pta):
+                if not keep:
+                    model += WCDA._get_model_map(bin, idx + 1, 0).as_dense()
+                    if idx != 0:
+                        model -= WCDA._get_model_map(bin, idx, 0).as_dense()
+            for idx, keep in enumerate(exta):
+                if not keep:
+                    model += WCDA._get_model_map(bin, 0, idx + 1).as_dense()
+                    if idx != 0:
+                        model -= WCDA._get_model_map(bin, 0, idx).as_dense()
+            # active_bin = WCDA._maptree._analysis_bins[bin_int]  # Use integer bin
+            # Read data and background with uproot
+            try:
+                tdata = forg_uproot[f"nHit{bin_int:02d}/data"].arrays(library="np")
+                tbkg = forg_uproot[f"nHit{bin_int:02d}/bkg"].arrays(library="np")
+                data_counts = tdata["count"]
+                bkg_counts = tbkg["count"]
+            except KeyError as e:
+                log.error(f"Failed to read TTree for bin nHit{bin_int:02d}: {e}")
+                continue
 
-        model = WCDA._get_model_map(bin,  0, 0).as_dense()
-        for idx, keep in enumerate(pta):
-            if not keep:
-                model += WCDA._get_model_map(bin, idx+1, 0).as_dense()
-                if idx != 0:
-                    model -= WCDA._get_model_map(bin, idx, 0).as_dense()
-        for idx, keep in enumerate(exta):
-            if not keep:
-                model += WCDA._get_model_map(bin, 0, idx+1).as_dense()
-                if idx != 0:
-                    model -= WCDA._get_model_map(bin, 0, idx).as_dense()
+            # Vectorized computation of residual map
+            val_m = bkg_counts.copy()
+            roi_mask = np.isin(np.arange(npix), pixid)
+            roi_indices = np.searchsorted(pixid, np.arange(npix)[roi_mask])
+            val_m[roi_mask] += model[roi_indices]
 
-        # model = WCDA._get_expectation(active_bin,bin,ptid,extid)
-        # model = WCDA._get_expectation(active_bin,bin,0,0)
-        # for i,pt in enumerate(pta):
-        #     if not pt:
-        #         model += WCDA._get_expectation(active_bin,bin,i+1,0)
-        #         if i != 0:
-        #             model -= WCDA._get_expectation(active_bin,bin,i,0)
-        
-        # for i,ext in enumerate(exta):
-        #     if not ext:
-        #         model += WCDA._get_expectation(active_bin,bin,0,i+1)
-        #         if i != 0:
-        #             model -= WCDA._get_expectation(active_bin,bin,0,i)
+            # Write to output file with uproot
+            with uproot.update(outroot) as fout_uproot:
+                fout_uproot[f"nHit{bin_int:02d}/data"] = {"count": data_counts}
+                fout_uproot[f"nHit{bin_int:02d}/bkg"] = {"count": val_m}
 
-        tdata=forg.Get("nHit%02d"%int(bin)).data
-        tbkg=forg.Get("nHit%02d"%int(bin)).bkg
+    # Add additional info with external tool
+    os.system(f'{libdir}/tools/llh_skymap/Add_UserInfo {outroot} {binc[0]} {binc[-1]}')
 
-        n10=fout.mkdir('nHit%02d'%int(bin),'nHit%02d'%int(bin))
-
-        dtype1 = [('count', float)]
-        dtype2 = [('count', float)]
-
-        toFill_d=np.zeros(npix, dtype = dtype1)
-        toFill_m=np.zeros(npix, dtype = dtype2)
-
-        tree1=ROOT.TTree('data','data')
-        tree2=ROOT.TTree('bkg','bkg')
-
-        tree1.SetDirectory(n10)
-        tree1.SetEntries(npix)
-        tree2.SetDirectory(n10)
-        tree2.SetEntries(npix)
-
-        #LOOP
-        for idx in tqdm(holepixid):
-            tdata.GetEntry(idx)
-            tbkg.GetEntry(idx)
-            toFill_d[idx]=tdata.count
-            if idx in pixid:
-                roiid=np.argwhere(pixid==idx)[0][0]
-                toFill_m[idx]=tbkg.count+model[roiid]
-            else:
-                toFill_m[idx]=tbkg.count
-        # rn.array2tree(toFill_d,tree=tree1)
-        # rn.array2tree(toFill_m,tree=tree2)
-
-        # 创建字典格式的数据，符合uproot要求
-        data_dict = {"count": toFill_d["count"]}
-        bkg_dict = {"count": toFill_m["count"]}
-
-        # 使用uproot写入树
-        with uproot.update(f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root") as file:
-            file[f"nHit{int(bin):02d}/data"] = data_dict
-            file[f"nHit{int(bin):02d}/bkg"] = bkg_dict
-
-        # obj11 = ROOT.TParameter(int)("Nside",1024)
-        # obj21 = ROOT.TParameter(int)("Scheme",0)
-        # obj12 = ROOT.TParameter(int)("Nside",1024)
-        # obj22 = ROOT.TParameter(int)("Scheme",0)
-
-        # tree1.GetUserInfo().Add(obj11)
-        # tree1.GetUserInfo().Add(obj21)
-        # tree2.GetUserInfo().Add(obj12)
-        # tree2.GetUserInfo().Add(obj22)
-
-        fout.Write()
-        fout.Close()
-    forg.Close()
-
-    os.system(f'{libdir}/tools/llh_skymap/Add_UserInfo {libdir}/../res/{region_name}/{Modelname}/{outname}.root {int(binc[0])} {int(binc[-1])}')
+    # Run significance skymap
     if ifrunllh:
         try:
             from hawc_hal import HealpixConeROI
-        except:
+        except ImportError:
             from WCDA_hal import HealpixConeROI
-        roi2=HealpixConeROI(ra=ra1,dec=dec1,data_radius=data_radius,model_radius=data_radius+1)
+
+        roi2 = HealpixConeROI(ra=ra1, dec=dec1, data_radius=data_radius, model_radius=data_radius + 1)
         if s is None:
-            s=int(binc[0])
+            s = binc[0]
         if e is None:
-            e=int(binc[-1])
-        runllhskymap(roi2, f"{libdir}/../res/{region_name}/{Modelname}/{outname}.root", response, ra1, dec1, data_radius, outname, detector=detector, ifres=1, s=s, e=e,jc=jc, sn=sn)
-    return outname+"_res"
+            e = binc[-1]
+        runllhskymap(roi2, outroot, response, ra1, dec1, data_radius, outname,
+                     detector=detector, ifres=1, s=s, e=e, jc=jc, sn=sn)
+
+    return outname + "_res"
+
 
 def getllhskymap(inname, region_name, Modelname, ra1, dec1, data_radius, detector="WCDA", ifsave=True, ifdraw=False, drawfullsky=False, tofits=False):
     """
