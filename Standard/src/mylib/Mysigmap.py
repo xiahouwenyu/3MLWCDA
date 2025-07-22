@@ -152,7 +152,9 @@ def getresaccuracy(
     active_sources=None, #["S147", "PSR"]
     plot=False,
     savepath=None,
-    savename=None
+    savename=None,
+    radius=10,
+    reso=6
 ):
     """
     计算显著性图，支持加权合并、多bin显著性、以及自定义模型残差。
@@ -400,7 +402,7 @@ def getresaccuracy(
                 ax.spines['bottom'].set_visible(False)
                 ax.spines['left'].set_visible(False)
                 ax.set_axis_off() 
-                hp.gnomview(m, rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6, title=f"bin {i}", return_projected_map=True, sub=(nrows, ncols, i + 1), cbar=True, reuse_axes=False) # 您可以控制是否显示 colorbar , reuse_axes=True
+                hp.gnomview(m, rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso, title=f"bin {i}", return_projected_map=True, sub=(nrows, ncols, i + 1), cbar=True, reuse_axes=False) # 您可以控制是否显示 colorbar , reuse_axes=True
                 # ax.tick_params(axis='both', which='both', length=0)  # 隐藏刻度线
                 hp.graticule(dpar=1, dmer=1, verbose=False, color='gray', alpha=0.5)
                 
@@ -422,7 +424,7 @@ def getresaccuracy(
             resu.set_fill_value(hp.UNSEEN)
             resu = hp.ma(resu)
             plt.figure(figsize=(8, 8))
-            hp.gnomview(resu, norm='', rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=200, ysize=200, reso=6,
+            hp.gnomview(resu, norm='', rot=[new_source_lon_lat[0], new_source_lon_lat[1]], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso,
                         title=(f"{Residual} Significance Map {savename.replace('sigmapfast_', '').replace('_', ' ')}"))
             hp.graticule(dpar=1, dmer=1, verbose=False)
             if new_source_lon_lat and len(new_source_lon_lat) == 2:

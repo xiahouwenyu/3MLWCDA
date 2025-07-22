@@ -291,7 +291,7 @@ def set_all_parameters_free_or_fixed(model, free=True):
         param.free = free
 
 from matplotlib import gridspec
-def plot_all_model_maps(WCDA, lm, ra1, dec1, max_component_id=None, xsize=200, ysize=200, reso=6):
+def plot_all_model_maps(WCDA, lm, ra1, dec1, max_component_id=None, radius=10, reso=6):
     """
     绘制模型的所有组成部分（如点源、扩展源、diffuse等），并拼接为一张大图。
 
@@ -308,6 +308,8 @@ def plot_all_model_maps(WCDA, lm, ra1, dec1, max_component_id=None, xsize=200, y
     """
     if max_component_id is None:
         max_component_id = 10  # 默认尝试最多10个，直到失败为止
+
+    xsize=radius*2*(60/reso), ysize=radius*2*(60/reso)
 
     maps = []
     valid_ids = []
@@ -2147,10 +2149,12 @@ def get_maxres_lonlat(resu_map, nside=1024):
     lon, lat = hp.pix2ang(nside, new_source_idx, lonlat=True)
     return lon, lat
 
-def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_name, iter_num, libdir):
+def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_name, iter_num, libdir, radius=10, reso=6):
     """绘制并保存残差图"""
+
+    
     plt.figure()
-    hp.gnomview(resu_map, norm='', rot=[ra1, dec1], xsize=200, ysize=200, reso=6, title=model_name)
+    hp.gnomview(resu_map, norm='', rot=[ra1, dec1], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso, title=model_name)
     plt.scatter(lon_array, lat_array, marker='x', color='red')
     
     res_dir = f'{libdir}/../res/{region_name}_iter/'
