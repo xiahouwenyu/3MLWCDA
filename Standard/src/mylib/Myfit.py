@@ -1448,7 +1448,7 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
         except:
             pass
         Model.save(f"{libdir}/../res/{regionname}/{modelname}/Model.yml", overwrite=True)
-        jl.results.write_to(f"../res/{regionname}/{modelname}/Results.fits", overwrite=True)
+        jl.results.write_to(f"{libdir}/../res/{regionname}/{modelname}/Results.fits", overwrite=True)
         jl.results.optimized_model.save(f"{libdir}/../res/{regionname}/{modelname}/Model_opt.yml", overwrite=True)
         with open(f"{libdir}/../res/{regionname}/{modelname}/Results.txt", "w") as f:
             f.write("\nFree parameters:\n")
@@ -1459,7 +1459,7 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
                 f.write("%s\n" % l)
             f.write("\nStatistical measures:\n")
             f.write(str(result[1].iloc[0])+"\n")
-            f.write(str(jl.results.get_statistic_measure_frame().to_dict()))
+            f.write(str(jl.results.get_statistic_measure_frame().to_dict())+"\n")
             
         result[0].to_html(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.html")
         result[0].to_csv(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.csv")
@@ -1635,6 +1635,9 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
             f.write("\nFixed parameters:\n")
             for l in fixedpars:
                 f.write("%s\n" % l)
+            f.write("\nStatistical measures:\n")
+            f.write(str(result[1].iloc[0])+"\n")
+            f.write(str(jl.results.get_statistic_measure_frame().to_dict())+"\n")
         result[0].to_html(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.html")
         result[0].to_csv(f"{libdir}/../res/{regionname}/{modelname}/Results_detail.csv")
         # new_model_reloaded = load_model("./%s/Model.yml"%(time1))
@@ -2055,7 +2058,7 @@ def getTSall(TSlist, region_name, Modelname, result, WCDAs):
         TS["TS_all"] += TS_all
         TS["-log(likelihood)"] += -llh
     TSresults = pd.DataFrame([TS])
-    TSresults.to_csv(f'../res/{region_name}/{Modelname}/Results.txt', sep='\t', mode='a', index=False)
+    TSresults.to_csv(f'{libdir}/../res/{region_name}/{Modelname}/Results.txt', sep='\t', mode='a', index=False)
     TSresults
     return TS, TSresults
 
@@ -2204,10 +2207,16 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
                                      data_radius, model_radius, fixcatall, detector,
                                      rtsigma, rtflux, rtindex, rtp, ifext_mt_2)
 
-    # 添加弥散背景
-    lm, tDGE, diffuse_component = add_diffuse(lm, ifDGE, freeDGE, indexb, kb, piv, ra1, dec1, model_radius, region_name, DGEk, DGEfile)
-    if diffuse_component:
-        exts.append(diffuse_component)
+    if "Diffuse" not in [lm.get_extended_source_name(i) for i in range(lm.get_number_of_extended_sources())]:
+        # 添加弥散背景
+        lm, tDGE, diffuse_component = add_diffuse(lm, ifDGE, freeDGE, indexb, kb, piv, ra1, dec1, model_radius, region_name, DGEk, DGEfile)
+        if diffuse_component:
+            exts.append(diffuse_component)
+    else:
+        if freeDGE:
+            tDGE = "_DGE_free"
+        else:
+            tDGE = "_DGE_fix"
 
     # 绘制初始模型图
     draw_model_map(region_name + "_iter", Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "Oorg")
@@ -2234,6 +2243,8 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
 
     bestmodelname = Modelname
     bestresultc = copy.deepcopy(bestresult)
+
+    current_model_name = f"{npt}pt+{next}ext" + tDGE
 
     # 开始迭代搜索新源
     for N_src in range(100):
