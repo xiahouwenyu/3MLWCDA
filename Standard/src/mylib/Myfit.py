@@ -673,7 +673,7 @@ def getcatModel(ra1, dec1, data_radius, model_radius, detector="WCDA", rtsigma=8
                     log.info(f"Mor: \n sigma={sigma:.2f} sb=({sbl:.2f},{sbh:.2f}) fitrange={rtp*pe:.2f}")
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, sigma={sigma}, sb=({sbl},{sbh}), raf={pf}, decf={pf}, sf={sf}, piv={piv},
-        k={A0}, kb=({kbl}, {kbh}), alpha={alpha}, alphab=({indexel},{indexeh}), beta={beta}, betab=(0,3), fitrange={rtp*pe}, kf={kf}, alphaf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar}, spec=Log_parabola())
+        k={A0}, kb=({kbl}, {kbh}), alpha={alpha}, alphab=({indexel},{indexeh}), beta={beta}, betab=(0,3), betaf={indexf}, fitrange={rtp*pe}, kf={kf}, alphaf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar}, spec=Log_parabola())
 lm.add_source({name})
                     """
                     exec(prompt)
@@ -681,7 +681,7 @@ lm.add_source({name})
                     log.info(f"Mor: fitrange={rtp*pe:.2f}")
                     prompt = f"""
 {name} = setsorce("{name}", {ras}, {decs}, raf={pf}, decf={pf}, sf={sf}, piv={piv},
-        k={A0}, kb=({kbl}, {kbh}), alpha={alpha}, alphab=({indexel},{indexeh}), beta={beta}, betab=(0,3), fitrange={rtp*pe}, kf={kf}, alphaf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar}, spec=Log_parabola())
+        k={A0}, kb=({kbl}, {kbh}), alpha={alpha}, alphab=({indexel},{indexeh}), beta={beta}, betab=(0,3), betaf={indexf}, fitrange={rtp*pe}, kf={kf}, alphaf={indexf}, kn={Kscale}, setdeltabypar={setdeltabypar}, spec=Log_parabola())
 lm.add_source({name})
                     """
                     exec(prompt)
