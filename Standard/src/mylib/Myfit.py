@@ -2184,7 +2184,7 @@ def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_
     hp.gnomview(resu_map, norm='', rot=[ra1, dec1], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso, title=model_name)
     plt.scatter(lon_array, lat_array, marker='x', color='red')
     
-    res_dir = f'{libdir}/../res/{region_name}_iter/'
+    res_dir = f'{libdir}/../res/{region_name}/'
     os.makedirs(res_dir, exist_ok=True)
     plt.savefig(f"{res_dir}/{model_name}_{iter_num}.png", dpi=300)
     plt.show()
@@ -2212,7 +2212,7 @@ def add_extended_source(lm, name, lon, lat, indexb, kb, data_radius, ifAsymm,  p
 
 def log_TS(region_name, iter_num, ts_value, libdir):
     """记录每次迭代后的总TS值"""
-    path = f'{libdir}/../res/{region_name}_iter/{region_name}_TS.txt'
+    path = f'{libdir}/../res/{region_name}/{region_name}_TS.txt'
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
     # 第一次迭代时用 "w" (写入), 之后用 "a" (追加)
@@ -2222,7 +2222,7 @@ def log_TS(region_name, iter_num, ts_value, libdir):
 
 # --- 重构后的主函数 ---
 
-def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
+def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, s, e,
            mini="ROOT", verbose=False, ifDGE=1, freeDGE=1, DGEk=None,
            DGEfile=f"{libdir}/../../data/G25_dust_bkg_template.fits", ifAsymm=False, ifnopt=True,
            startfromfile=None, startfrommodel=None, fromcatalog=False,
@@ -2234,7 +2234,13 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
     pts, exts = [], []
     TS_all = []
     lon_array, lat_array = [] ,[]
-    Modelname = "Original"
+    Modelname = f"{Mname}/Original"
+
+    if not os.path.exists(f'{libdir}/../res/{region_name}/'):
+        os.system(f'mkdir -p {libdir}/../res/{region_name}/')
+    if not os.path.exists(f'{libdir}/../res/{region_name}/{Modelname}/'):
+        os.system(f'mkdir -p {libdir}/../res/{region_name}/{Modelname}/')
+    
 
     # 获取探测器参数
     kbs, indexbs, kb, indexb, piv = get_detector_params(detector)
@@ -2256,37 +2262,39 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
             tDGE = "_DGE_fix"
 
     # 绘制初始模型图
-    draw_model_map(region_name + "_iter", Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "Oorg")
+    draw_model_map(region_name, Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "Oorg")
 
     lm.display(complete=True)
     # 首次拟合
     bestmodel = copy.deepcopy(lm)
     try:
         if detector == "jf":
-            bestresult = jointfit(region_name + "_iter", Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
+            bestresult = jointfit(region_name, Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
         else:
-            bestresult = fit(region_name + "_iter", Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
+            bestresult = fit(region_name, Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
     except Exception as e:
         log.error(f"拟合失败: {e}")
         return lm, None
-    TS, _ = getTSall([], region_name + "_iter", Modelname, bestresult, WCDA)
+    TS, _ = getTSall([], region_name, Modelname, bestresult, WCDA)
     TSorg = TS["TS_all"]
     TS_all.append(TSorg)
 
     # 绘制初始拟合后的模型图 (去除弥散背景)
     sources_no_diffuse = get_sources(lm, bestresult)
     sources_no_diffuse.pop("Diffuse", None)
-    draw_model_map(region_name + "_iter", Modelname, sources_no_diffuse, libdir, roi, ra1, dec1, data_radius * 2, detector, cat, Modelname)
+    draw_model_map(region_name, Modelname, sources_no_diffuse, libdir, roi, ra1, dec1, data_radius * 2, detector, cat, Modelname)
 
     bestmodelname = Modelname
     bestresultc = copy.deepcopy(bestresult)
 
-    current_model_name = f"{npt}pt+{next}ext" + tDGE
+    current_model_name = f"{Mname}/{npt}pt+{next}ext" + tDGE
+    if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
+        os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
 
     # 开始迭代搜索新源
     for N_src in range(100):
         # 计算残差图并找到最大值位置
-        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}_iter/',savename=f"{current_model_name}_residual.png", radius=data_radius)
+        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}/',savename=f"{current_model_name}_residual.png", radius=data_radius)
         lon, lat = get_maxres_lonlat(resu)
         lon_array.append(lon)
         lat_array.append(lat)
@@ -2301,23 +2309,25 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
             lm_cache_for_pt = copy.deepcopy(lm) # 备份当前模型
             pt = add_point_source(lm, pt_name, lon, lat, indexbs, kbs, data_radius, piv, detector)
             
-            current_model_name = f"{npt_temp}pt+{next}ext" + tDGE
+            current_model_name = f"{Mname}/{npt_temp}pt+{next}ext" + tDGE
+            if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
+                os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
             try:
                 if detector == "jf":
-                    ptresult = jointfit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+                    ptresult = jointfit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
                 else:
-                    ptresult = fit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+                    ptresult = fit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
             except Exception as e:
                 log.error(f"点源拟合失败: {e}")
                 return lm, None
-            TSpt, _ = getTSall([], region_name + "_iter", current_model_name, ptresult, WCDA)
+            TSpt, _ = getTSall([], region_name, current_model_name, ptresult, WCDA)
             TS_allpt = TSpt["TS_all"]
             lmpt = copy.deepcopy(lm) # 保存点源拟合后的模型
 
             # 绘制点源模型图
             sources_pt = get_sources(lm, ptresult)
             sources_pt.pop("Diffuse", None)
-            draw_model_map(region_name+"_iter", current_model_name, sources_pt, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+            draw_model_map(region_name, current_model_name, sources_pt, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
             
             # 恢复模型以尝试展源
             lm = lm_cache_for_pt
@@ -2326,20 +2336,22 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
         next_temp = next + 1
         ext_name = f"ext{next_temp}"
         if ifnopt:
-            current_model_name = f"{npt}pt+{next_temp}ext" + tDGE
+            current_model_name = f"{Mname}/{npt}pt+{next_temp}ext" + tDGE
         else: # 从点源尝试恢复了模型
-            current_model_name = f"{npt}pt+{next_temp}ext" + tDGE
+            current_model_name = f"{Mname}/{npt}pt+{next_temp}ext" + tDGE
+        if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
+            os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
         
         ext = add_extended_source(lm, ext_name, lon, lat, indexbs, kbs, data_radius, ifAsymm, piv, detector)
         try:
             if detector == "jf":
-                extresult = jointfit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+                extresult = jointfit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
             else:
-                extresult = fit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
+                extresult = fit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
         except Exception as e:
             log.error(f"展源拟合失败: {e}")
             return lm, None
-        TSext, _ = getTSall([ext_name], region_name+"_iter", current_model_name, extresult, WCDA)
+        TSext, _ = getTSall([ext_name], region_name, current_model_name, extresult, WCDA)
         TS_allext = TSext["TS_all"]
         
         # 如果加入新源后TS提升小于25，则停止迭代
@@ -2351,7 +2363,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
         # 绘制展源模型图
         sources_ext = get_sources(lm, extresult)
         sources_ext.pop("Diffuse", None)
-        draw_model_map(region_name+"_iter", current_model_name, sources_ext, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+        draw_model_map(region_name, current_model_name, sources_ext, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
 
         # 步骤3: 比较点源和展源，确定本轮最佳模型
         if not ifnopt:
@@ -2397,7 +2409,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
             bestmodel.display()
             final_sources = get_sources(bestmodel, bestresult)
             final_sources.pop("Diffuse", None)
-            draw_model_map(region_name+"_iter", "BestModel_"+bestmodelname, final_sources, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+            draw_model_map(region_name, "BestModel_"+bestmodelname, final_sources, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
             log.info(f"最佳模型是 {bestmodelname}") 
             return bestmodel, bestresult
             
