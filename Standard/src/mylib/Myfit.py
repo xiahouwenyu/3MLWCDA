@@ -309,7 +309,8 @@ def plot_all_model_maps(WCDA, lm, ra1, dec1, max_component_id=None, radius=10, r
     if max_component_id is None:
         max_component_id = 10  # 默认尝试最多10个，直到失败为止
 
-    xsize=radius*2*(60/reso), ysize=radius*2*(60/reso)
+    xsize=radius*2*(60/reso)
+    ysize=radius*2*(60/reso)
 
     maps = []
     valid_ids = []
@@ -1322,7 +1323,7 @@ def check_bondary(optmodel):
     return ifatlimit, boundpar
     
 
-def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True, quiet=False, lmini = "minuit"):
+def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids = None, donwtlimit=True, quiet=False, lmini = "minuit", ftol=1, max_function_calls = 500000, strategy=1, print_level=0):
     """
         进行拟合
 
@@ -1389,6 +1390,19 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
 
         # Set the minimizer for the JointLikelihood object
         jl.set_minimizer(pagmo_minimizer)
+    elif isinstance(mini, str):
+        # ROOTmini = threeML.minimizer.minimization.get_minimizer("ROOT")
+        # print(ROOTmini.valid_setup_keys)
+        if mini.lower() == "minuit":
+            minuitmini = LocalMinimization(mini)
+            minuitmini.setup(ftol=ftol, max_iter = max_function_calls, strategy=strategy, print_level=print_level) #, print_level=0
+            jl.set_minimizer(minuitmini)
+        elif mini.lower() == "root":
+            rmini = LocalMinimization(mini)
+            rmini.setup(ftol=ftol, max_function_calls = max_function_calls, strategy=strategy, verbosity=print_level) #, minimizer="Combined", verbosity=3, precision=1e-11
+            jl.set_minimizer(rmini)
+        else:
+            jl.set_minimizer(mini)
     else:
         jl.set_minimizer(mini)
     result = jl.fit(quiet=quiet)
@@ -1499,7 +1513,7 @@ def get_vari_dis(result, var="J0057.Gaussian_on_sphere.sigma"):
     plt.xlim(left=bins.min()-0.2*bins.std())
     plt.ylim(0,nt.max()+0.2*nt.std())
 
-def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=True, quiet=False):
+def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit",verbose=False, savefit=True, ifgeterror=False, grids=None, donwtlimit=True, quiet=False, lmini = "minuit", ftol=1, max_function_calls = 500000, strategy=1, print_level=0):
     """
         进行联合拟合
 
@@ -1531,7 +1545,7 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
         grid_minimizer = GlobalMinimization("grid")
 
         # Create an instance of a local minimizer, which will be used by GRID
-        local_minimizer = LocalMinimization("minuit")
+        local_minimizer = LocalMinimization(lmini)
 
         # Define a grid for mu as 10 steps between 2 and 80
         my_grid = grids#{Model.J0248.spatial_shape.lon0: np.linspace(Model.J0248.spatial_shape.lon0.value-2, Model.J0248.spatial_shape.lon0.value+2, 20), Model.J0248.spatial_shape.lat0: np.linspace(Model.J0248.spatial_shape.lat0.value-2, Model.J0248.spatial_shape.lat0.value+2, 10)}
@@ -1554,7 +1568,7 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
         my_algorithm = pygmo.algorithm(pygmo.bee_colony(gen=20))
 
         # Create an instance of a local minimizer
-        local_minimizer = LocalMinimization("minuit")
+        local_minimizer = LocalMinimization(lmini)
 
         # Setup the global minimization
         pagmo_minimizer.setup(
@@ -1567,6 +1581,19 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
 
         # Set the minimizer for the JointLikelihood object
         jl.set_minimizer(pagmo_minimizer)
+    elif isinstance(mini, str):
+        # ROOTmini = threeML.minimizer.minimization.get_minimizer("ROOT")
+        # print(ROOTmini.valid_setup_keys)
+        if mini.lower() == "minuit":
+            minuitmini = LocalMinimization(mini)
+            minuitmini.setup(ftol=ftol, max_iter = max_function_calls, strategy=strategy, print_level=print_level) #, print_level=0
+            jl.set_minimizer(minuitmini)
+        elif mini.lower() == "root":
+            rmini = LocalMinimization(mini)
+            rmini.setup(ftol=ftol, max_function_calls = max_function_calls, strategy=strategy, verbosity=print_level) #, minimizer="Combined", verbosity=3, precision=1e-11
+            jl.set_minimizer(rmini)
+        else:
+            jl.set_minimizer(mini)
     else:
         jl.set_minimizer(mini)
 
@@ -2162,18 +2189,24 @@ def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_
     plt.savefig(f"{res_dir}/{model_name}_{iter_num}.png", dpi=300)
     plt.show()
 
-def add_point_source(lm, name, lon, lat, indexb, kb, data_radius):
+def add_point_source(lm, name, lon, lat, indexb, kb, data_radius, piv, detector):
     """向模型中添加一个点源"""
-    pt_source = setsorce(name, lon, lat, indexb=indexb, kb=kb, fitrange=data_radius)
+    if detector == "jf":
+        pt_source = setsorce(name, lon, lat, alphab=indexb, kb=kb, k=1e-15,fitrange=data_radius, piv=piv, spec=Log_parabola())
+    else:
+        pt_source = setsorce(name, lon, lat, indexb=indexb, kb=kb, fitrange=data_radius, piv=piv)
     lm.add_source(pt_source)
     return pt_source
 
-def add_extended_source(lm, name, lon, lat, indexb, kb, data_radius, ifAsymm):
+def add_extended_source(lm, name, lon, lat, indexb, kb, data_radius, ifAsymm,  piv, detector):
     """向模型中添加一个展源（对称或非对称高斯）"""
-    if ifAsymm:
-        ext_source = setsorce(name, lon, lat, a=0.1, ae=(0,5), e=0.1, eb=(0,1), theta=10, thetab=(-90,90), indexb=indexb, kb=kb, fitrange=data_radius, spat="Asymm")
+    if detector == "jf":
+        ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), alphab=indexb,kb=kb, k=1e-15,fitrange=data_radius, piv=piv, spec=Log_parabola())
     else:
-        ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,5), indexb=indexb, kb=kb, fitrange=data_radius)
+        if ifAsymm:
+            ext_source = setsorce(name, lon, lat, a=0.1, ae=(0,2), e=0.1, eb=(0,1), theta=10, thetab=(-90,90), indexb=indexb, kb=kb, fitrange=data_radius, spat="Asymm",piv=piv)
+        else:
+            ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), indexb=indexb, kb=kb, fitrange=data_radius,piv=piv)
     lm.add_source(ext_source)
     return ext_source
 
@@ -2253,7 +2286,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
     # 开始迭代搜索新源
     for N_src in range(100):
         # 计算残差图并找到最大值位置
-        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}_iter/',savename=f"{current_model_name}_residual.png")
+        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}_iter/',savename=f"{current_model_name}_residual.png", radius=data_radius)
         lon, lat = get_maxres_lonlat(resu)
         lon_array.append(lon)
         lat_array.append(lat)
@@ -2266,7 +2299,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
             npt_temp = npt + 1
             pt_name = f"pt{npt_temp}"
             lm_cache_for_pt = copy.deepcopy(lm) # 备份当前模型
-            pt = add_point_source(lm, pt_name, lon, lat, indexbs, kbs, data_radius)
+            pt = add_point_source(lm, pt_name, lon, lat, indexbs, kbs, data_radius, piv, detector)
             
             current_model_name = f"{npt_temp}pt+{next}ext" + tDGE
             try:
@@ -2279,6 +2312,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
                 return lm, None
             TSpt, _ = getTSall([], region_name + "_iter", current_model_name, ptresult, WCDA)
             TS_allpt = TSpt["TS_all"]
+            lmpt = copy.deepcopy(lm) # 保存点源拟合后的模型
 
             # 绘制点源模型图
             sources_pt = get_sources(lm, ptresult)
@@ -2296,7 +2330,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
         else: # 从点源尝试恢复了模型
             current_model_name = f"{npt}pt+{next_temp}ext" + tDGE
         
-        ext = add_extended_source(lm, ext_name, lon, lat, indexbs, kbs, data_radius, ifAsymm)
+        ext = add_extended_source(lm, ext_name, lon, lat, indexbs, kbs, data_radius, ifAsymm, piv, detector)
         try:
             if detector == "jf":
                 extresult = jointfit(region_name + "_iter", current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
@@ -2334,8 +2368,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, WCDA, roi, s, e,
             else:
                 log.info(f"点源更优!! deltaTS={deltaTS:.2f}")
                 npt += 1
-                lm.remove_source(ext_name) # 移除刚添加的展源
-                pt = add_point_source(lm, f"pt{npt}", lon, lat, indexbs, kbs, data_radius) # 重新添加点源
+                # lm.remove_source(ext_name) # 移除刚添加的展源
+                # pt = add_point_source(lm, f"pt{npt}", lon, lat, indexbs, kbs, data_radius, piv, detector) # 重新添加点源
+                lm = lmpt
                 WCDA.set_model(lm)
                 bestresultc = copy.deepcopy(ptresult)
                 bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
