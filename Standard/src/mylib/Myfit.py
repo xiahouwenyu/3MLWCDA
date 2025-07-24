@@ -2282,7 +2282,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     # 绘制初始拟合后的模型图 (去除弥散背景)
     sources_no_diffuse = get_sources(lm, bestresult)
     sources_no_diffuse.pop("Diffuse", None)
-    draw_model_map(region_name, Modelname, sources_no_diffuse, libdir, roi, ra1, dec1, data_radius * 2, detector, cat, Modelname)
+    draw_model_map(region_name, Modelname, sources_no_diffuse, libdir, roi, ra1, dec1, data_radius * 2, detector, cat, Mname)
 
     bestmodelname = Modelname
     bestresultc = copy.deepcopy(bestresult)
