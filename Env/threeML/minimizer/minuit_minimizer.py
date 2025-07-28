@@ -137,7 +137,7 @@ class MinuitMinimizer(LocalMinimizer):
                 # This is the maximum number of iterations for the minimization
                 # (default is 10000)
 
-                self.minuit.maxiter = user_setup_dict["max_iter"]
+                # self.minuit.maxiter = user_setup_dict["max_iter"]
                 self.ncall = user_setup_dict["max_iter"]
             if "iterate" in user_setup_dict:
 
