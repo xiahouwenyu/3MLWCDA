@@ -2253,6 +2253,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     if "Diffuse" not in [lm.get_extended_source_name(i) for i in range(lm.get_number_of_extended_sources())]:
         # 添加弥散背景
         lm, tDGE, diffuse_component = add_diffuse(lm, ifDGE, freeDGE, indexb, kb, piv, ra1, dec1, model_radius, region_name, DGEk, DGEfile)
+        next+=1
         if diffuse_component:
             exts.append(diffuse_component)
     else:
