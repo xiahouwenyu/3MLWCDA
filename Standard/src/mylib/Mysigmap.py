@@ -90,6 +90,8 @@ def _smooth_and_scale_maps(on, off, smooth_sigma):
     off[np.isnan(off)] = hp.UNSEEN
     on[np.isinf(on)] = hp.UNSEEN
     off[np.isinf(off)] = hp.UNSEEN
+    # on = hp.ma(on)
+    # off = hp.ma(off)
 
     on1 = hp.sphtfunc.smoothing(on, sigma=np.radians(smooth_sigma))
     off1 = hp.sphtfunc.smoothing(off, sigma=np.radians(smooth_sigma))
@@ -120,6 +122,8 @@ def compute_significance_mapfast(on, bk, signif=17, alpha=3.24e-5):
 
     if signif == 5:
         sig = (on - bk) / np.sqrt(on_safe + alpha * bk_safe + epsilon)
+    elif signif == 0:
+        sig = (on - bk) / np.sqrt(bk)
     elif signif == 9:
         sig = (on - bk) / np.sqrt(on_safe * alpha + bk_safe + epsilon)
     elif signif == 17:
@@ -280,7 +284,21 @@ def getresaccuracy(
             sum_bk = np.ma.sum(bk)
             if sum_bk > 0:
                 # 只有在背景计数有效时才计算权重
-                weight = (np.ma.sum(on) - sum_bk) / (sum_bk + epsilon_weight)
+                # weight = (np.ma.sum(on) - sum_bk) / (sum_bk + epsilon_weight)
+                # 更稳健的权重计算，考虑信噪比
+                signal = np.ma.sum(on) -  np.ma.sum(bk)
+                noise = np.sqrt(np.ma.sum(on) + alpha * np.ma.sum(bk)) #alpha**2 * 
+                weight = signal / (noise + epsilon_weight) if noise > 0 else 0
+
+                # term1_ratio = (1. + alpha) / alpha * np.ma.sum(on) / (np.ma.sum(on) + sum_bk / alpha + epsilon_weight)
+                # term2_ratio = (1. + alpha) * sum_bk / alpha / (sum_bk + sum_bk / alpha + epsilon_weight)
+                
+                # log_term1 = np.ma.sum(on) * np.log(np.maximum(term1_ratio, epsilon_weight))
+                # log_term2 = sum_bk / alpha * np.log(np.maximum(term2_ratio, epsilon_weight))
+                
+                # sig = np.sqrt(2 * np.maximum(log_term1 + log_term2, 0)) if np.ma.sum(on) > sum_bk else 0
+                # weight = sig
+
                 weights.append(weight)
             else:
                 # print(sum_bk)
@@ -323,15 +341,17 @@ def getresaccuracy(
         sum_weighted_variance = np.ma.sum((weights**2)[:, np.newaxis] * variance_term_stack, axis=0)
 
         epsilon = 1e-30
-        denominator = alpha**2 + alpha
-
-        off_w = (sum_weighted_variance - sum_weighted_net_signal) / (denominator + epsilon)
-        on_w = sum_weighted_net_signal + alpha * off_w
+        # off_w = sum_weighted_variance / (2 * alpha)
+        off_w = (sum_weighted_variance - sum_weighted_net_signal) / ( 1 + alpha + epsilon )
+        # denominator = alpha**2 + alpha
+        # off_w = (sum_weighted_variance - sum_weighted_net_signal) / (denominator + epsilon)
+        # on_w = sum_weighted_net_signal + alpha * off_w
+        on_w = off_w + sum_weighted_net_signal
 
         # 物理上，计数值不能为负。这部分是正确的。
         on_w = np.ma.maximum(on_w, 0)
         off_w = np.ma.maximum(off_w, 0)
-        bk_w = alpha * off_w
+        bk_w =  off_w #alpha *
 
         # 2. 将这个正确的主掩码应用到我们新计算的 on_w 和 bk_w 上。
         on_w.mask = on_all[0].mask
@@ -340,6 +360,8 @@ def getresaccuracy(
 
         # --- 修正: 不要将有效的0值设置为UNSEEN ---
         # 设置掩码，而不是填充值。hp.ma会自动处理
+        on_w[on_all[0].mask] = hp.UNSEEN
+        bk_w[on_all[0].mask] = hp.UNSEEN
         on_w.set_fill_value(hp.UNSEEN)
         bk_w.set_fill_value(hp.UNSEEN)
         # on_w[on_w==0] = hp.UNSEEN  <-- 移除
@@ -348,8 +370,47 @@ def getresaccuracy(
         bk_w = hp.ma(bk_w)
         # --- 修正结束 ---
 
+        # # === 新增：可视化权重分布 ===
+        # import matplotlib.pyplot as plt
+        # plt.figure(figsize=(10, 4))
+        # plt.plot(weights, 'o-', label='Bin Weights')
+        # plt.xlabel('Energy Bin Index')
+        # plt.ylabel('Weight')
+        # plt.title('Weight Distribution Across Bins')
+        # plt.savefig('weight_distribution.png')
+        # plt.close()
+
+        # # === 平滑前的ON/OFF图 ===
+        # hp.gnomview(on_w, norm='', rot=[279.5, -7], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso,
+        #             title='ON Map Before Smoothing')
+        # # hp.gnomview(on_w, title='ON Map Before Smoothing')
+        # plt.savefig('on_before_smooth.png')
+        # plt.close()
+        
+        # hp.gnomview(bk_w, norm='', rot=[279.5, -7], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso,
+        #             title='OFF Map Before Smoothing')
+        # # hp.mollview(bk_w, title='OFF Map Before Smoothing')
+        # plt.savefig('off_before_smooth.png')
+        # plt.close()
+
+        # === 关键步骤：执行平滑 ===
         ON_smooth, BK_smooth = _smooth_and_scale_maps(on_w, bk_w, smooth_sigma)
-        resu = compute_significance_mapfast(ON_smooth, BK_smooth, signif=signif, alpha=alpha)
+        
+        # # === 平滑后的ON/OFF图 ===
+        # hp.gnomview(ON_smooth, norm='', rot=[279.5, -7], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso,
+        #             title='ON Map After Smoothing')
+        # # hp.mollview(ON_smooth, title='ON Map After Smoothing')
+        # plt.savefig('on_after_smooth.png')
+        # plt.close()
+        
+        # hp.gnomview(BK_smooth, norm='', rot=[279.5, -7], xsize=radius*2*(60/reso), ysize=radius*2*(60/reso), reso=reso,
+        #             title='OFF Map After Smoothing')
+        # # hp.mollview(BK_smooth, title='OFF Map After Smoothing')
+        # plt.savefig('off_after_smooth.png')
+        # plt.close()
+
+        # ON_smooth, BK_smooth = _smooth_and_scale_maps(on_w, bk_w, smooth_sigma)
+        resu = compute_significance_mapfast(ON_smooth, BK_smooth, alpha=alpha, signif=signif) #signif=signif,signif=0
         resu_all = resu
     elif combine == 'none':
         ii=0
@@ -1091,24 +1152,27 @@ def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=
         Returns:
             >>> None
     """ 
+    S=S[S!=0]
     if bins is None:
-        bins = 2*int(max(S.compressed()))
+        bins = 4*int(max(S.compressed())+5)
         if bins<100:
             bins=100
     bin_y,bin_x,patches=plt.hist(S.compressed(),bins=bins)
     plt.close()
     bin_x=np.array(bin_x)
     bin_y=np.array(bin_y)
-    fit_range = np.logical_and(bin_x>-5, bin_x<5)
+    
+    fit_range = np.logical_and(bin_x>np.max([-5, min(S.compressed())]), bin_x<np.min([5,max(S.compressed())]))
     wdt=(bin_x[1]-bin_x[0])/2.
     try:
         popt, pcov = curve_fit(
             gaussian,
             bin_x[fit_range] + wdt,
             bin_y[fit_range[:-1]],
-            bounds=([100, -2, 0], [50000000, 2, 10]),
+            bounds=([100, -1, 0], [50000000, 2, 10]),
         )
-    except (ValueError, IndexError):
+    except (ValueError, IndexError) as e:
+        print(f"Error in curve fitting: {e}. Using first 100 bins for fitting.")
         popt, pcov = curve_fit(
             gaussian,
             bin_x[:100] + wdt,
