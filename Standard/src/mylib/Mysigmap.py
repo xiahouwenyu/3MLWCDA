@@ -22,7 +22,7 @@ from scipy.optimize import curve_fit
 
 from Mycoord import *
 
-from Myspeedup import libdir, runllhskymap
+from Myspeedup import libdir, runllhskymap, runllhskymap_mp
 
 import MapPalette
 
@@ -1255,7 +1255,7 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
     return S
 
 def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1, data_radius, outname,
-                 active_sources=[], binc="all", ifrunllh=True, detector="WCDA", jc=10, sn=1000, s=None, e=None):
+                 active_sources=[], binc="all", ifrunllh=True, detector="WCDA", jc=10, sn=1000, s=None, e=None, llhmode=None):
     """Write residual map to skymap root file."""
     log.info(outname + "_res")
 
@@ -1348,15 +1348,24 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
             from hawc_hal import HealpixConeROI
         except ImportError:
             from WCDA_hal import HealpixConeROI
-
-        roi2 = HealpixConeROI(ra=ra1, dec=dec1, data_radius=data_radius, model_radius=data_radius + 1)
-        if s is None:
-            s = binc[0]
-        if e is None:
-            e = binc[-1]
-        runllhskymap(roi2, outroot, response, ra1, dec1, data_radius, outname,
-                     detector=detector, ifres=1, s=s, e=e, jc=jc, sn=sn)
-
+        if llhmode is None:
+            roi2 = HealpixConeROI(ra=ra1, dec=dec1, data_radius=data_radius, model_radius=data_radius + 1)
+            if s is None:
+                s = binc[0]
+            if e is None:
+                e = binc[-1]
+            runllhskymap(roi2, outroot, response, ra1, dec1, data_radius, outname, Modelname,
+                        detector=detector, ifres=1, s=s, e=e, jc=jc, sn=sn)
+        elif llhmode == "mp":
+            roi2 = HealpixConeROI(ra=ra1, dec=dec1, data_radius=data_radius, model_radius=data_radius + 1)
+            if s is None:
+                s = binc[0]
+            if e is None:
+                e = binc[-1]
+            map = runllhskymap_mp(roi, outroot, response, ra1, dec1, data_radius, outname, Modelname,
+                            detector=detector, ifres=1, s=s, e=e, jc=jc)
+            return map
+        elif llhmode == "ipy":
     return outname + "_res"
 
 
