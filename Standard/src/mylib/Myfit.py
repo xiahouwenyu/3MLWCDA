@@ -2188,7 +2188,8 @@ def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_
     
     res_dir = f'{libdir}/../res/{region_name}/'
     os.makedirs(res_dir, exist_ok=True)
-    plt.savefig(f"{res_dir}/{model_name}/../{model_name}_{iter_num}.png", dpi=300)
+    name = model_name.split("/")[-1]
+    plt.savefig(f"{res_dir}/{model_name}/../{name}_{iter_num}.png", dpi=300)
     plt.show()
 
 def add_point_source(lm, name, lon, lat, indexb, kb, data_radius, piv, detector):
@@ -2298,7 +2299,8 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     # 开始迭代搜索新源
     for N_src in range(100):
         # 计算残差图并找到最大值位置
-        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}/{current_model_name}/../',savename=f"{current_model_name}_residual.png", radius=data_radius)
+        name = current_model_name.split("/")[-1]
+        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}/{current_model_name}/../',savename=f"{name}_residual.png", radius=data_radius)
         lon, lat = get_maxres_lonlat(resu)
         lon_array.append(lon)
         lat_array.append(lat)
