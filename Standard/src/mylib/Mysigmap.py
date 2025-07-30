@@ -22,7 +22,7 @@ from scipy.optimize import curve_fit
 
 from Mycoord import *
 
-from Myspeedup import libdir, runllhskymap, runllhskymap_mp
+from Myspeedup import libdir, runllhskymap, runllhskymap_mp, runllhskymap_ipy
 
 import MapPalette
 
@@ -1357,7 +1357,6 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
             runllhskymap(roi2, outroot, response, ra1, dec1, data_radius, outname, Modelname,
                         detector=detector, ifres=1, s=s, e=e, jc=jc, sn=sn)
         elif llhmode == "mp":
-            roi2 = HealpixConeROI(ra=ra1, dec=dec1, data_radius=data_radius, model_radius=data_radius + 1)
             if s is None:
                 s = binc[0]
             if e is None:
@@ -1366,6 +1365,13 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
                             detector=detector, ifres=1, s=s, e=e, jc=jc)
             return map
         elif llhmode == "ipy":
+            if s is None:
+                s = binc[0]
+            if e is None:
+                e = binc[-1]
+            map = runllhskymap_ipy(roi, outroot, response, ra1, dec1, data_radius, outname, Modelname,
+                             detector=detector, ifres=1, s=s, e=e, jc=jc)
+            return map
     return outname + "_res"
 
 
