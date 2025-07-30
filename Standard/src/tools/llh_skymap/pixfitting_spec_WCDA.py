@@ -7,7 +7,12 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 from threeML import *
 silence_warnings()
-from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
+try:
+    from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+    from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
+    PYFFTW_AVAILABLE = False
+except:
+    from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 import healpy as hp
 import numpy as np
 import warnings
@@ -28,7 +33,7 @@ if __name__ == "__main__":
     p.add_argument("-m", "--maptreefile", dest="mtfile",help="MapTree ROOT file", default="/home/lhaaso/tangruiyi/analysis/cocoonstuff/maptreeinc/2021032202_Cocoon_bin123.root")
     p.add_argument("-r", "--responsefile", dest="rsfile",help="detector response ROOT file", default="/home/lhaaso/tangruiyi/analysis/cocoonstuff/maptreeinc/DR_crabPSF_newmap_pinc_neomc_1pe_bin1to4-6_bin2to78_bin12to9-11_bin13to6-11.root")
     p.add_argument("--s", dest="s", default=0, type=int,help="Starting analysis bin [0..13]")
-    p.add_argument("--e", dest="e", default=5, type=int,help="Starting analysis bin [0..13]")
+    p.add_argument("--e", dest="e", default=6, type=int,help="Starting analysis bin [0..13]")
     p.add_argument("--name",default="crab",type=str,help="out put figure name")
     p.add_argument("--jc",dest="jc", default=10,type=int,help="进程数")
     p.add_argument("--sn",dest="sn", default=100,type=int,help="单作业负载")

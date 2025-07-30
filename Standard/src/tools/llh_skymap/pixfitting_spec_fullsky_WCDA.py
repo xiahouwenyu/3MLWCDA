@@ -5,7 +5,12 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from threeML import *
 silence_warnings()
-from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
+try:
+    from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+    from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
+    PYFFTW_AVAILABLE = False
+except:
+    from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 import healpy as hp
 import numpy as np
 import warnings

@@ -11,8 +11,9 @@ log = setup_logger(__name__)
 log.propagate = False
 
 import matplotlib.pyplot as plt
-from astropy.coordinates.angle_utilities import angular_separation
+from astropy.coordinates import angular_separation  # 新导入方式
 from astropy.io import fits as pyfits
+from astropy import wcs
 from threeML.parallel.parallel_client import (ParallelClient,
                                               is_parallel_computation_active)
 from tqdm.auto import tqdm
@@ -81,10 +82,10 @@ class ParallelTSmap(object):
 
         self._roi_radius = float(roi_radius)
 
-        roi = HealpixConeROI(self._roi_radius, ra=ra_c, dec=dec_c)
+        roi = HealpixConeROI(self._roi_radius, model_radius=self._roi_radius+1, ra=ra_c, dec=dec_c)
 
         self._llh = HAL("HAWC", self._mtfile, self._rsfile, roi)
-        self._llh.set_active_measurements(1, 9)
+        self._llh.set_active_measurements(0, 6)
 
         # Make a fit with no source to get the likelihood for the null hypothesis
         model = self.get_model(0)
@@ -149,7 +150,7 @@ class ParallelTSmap(object):
                 )
 
             res = client.execute_with_progress_bar(
-                self.worker, list(range(len(self._points))), chunk_size=self._n_ras
+                self.worker, list(range(len(self._points))), chunk_size=self._n_ras*4
             )
 
         else:

@@ -7,7 +7,12 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 from threeML import *
 silence_warnings()
-from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
+try:
+    from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
+    from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
+    PYFFTW_AVAILABLE = False
+except:
+    from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 import healpy as hp
 import numpy as np
 import warnings
@@ -81,7 +86,8 @@ if __name__ == "__main__":
             source.position.dec.fix=True
             try:
                 param_df, like_df = jl.fit(quiet=True)
-            except: #(CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
+            except Exception as e: #(CannotComputeCovariance,OverflowError,FitFailed,RuntimeError)
+                print(e)
                 rr.append([pid, hp.UNSEEN]) #
             else:
                 results = jl.results

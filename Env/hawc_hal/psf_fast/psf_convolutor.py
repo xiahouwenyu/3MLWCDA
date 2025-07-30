@@ -14,8 +14,8 @@ from numpy.fft import rfftn, irfftn
 try:
     import pyfftw
     from pyfftw.interfaces import numpy_fft as pyfftw_fft
-    pyfftw.interfaces.cache.enable()
-    pyfftw.interfaces.cache.set_keepalive_time(300)
+    # pyfftw.interfaces.cache.enable()
+    # pyfftw.interfaces.cache.set_keepalive_time(300)
     PYFFTW_AVAILABLE = True
     print("PyFFTW 已找到并启用缓存。")
 except ImportError:

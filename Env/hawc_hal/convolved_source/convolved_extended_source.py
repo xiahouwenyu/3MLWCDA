@@ -17,7 +17,8 @@ from typing import Tuple
 # import time
 
 import concurrent.futures
-
+import os
+NUMBA_PARALLEL_MODE = os.getenv('NUMBA_TARGET', 'parallel')
 # from numba import guvectorize, float64, float32
 
 
@@ -61,7 +62,7 @@ def method_numba(A, B):
             out[i] += A[i, j] * B[i, j]
     return out
 
-@vectorize([float64(float64, float64)], target='parallel')
+@vectorize([float64(float64, float64)], target=NUMBA_PARALLEL_MODE)
 def multiply_and_sum(x, y):
     return x * y
 
@@ -85,7 +86,7 @@ def method_numba_opt(A, B):
         out[i] = acc
     return out
 
-@guvectorize([(float64[:], float64[:], float64[:])], '(n),(n)->()', target='parallel')
+@guvectorize([(float64[:], float64[:], float64[:])], '(n),(n)->()', target=NUMBA_PARALLEL_MODE)
 def method_guvectorize(a, b, res):
     acc = 0.0
     for i in range(a.shape[0]):
@@ -317,8 +318,12 @@ class ConvolvedExtendedSource3D(ConvolvedExtendedSource):
 
             return idx, C
         
+        max_workers = os.getenv('MAX_WORKERS_PER_ENGINE', None)
+        if max_workers is not None:
+            max_workers = int(max_workers)
+        
         self._responsemap = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             for energy_bin_id in range(self._response.n_energy_planes):
                 results = list(executor.map(lambda bins: get_responses(str(energy_bin_id), *bins), zip(self._dec_bins_to_consider[:-1], self._dec_bins_to_consider[1:])))
 

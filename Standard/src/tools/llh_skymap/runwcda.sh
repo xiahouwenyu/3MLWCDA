@@ -1,6 +1,13 @@
 #!/bin/bash
 
-source activate 3ML
+#SBATCH --job-name=wcda_pixfitting          # 作业名称
+#SBATCH --ntasks=1                           # 1个任务
+#SBATCH --mail-type=end
+#SBATCH --mail-user=caowy@mail.ustc.edu.cn
+#SBATCH --nodes=1
+#SBATCH --partition=debug         # 替换为其他可用分区
+
+source activate 3MLhal
 
 srcdir=${dirsrc}/
 exe=${srcdir}tools/llh_skymap/pixfitting_spec_WCDA.py

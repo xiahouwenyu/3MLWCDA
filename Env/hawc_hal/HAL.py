@@ -36,6 +36,8 @@ from hawc_hal.psf_fast import PSFConvolutor
 from hawc_hal.response import hawc_response_factory
 from hawc_hal.util import ra_to_longitude
 
+import os
+
 log = setup_logger(__name__)
 log.propagate = False
 
@@ -1076,8 +1078,12 @@ class HAL(PluginPrototype):
                     ConvolvedExtendedSource2D, ConvolvedExtendedSource3D
                 ] = self._convolved_ext_sources[ext_id]
                 return this_conv_src.get_source_map(energy_bin_id)
+            
+            max_workers = os.getenv('MAX_WORKERS_PER_ENGINE', None)
+            if max_workers is not None:
+                max_workers = int(max_workers)
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 results = list(executor.map(compute_expectation, range(n_ext_sources)))
             
             for expectation_per_transit in results:

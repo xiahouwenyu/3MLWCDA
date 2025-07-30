@@ -28,6 +28,9 @@ class InvalidPSF:
     def __deepcopy__(self, memo):
         return InvalidPSF()
 
+    def __reduce__(self):
+        return (InvalidPSF, ())
+
     # This allow the Invalid PSF to be saved in the HDF file
     def to_pandas(self):
         items = (("xs", []), ("ys", []))
@@ -40,6 +43,7 @@ class InvalidPSF:
             return object.__getattribute__(self, item)
 
         raise InvalidPSFError("Trying to use an invalid PSF")
+        # print("Trying to use an invalid PSF")
 
 
 class InvalidPSFError(ValueError):

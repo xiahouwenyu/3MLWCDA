@@ -2167,6 +2167,8 @@ def draw_model_map(region_name, model_name, sources, libdir, roi, ra1, dec1, dat
     for map,det in zip(map_file, detectors):
         map2, _ = hp.read_map(map, h=True)
         map2 = maskroi(map2, roi)
+        if "Diffuse" in sources:
+            sources.pop("Diffuse", None)  # 移除弥散源
         drawmap(region_name, model_name, sources, map2, ra1, dec1, rad=data_radius, contours=[10000], save=True, cat=cat, color="Fermi", savename=suffix+det)
     plt.show()
 
@@ -2186,7 +2188,7 @@ def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_
     
     res_dir = f'{libdir}/../res/{region_name}/'
     os.makedirs(res_dir, exist_ok=True)
-    plt.savefig(f"{res_dir}/{model_name}_{iter_num}.png", dpi=300)
+    plt.savefig(f"{res_dir}/{model_name}/../{model_name}_{iter_num}.png", dpi=300)
     plt.show()
 
 def add_point_source(lm, name, lon, lat, indexb, kb, data_radius, piv, detector):
@@ -2210,15 +2212,15 @@ def add_extended_source(lm, name, lon, lat, indexb, kb, data_radius, ifAsymm,  p
     lm.add_source(ext_source)
     return ext_source
 
-def log_TS(region_name, iter_num, ts_value, libdir):
+def log_TS(region_name, modelname, iter_num, ts_value, libdir):
     """记录每次迭代后的总TS值"""
-    path = f'{libdir}/../res/{region_name}/{region_name}_TS.txt'
+    path = f'{libdir}/../res/{region_name}/{modelname}/../{region_name}_TS.txt'
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
     # 第一次迭代时用 "w" (写入), 之后用 "a" (追加)
     mode = "w" if iter_num == 1 else "a"
     with open(path, mode) as f:
-        f.write("\nIter%d TS_total: %f\n" % (iter_num, ts_value))
+        f.write(f"\nIter{iter_num} {modelname} TS_total: {ts_value}\n")
 
 # --- 重构后的主函数 ---
 
@@ -2234,13 +2236,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     pts, exts = [], []
     TS_all = []
     lon_array, lat_array = [] ,[]
-    Modelname = f"{Mname}/Original"
-
-    if not os.path.exists(f'{libdir}/../res/{region_name}/'):
-        os.system(f'mkdir -p {libdir}/../res/{region_name}/')
-    if not os.path.exists(f'{libdir}/../res/{region_name}/{Modelname}/'):
-        os.system(f'mkdir -p {libdir}/../res/{region_name}/{Modelname}/')
-    
+    # Modelname = f"{Mname}/Original"
 
     # 获取探测器参数
     kbs, indexbs, kb, indexb, piv = get_detector_params(detector)
@@ -2262,20 +2258,26 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
         else:
             tDGE = "_DGE_fix"
 
+    current_model_name = f"{Mname}/{npt}pt+{next}ext" + tDGE
+    if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
+        os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
+    Modelname = current_model_name
+
     # 绘制初始模型图
-    draw_model_map(region_name, Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "Oorg")
+    draw_model_map(region_name, Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "org")
 
     lm.display(complete=True)
-    # 首次拟合
-    bestmodel = copy.deepcopy(lm)
+    
     try:
         if detector == "jf":
             bestresult = jointfit(region_name, Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
         else:
             bestresult = fit(region_name, Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
-    except Exception as e:
-        log.error(f"拟合失败: {e}")
+    except Exception as err:
+        log.error(f"拟合失败: {err}")
         return lm, None
+    # 首次拟合
+    bestmodel = copy.deepcopy(lm)
     TS, _ = getTSall([], region_name, Modelname, bestresult, WCDA)
     TSorg = TS["TS_all"]
     TS_all.append(TSorg)
@@ -2286,16 +2288,17 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     draw_model_map(region_name, Modelname, sources_no_diffuse, libdir, roi, ra1, dec1, data_radius * 2, detector, cat, Mname)
 
     bestmodelname = Modelname
-    bestresultc = copy.deepcopy(bestresult)
-
-    current_model_name = f"{Mname}/{npt}pt+{next}ext" + tDGE
-    if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
-        os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
+    # bestresultc = copy.deepcopy(bestresult)
+    try:
+        bestresultc = copy.deepcopy(bestresult)
+    except Exception as err:
+        log.error(f"无法复制最佳结果: {err}")
+        bestresultc = copy.copy(bestresult)
 
     # 开始迭代搜索新源
     for N_src in range(100):
         # 计算残差图并找到最大值位置
-        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}/',savename=f"{current_model_name}_residual.png", radius=data_radius)
+        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}/{current_model_name}/../',savename=f"{current_model_name}_residual.png", radius=data_radius)
         lon, lat = get_maxres_lonlat(resu)
         lon_array.append(lon)
         lat_array.append(lat)
@@ -2318,9 +2321,9 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
                     ptresult = jointfit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
                 else:
                     ptresult = fit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
-            except Exception as e:
-                log.error(f"点源拟合失败: {e}")
-                return lm, None
+            except Exception as err:
+                log.error(f"点源拟合失败: {err}")
+                return bestmodel, bestresult
             TSpt, _ = getTSall([], region_name, current_model_name, ptresult, WCDA)
             TS_allpt = TSpt["TS_all"]
             lmpt = copy.deepcopy(lm) # 保存点源拟合后的模型
@@ -2349,17 +2352,23 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
                 extresult = jointfit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
             else:
                 extresult = fit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
-        except Exception as e:
-            log.error(f"展源拟合失败: {e}")
-            return lm, None
+        except Exception as err:
+            log.error(f"展源拟合失败: {err}")
+            return bestmodel, bestresult
         TSext, _ = getTSall([ext_name], region_name, current_model_name, extresult, WCDA)
         TS_allext = TSext["TS_all"]
         
         # 如果加入新源后TS提升小于25，则停止迭代
-        current_max_ts = max(TS_allpt if TS_allpt is not None else -1, TS_allext)
-        if current_max_ts - TS_all[0] < 25:
-            log.info("新源贡献过小(TS<25)，停止迭代!")
-            return bestmodel, bestresult
+        # current_max_ts = max(TS_allpt if TS_allpt is not None else -1, TS_allext)
+        # if current_max_ts - TS_all[0] < 25:
+        #     log.info("新源贡献过小(TS<25)，停止迭代!")
+        #     log.info(f"模型 {bestmodelname} 已是最佳!! deltaTS={current_max_ts - TS_all[0]:.2f}, 无需更多源!")
+        #     bestmodel.display()
+        #     final_sources = get_sources(bestmodel, bestresult)
+        #     final_sources.pop("Diffuse", None)
+        #     draw_model_map(region_name, bestmodelname, final_sources, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+        #     log.info(f"最佳模型是 {bestmodelname}") 
+        #     return bestmodel, bestresult
 
         # 绘制展源模型图
         sources_ext = get_sources(lm, extresult)
@@ -2373,8 +2382,13 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
             if deltaTS >= extthereshold:
                 log.info(f"展源更优!! deltaTS={deltaTS:.2f}")
                 next += 1
-                bestresultc = copy.deepcopy(extresult)
-                bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
+                # bestresultc = copy.deepcopy(extresult)
+                try:
+                    bestresultc = copy.deepcopy(extresult)
+                except Exception as err:
+                    log.error(f"无法复制最佳结果: {err}")
+                    bestresultc = copy.copy(extresult)
+                bestmodelnamec = f"{Mname}/{npt}pt+{next}ext" + tDGE
                 TS_all.append(TS_allext)
                 exts.append(ext)
                 # lm 已经是添加了展源的模型，无需改动
@@ -2383,35 +2397,51 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
                 npt += 1
                 # lm.remove_source(ext_name) # 移除刚添加的展源
                 # pt = add_point_source(lm, f"pt{npt}", lon, lat, indexbs, kbs, data_radius, piv, detector) # 重新添加点源
-                lm = lmpt
+                lm = copy.deepcopy(lmpt)
                 WCDA.set_model(lm)
-                bestresultc = copy.deepcopy(ptresult)
-                bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
+                # bestresultc = copy.deepcopy(ptresult)
+                try:
+                    bestresultc = copy.deepcopy(ptresult)
+                except Exception as err:
+                    log.error(f"无法复制最佳结果: {err}")
+                    bestresultc = copy.copy(ptresult)
+                bestmodelnamec = f"{Mname}/{npt}pt+{next}ext" + tDGE
                 TS_all.append(TS_allpt)
                 pts.append(pt)
         else: # 只考虑展源的情况
             next += 1
-            bestresultc = copy.deepcopy(extresult)
-            bestmodelnamec = f"{npt}pt+{next}ext" + tDGE
+            # bestresultc = copy.deepcopy(extresult)
+            try:
+                bestresultc = copy.deepcopy(extresult)
+            except Exception as err:
+                log.error(f"无法复制最佳结果: {err}")
+                bestresultc = copy.copy(extresult)
+            bestmodelnamec = f"{Mname}/{npt}pt+{next}ext" + tDGE
             TS_all.append(TS_allext)
             exts.append(ext)
 
         Modelname = bestmodelnamec # 更新当前最优的模型名
-        log_TS(region_name, N_src + 1, TS_all[-1], libdir)
+        log_TS(region_name, Modelname, N_src + 1, TS_all[-1], libdir)
         
         # 步骤4: 判断本轮迭代是否显著提升，并决定是否继续
         if TS_all[N_src+1] - TS_all[N_src] > 25:
             log.info(f"模型 {bestmodelnamec} 更优!! deltaTS={TS_all[N_src+1] - TS_all[N_src]:.2f}")
             bestmodelname = bestmodelnamec
-            bestresult = copy.deepcopy(bestresultc)
+            # bestresult = copy.deepcopy(bestresultc)
+            try:
+                bestresult = copy.deepcopy(bestresultc)
+            except Exception as err:
+                log.error(f"无法复制最佳结果: {err}")
+                bestresult = copy.copy(bestresultc)
             bestmodel = copy.deepcopy(lm) # 保存当前模型状态
         else:
             log.info(f"模型 {bestmodelname} 已是最佳!! deltaTS={TS_all[N_src+1] - TS_all[N_src]:.2f}, 无需更多源!")
             bestmodel.display()
             final_sources = get_sources(bestmodel, bestresult)
             final_sources.pop("Diffuse", None)
-            draw_model_map(region_name, "BestModel_"+bestmodelname, final_sources, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
-            log.info(f"最佳模型是 {bestmodelname}") 
+            draw_model_map(region_name, bestmodelname, final_sources, libdir, roi, ra1, dec1, data_radius*2, detector, cat)
+            os.system(f'cp {libdir}/../res/{region_name}/{bestmodelname}/* {libdir}/../res/{region_name}/{bestmodelname}/../')
+            log.info(f"最佳模型是 {bestmodelname}")
             return bestmodel, bestresult
             
     return bestmodel, bestresult

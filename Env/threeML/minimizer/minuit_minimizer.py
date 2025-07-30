@@ -110,7 +110,7 @@ class MinuitMinimizer(LocalMinimizer):
 
         self.minuit.errordef = Minuit.LIKELIHOOD
 
-        # self.minuit.print_level = self.verbosity
+        self.minuit.print_level = self.verbosity
 
         self.ncall = None
 

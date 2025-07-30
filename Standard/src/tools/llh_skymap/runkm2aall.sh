@@ -19,5 +19,5 @@ do
         break
     fi
     # qsub -v map=$map,ra=$ra,dec=$dec,radius=$radius,name=$name,part=$i,outdir=${outdir},jc=${jc},sn=${sn},s=${s},e=${e},response=${response},dirsrc=${dirsrc} -o ./output/output${i}.log -e ./output/err${i}.log -l nodes=5 ./runkm2a.sh
-    sbatch --export=map=$map,ra=$ra,dec=$dec,radius=$radius,name=$name,part=$i,outdir=${outdir},jc=${jc},sn=${sn},s=${s},e=${e},response=${response},dirsrc=${dirsrc} --output=./output/output${i}.log --error=./output/err${i}.log --nodes=3 ./runkm2a.sh
+    sbatch --export=map=$map,ra=$ra,dec=$dec,radius=$radius,name=$name,part=$i,outdir=${outdir},jc=${jc},sn=${sn},s=${s},e=${e},response=${response},dirsrc=${dirsrc} --cpus-per-task=$jc --output=./output/output${i}_KM2A_${ra}_${dec}.log --error=./output/err${i}_KM2A_${ra}_${dec}.log ./runkm2a.sh
 done

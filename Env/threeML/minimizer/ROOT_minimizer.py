@@ -74,7 +74,7 @@ class ROOTMinimizer(LocalMinimizer):
 
         # Defaults
 
-        setup_dict = {"ftol": 1.0, "max_function_calls": 100000, "strategy": 1,  "verbosity": 1, "minimizer": "Minimize", "precision": -1} #"ForcePosDef": False,
+        setup_dict = {"ftol": 1.0, "max_function_calls": 100000, "strategy": 1,  "verbosity": 0, "minimizer": "Minimize", "precision": -1} #"ForcePosDef": False,
         # Minimize Migrad Simplex Combined Scan Fumili
 
         # Update defaults if needed
