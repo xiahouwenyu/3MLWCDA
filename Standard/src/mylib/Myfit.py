@@ -2300,7 +2300,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     for N_src in range(100):
         # 计算残差图并找到最大值位置
         name = current_model_name.split("/")[-1]
-        resu = getresaccuracy(WCDA, lm, plot=True, savepath=f'{libdir}/../res/{region_name}/{current_model_name}/../',savename=f"{name}_residual.png", radius=data_radius)
+        resu = getresaccuracy(WCDA, lm, plot=False, savepath=f'{libdir}/../res/{region_name}/{current_model_name}/../',savename=f"{name}", radius=data_radius)
         lon, lat = get_maxres_lonlat(resu)
         lon_array.append(lon)
         lat_array.append(lat)
