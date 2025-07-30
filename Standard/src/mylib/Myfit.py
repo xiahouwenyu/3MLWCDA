@@ -23,6 +23,7 @@ except:
 from scipy.optimize import minimize
 from Mylightcurve import p2sigma
 from Myspeedup import libdir
+from Mycoord import distance
 
 log = setup_logger(__name__)
 log.propagate = False
@@ -2192,24 +2193,28 @@ def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_
     plt.savefig(f"{res_dir}/{model_name}/../{name}_{iter_num}.png", dpi=300)
     plt.show()
 
-def add_point_source(lm, name, lon, lat, indexb, kb, data_radius, piv, detector):
+def add_point_source(lm, name, lon, lat, ra, dec, indexb, kb, data_radius, piv, detector):
     """向模型中添加一个点源"""
+    distance = distance(ra, dec, lon, lat)
+    frange = data_radius-distance
     if detector == "jf":
-        pt_source = setsorce(name, lon, lat, alphab=indexb, kb=kb, k=1e-15,fitrange=data_radius, piv=piv, spec=Log_parabola())
+        pt_source = setsorce(name, lon, lat, alphab=indexb, kb=kb, k=1e-15,fitrange=frange, piv=piv, spec=Log_parabola())
     else:
-        pt_source = setsorce(name, lon, lat, indexb=indexb, kb=kb, fitrange=data_radius, piv=piv)
+        pt_source = setsorce(name, lon, lat, indexb=indexb, kb=kb, fitrange=frange, piv=piv)
     lm.add_source(pt_source)
     return pt_source
 
-def add_extended_source(lm, name, lon, lat, indexb, kb, data_radius, ifAsymm,  piv, detector):
+def add_extended_source(lm, name, lon, lat, ra, dec, indexb, kb, data_radius, ifAsymm,  piv, detector):
     """向模型中添加一个展源（对称或非对称高斯）"""
+    distance = distance(ra, dec, lon, lat)
+    frange = data_radius-distance
     if detector == "jf":
-        ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), alphab=indexb,kb=kb, k=1e-15,fitrange=data_radius, piv=piv, spec=Log_parabola())
+        ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), alphab=indexb,kb=kb, k=1e-15,fitrange=frange, piv=piv, spec=Log_parabola())
     else:
         if ifAsymm:
-            ext_source = setsorce(name, lon, lat, a=0.1, ae=(0,2), e=0.1, eb=(0,1), theta=10, thetab=(-90,90), indexb=indexb, kb=kb, fitrange=data_radius, spat="Asymm",piv=piv)
+            ext_source = setsorce(name, lon, lat, a=0.1, ae=(0,2), e=0.1, eb=(0,1), theta=10, thetab=(-90,90), indexb=indexb, kb=kb, fitrange=frange, spat="Asymm",piv=piv)
         else:
-            ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), indexb=indexb, kb=kb, fitrange=data_radius,piv=piv)
+            ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), indexb=indexb, kb=kb, fitrange=frange,piv=piv)
     lm.add_source(ext_source)
     return ext_source
 
@@ -2313,7 +2318,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
             npt_temp = npt + 1
             pt_name = f"pt{npt_temp}"
             lm_cache_for_pt = copy.deepcopy(lm) # 备份当前模型
-            pt = add_point_source(lm, pt_name, lon, lat, indexbs, kbs, data_radius, piv, detector)
+            pt = add_point_source(lm, pt_name, lon, lat, ra1, dec1, indexbs, kbs, data_radius, piv, detector)
             
             current_model_name = f"{Mname}/{npt_temp}pt+{next}ext" + tDGE
             if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
@@ -2348,7 +2353,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
         if not os.path.exists(f'{libdir}/../res/{region_name}/{current_model_name}/'):
             os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
         
-        ext = add_extended_source(lm, ext_name, lon, lat, indexbs, kbs, data_radius, ifAsymm, piv, detector)
+        ext = add_extended_source(lm, ext_name, lon, lat, ra1, dec1, indexbs, kbs, data_radius, ifAsymm, piv, detector)
         try:
             if detector == "jf":
                 extresult = jointfit(region_name, current_model_name, WCDA, lm, s, e, mini=mini, verbose=verbose)
