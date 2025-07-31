@@ -14,9 +14,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 try:
     from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
-    # from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
-    # from hawc_hal.obsolete.ts_map import ParallelTSmap
-    PYFFTW_AVAILABLE = False
+    from hawc_hal.obsolete.ts_map import ParallelTSmap
 except:
     from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
     from WCDA_hal.obsolete.ts_map import ParallelTSmap
@@ -205,7 +203,7 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         plt.show()
     activate_logs()
     activate_warnings()
-    return results_array
+    return skymap
 
 def runllhskymap_ipy(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname,
                             detector="WCDA", ifres=0, s=None, e=None, pixelsize = 0.1, index=-2.63, indexf=False):

@@ -34,6 +34,9 @@ Add_UserInfo.o Add_UserInfo.d: Add_UserInfo.cc \
  /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/TIterator.h \
  /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/TVirtualRWMutex.h \
  /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/TVirtualMutex.h \
+ /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/ROOT/RRangeCast.hxx \
+ /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/ROOT/RSpan.hxx \
+ /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/ROOT/span.hxx \
  /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/TUUID.h \
  /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/TList.h \
  /data/home/cwy/.mylib/miniconda3/envs/3MLhal/include/TBuffer.h \
