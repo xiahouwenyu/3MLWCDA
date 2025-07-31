@@ -99,6 +99,7 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
     # 这部分函数保持不变
     silence_logs()
     silence_warnings()
+    outdir = f"{libdir}/../res/{region_name}/{Modelname}"
     if ifres:
         region_name=region_name+"_res"
     if name is None:
@@ -131,7 +132,6 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         fluxb = (-1e-17*fluxUnit, 1e-14*fluxUnit)
         if index is None:
             index = -3.6
-    outdir = f"{libdir}/../res/{region_name}/{Modelname}"
     
     # 数据加载和模型构建部分保持不变
     print("Loading data and building model (ONCE!)...")
@@ -201,7 +201,6 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         plt.figure(figsize=(12, 8))
         hp.mollview(skymap, title="Significance Map", unit="sigma", cmap="viridis") #, coord=['G', 'C'], rot=[ra, dec], min=-5, max=5
         hp.graticule()
-
         # Show the plot
         plt.show()
     activate_logs()
@@ -220,6 +219,7 @@ def runllhskymap_ipy(roi, maptree, response, ra1, dec1, data_radius, region_name
         Returns:
             >>> None
     """
+    outdir = f"{libdir}/../res/{region_name}/{Modelname}"
     if ifres:
         region_name=region_name+"_res"
     # 这里的参数保持不变
@@ -252,7 +252,6 @@ def runllhskymap_ipy(roi, maptree, response, ra1, dec1, data_radius, region_name
     mtfile = maptree
     rsfile = response
     s, e = s, e
-    outdir = f"{libdir}/../res/{region_name}/{Modelname}"
     P = ParallelTSmap(mtfile, rsfile, ra, dec, 2*radius/pixelsize, 2*radius/pixelsize, pixelsize,s,e,piv=piv,index=index, indexf=indexf, projection="AIT", roi_radius=radius)
     map = P.go()
     fig = P.plot()
