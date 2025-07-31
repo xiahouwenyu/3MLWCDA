@@ -1394,15 +1394,18 @@ def fit(regionname, modelname, Detector,Model,s=None,e=None, mini = "minuit",ver
     elif isinstance(mini, str):
         # ROOTmini = threeML.minimizer.minimization.get_minimizer("ROOT")
         # print(ROOTmini.valid_setup_keys)
-        if mini.lower() == "minuit":
-            minuitmini = LocalMinimization(mini)
-            minuitmini.setup(ftol=ftol, max_iter = max_function_calls, strategy=strategy, print_level=print_level) #, print_level=0
-            jl.set_minimizer(minuitmini)
-        elif mini.lower() == "root":
-            rmini = LocalMinimization(mini)
-            rmini.setup(ftol=ftol, max_function_calls = max_function_calls, strategy=strategy, verbosity=print_level) #, minimizer="Combined", verbosity=3, precision=1e-11
-            jl.set_minimizer(rmini)
-        else:
+        try:
+            if mini.lower() == "minuit":
+                minuitmini = LocalMinimization(mini)
+                minuitmini.setup(ftol=ftol, max_iter = max_function_calls, strategy=strategy, print_level=print_level) #, print_level=0
+                jl.set_minimizer(minuitmini)
+            elif mini.lower() == "root":
+                rmini = LocalMinimization(mini)
+                rmini.setup(ftol=ftol, max_function_calls = max_function_calls, strategy=strategy, verbosity=print_level) #, minimizer="Combined", verbosity=3, precision=1e-11
+                jl.set_minimizer(rmini)
+            else:
+                jl.set_minimizer(mini)
+        except:
             jl.set_minimizer(mini)
     else:
         jl.set_minimizer(mini)
@@ -1585,15 +1588,18 @@ def jointfit(regionname, modelname, Detector,Model,s=None,e=None,mini = "minuit"
     elif isinstance(mini, str):
         # ROOTmini = threeML.minimizer.minimization.get_minimizer("ROOT")
         # print(ROOTmini.valid_setup_keys)
-        if mini.lower() == "minuit":
-            minuitmini = LocalMinimization(mini)
-            minuitmini.setup(ftol=ftol, max_iter = max_function_calls, strategy=strategy, print_level=print_level) #, print_level=0
-            jl.set_minimizer(minuitmini)
-        elif mini.lower() == "root":
-            rmini = LocalMinimization(mini)
-            rmini.setup(ftol=ftol, max_function_calls = max_function_calls, strategy=strategy, verbosity=print_level) #, minimizer="Combined", verbosity=3, precision=1e-11
-            jl.set_minimizer(rmini)
-        else:
+        try:
+            if mini.lower() == "minuit":
+                minuitmini = LocalMinimization(mini)
+                minuitmini.setup(ftol=ftol, max_iter = max_function_calls, strategy=strategy, print_level=print_level) #, print_level=0
+                jl.set_minimizer(minuitmini)
+            elif mini.lower() == "root":
+                rmini = LocalMinimization(mini)
+                rmini.setup(ftol=ftol, max_function_calls = max_function_calls, strategy=strategy, verbosity=print_level) #, minimizer="Combined", verbosity=3, precision=1e-11
+                jl.set_minimizer(rmini)
+            else:
+                jl.set_minimizer(mini)
+        except:
             jl.set_minimizer(mini)
     else:
         jl.set_minimizer(mini)
@@ -2220,7 +2226,7 @@ def add_extended_source(lm, name, lon, lat, ra, dec, indexb, kb, data_radius, if
 
 def log_TS(region_name, modelname, iter_num, ts_value, libdir):
     """记录每次迭代后的总TS值"""
-    path = f'{libdir}/../res/{region_name}/{modelname}/../{region_name}_TS.txt'
+    path = f'{libdir}/../res/{region_name}/{modelname}/../{modelname}_TS.txt'
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
     # 第一次迭代时用 "w" (写入), 之后用 "a" (追加)
@@ -2252,7 +2258,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
                                      data_radius, model_radius, fixcatall, detector,
                                      rtsigma, rtflux, rtindex, rtp, ifext_mt_2)
 
-    if "Diffuse" not in [lm.get_extended_source_name(i) for i in range(lm.get_number_of_extended_sources())]:
+    if "Diffuse" not in [lm.get_extended_source_name(i) for i in range(lm.get_number_of_extended_sources())] and ifDGE:
         # 添加弥散背景
         lm, tDGE, diffuse_component = add_diffuse(lm, ifDGE, freeDGE, indexb, kb, piv, ra1, dec1, model_radius, region_name, DGEk, DGEfile)
         next+=1
@@ -2269,11 +2275,11 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
         os.system(f'mkdir -p {libdir}/../res/{region_name}/{current_model_name}/')
     Modelname = current_model_name
 
-    # 绘制初始模型图
+    # 绘制初始天图和模型
     draw_model_map(region_name, Modelname, get_sources(lm), libdir, roi, ra1, dec1, data_radius * 2, detector, cat, "org")
 
     lm.display(complete=True)
-    
+    N_src=0
     try:
         if detector == "jf":
             bestresult = jointfit(region_name, Modelname, WCDA, lm, s, e, mini=mini, verbose=verbose)
@@ -2287,6 +2293,7 @@ def Search(ra1, dec1, data_radius, model_radius, region_name, Mname, WCDA, roi, 
     TS, _ = getTSall([], region_name, Modelname, bestresult, WCDA)
     TSorg = TS["TS_all"]
     TS_all.append(TSorg)
+    log_TS(region_name, Modelname, N_src + 1, TS_all[-1], libdir)
 
     # 绘制初始拟合后的模型图 (去除弥散背景)
     sources_no_diffuse = get_sources(lm, bestresult)

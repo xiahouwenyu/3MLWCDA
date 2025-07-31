@@ -34,6 +34,11 @@ class ParallelTSmap(object):
         xsize,
         ysize,
         pix_scale,
+        s=None,
+        e=None,
+        piv=3,
+        index=-2.63,
+        indexf=False,
         projection="AIT",
         roi_radius=3.0,
     ):
@@ -54,6 +59,11 @@ class ParallelTSmap(object):
         self._rsfile = response
 
         self._points = []
+        self.s = s
+        self.e = e
+        self._piv = piv
+        self._index = index
+        self._indexf = indexf
 
         # It is important that dec is the first one because the PSF for a Dec bin_name
         # is cached within one engine
@@ -85,7 +95,7 @@ class ParallelTSmap(object):
         roi = HealpixConeROI(self._roi_radius, model_radius=self._roi_radius+1, ra=ra_c, dec=dec_c)
 
         self._llh = HAL("HAWC", self._mtfile, self._rsfile, roi)
-        self._llh.set_active_measurements(0, 6)
+        self._llh.set_active_measurements(self.s, self.e)
 
         # Make a fit with no source to get the likelihood for the null hypothesis
         model = self.get_model(0)
@@ -116,14 +126,14 @@ class ParallelTSmap(object):
             "TestSource", ra=this_ra, dec=this_dec, spectral_shape=spectrum
         )
 
-        spectrum.piv = 1 * u.TeV
+        spectrum.piv = self._piv * u.TeV
         spectrum.piv.fix = True
 
         # Start from a flux 1/10 of the Crab
         spectrum.K = crab_diff_flux_at_1_TeV
         spectrum.K.bounds = (1e-30, 1e-18)
-        spectrum.index = -2.63
-        spectrum.index.fix = False
+        spectrum.index = self._index
+        spectrum.index.fix = self._indexf
 
         model1 = Model(this_source)
 

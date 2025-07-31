@@ -101,7 +101,7 @@ def get_upperlimit(jl, par="J0057.spectrum.main.PowerlawM.K", num=500, plot=True
         plt.show()
     return upper, newmini
 
-def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, scannum=200, det="WCDA"):
+def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, nCL=False, threshold=2, scanbin=10, iffixtans=False, bondaryrange=100, pixelsize=0.05, scannum=200, det="WCDA", verbose=False):
     #Only fit the spectrum.K for plotting  points on the spectra
         #prarm1: fixed.spectrum.alpha 
         #param2: fixed.spectrum.belta
@@ -164,7 +164,9 @@ def cal_K_WCDA(i,lm,maptree,response,roi,source="J0248", ifgeterror=False, mini=
                 else:
                     kparname=fp
 
-    result2 = fit("nothing","nothing", WCDA_1,lm2,int(i),int(i),mini=mini,savefit=False, ifgeterror=ifgeterror)
+    # lm2.display(complete=True)
+
+    result2 = fit("nothing","nothing", WCDA_1,lm2,int(i),int(i),mini=mini,savefit=False, ifgeterror=ifgeterror, verbose=verbose)
 
     TSflux=result2[0].compute_TS(source,result2[1][1]).values[0][2]
     if ifpowerlawM:
@@ -449,7 +451,7 @@ def reweightxall(WCDA, lm, func = fun_Powerlaw,source="J0248"):
     th1.GetQuantiles(1,x_hi,y_hi)
     return x,x_lo,x_hi, th1
 
-def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=0, iffixtans=False, bondaryrange=100, pixelsize=0.17, acc=False, scannum=200):
+def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=False, mini="ROOT", ifpowerlawM=False, spec=PowerlawM(), CL=0.95, piv = 3, nCL=False, threshold=2, scanbin=0, iffixtans=False, bondaryrange=100, pixelsize=0.17, acc=False, scannum=200, verbose=False):
     """
         获取某个源的能谱点
 
@@ -492,7 +494,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
         if int(i) <= imin:
             imin = int(i)
         xx = reweightx(lm, Detector, i, source=source, func=func, acc=acc, piv=piv)
-        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange, pixelsize=pixelsize, scannum=scannum, det = Detector.name)
+        result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, spec=spec, CL=CL, nCL=nCL, threshold=threshold, scanbin=scanbin, iffixtans=iffixtans, bondaryrange=bondaryrange, pixelsize=pixelsize, scannum=scannum, det = Detector.name, verbose=verbose)
         # try:
         #     result2, TSflux=cal_K_WCDA(i,lm, maptree,response,roi, source=source, ifgeterror=ifgeterror, mini=mini, ifpowerlawM=ifpowerlawM, CL=CL, nCL=nCL, threshold=threshold)
         # except Exception as e:

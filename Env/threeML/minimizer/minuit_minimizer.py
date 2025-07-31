@@ -241,8 +241,6 @@ class MinuitMinimizer(LocalMinimizer):
 
             self._print_current_status()
 
-            self.restore_best_fit()
-
             raise FitFailed(
                 "MIGRAD call failed. This is usually due to unconstrained parameters."
             )

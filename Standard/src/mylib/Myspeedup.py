@@ -14,12 +14,13 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 try:
     from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
-    from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
+    # from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
+    # from hawc_hal.obsolete.ts_map import ParallelTSmap
     PYFFTW_AVAILABLE = False
 except:
     from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
+    from WCDA_hal.obsolete.ts_map import ParallelTSmap
 from Myspec import PowerlawM as PowLaw
-from hawc_hal.obsolete.ts_map import ParallelTSmap
 # 导入 ipyparallel
 import ipyparallel as ipp
 
@@ -55,9 +56,6 @@ def runllhskymap(roi, maptree, response, ra1, dec1, data_radius, region_name, de
         os.system(f"cd {libdir}/tools/llh_skymap/; rm -rf ./output/*; ./runkm2aall.sh {maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response} {libdir}")
         print(f"cd {libdir}/tools/llh_skymap/; rm -rf ./output/*; ./runkm2aall.sh {maptree} {ra1} {dec1} {data_radius} {region_name} {parts} {libdir}/tools/llh_skymap {jc} {sn} {s} {e} {response} {libdir}")
 
-# 这部分函数保持不变
-silence_logs()
-silence_warnings()
 jl_global = None
 source_global = None
 
@@ -98,6 +96,9 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         Returns:
             >>> None
     """
+    # 这部分函数保持不变
+    silence_logs()
+    silence_warnings()
     if ifres:
         region_name=region_name+"_res"
     if name is None:
@@ -203,6 +204,8 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
 
         # Show the plot
         plt.show()
+    activate_logs()
+    activate_warnings()
     return results_array
 
 def runllhskymap_ipy(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname,
