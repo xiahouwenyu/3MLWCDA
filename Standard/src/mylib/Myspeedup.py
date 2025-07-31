@@ -88,7 +88,7 @@ def getllh_for_one_pixel(pid):
     except Exception as e:
         return [pid, hp.UNSEEN]
     
-def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname, detector="WCDA", ifres=False, jc=30, s=None, e=None, ifplot=False, index=None, indexf=True):
+def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname, detector="WCDA", ifres=False, jc=30, s=None, e=None, ifplot=False, index=None, indexf=True, name = None):
     """
         交作业跑显著性天图，使用多进程并行计算
 
@@ -100,7 +100,8 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
     """
     if ifres:
         region_name=region_name+"_res"
-
+    if name is None:
+        name = f"{region_name}"
     # 硬编码参数保持不变
     ra, dec = ra1, dec1
     radius = data_radius
@@ -130,7 +131,6 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         if index is None:
             index = -3.6
     outdir = f"{libdir}/../res/{region_name}/{Modelname}"
-    name = "region_name"
     
     # 数据加载和模型构建部分保持不变
     print("Loading data and building model (ONCE!)...")

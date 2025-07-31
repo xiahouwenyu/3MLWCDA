@@ -2195,8 +2195,8 @@ def plot_residual(resu_map, lon_array, lat_array, ra1, dec1, region_name, model_
 
 def add_point_source(lm, name, lon, lat, ra, dec, indexb, kb, data_radius, piv, detector):
     """向模型中添加一个点源"""
-    distance = distance(ra, dec, lon, lat)
-    frange = data_radius-distance
+    dd = distance(ra, dec, lon, lat)
+    frange = data_radius-dd
     if detector == "jf":
         pt_source = setsorce(name, lon, lat, alphab=indexb, kb=kb, k=1e-15,fitrange=frange, piv=piv, spec=Log_parabola())
     else:
@@ -2206,8 +2206,8 @@ def add_point_source(lm, name, lon, lat, ra, dec, indexb, kb, data_radius, piv, 
 
 def add_extended_source(lm, name, lon, lat, ra, dec, indexb, kb, data_radius, ifAsymm,  piv, detector):
     """向模型中添加一个展源（对称或非对称高斯）"""
-    distance = distance(ra, dec, lon, lat)
-    frange = data_radius-distance
+    dd = distance(ra, dec, lon, lat)
+    frange = data_radius-dd
     if detector == "jf":
         ext_source = setsorce(name, lon, lat, sigma=0.1, sb=(0,2), alphab=indexb,kb=kb, k=1e-15,fitrange=frange, piv=piv, spec=Log_parabola())
     else:

@@ -1256,7 +1256,7 @@ def getsigmap(region_name, Modelname, mymap,i=0,signif=17,res=False,name="J1908"
 
 def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1, data_radius, outname,
                  active_sources=[], binc="all", ifrunllh=True, detector="WCDA", jc=10, sn=1000, s=None, e=None, llhmode=None):
-    """Write residual map to skymap root file."""
+    """Write residual map to skymap root file. mp ipy"""
     log.info(outname + "_res")
 
     # Healpix region info
@@ -1354,22 +1354,22 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
                 s = binc[0]
             if e is None:
                 e = binc[-1]
-            runllhskymap(roi2, outroot, response, ra1, dec1, data_radius, outname, Modelname,
+            runllhskymap(roi2, outroot, response, ra1, dec1, data_radius, outname,
                         detector=detector, ifres=1, s=s, e=e, jc=jc, sn=sn)
         elif llhmode == "mp":
             if s is None:
                 s = binc[0]
             if e is None:
                 e = binc[-1]
-            map = runllhskymap_mp(roi, outroot, response, ra1, dec1, data_radius, outname, Modelname,
-                            detector=detector, ifres=1, s=s, e=e, jc=jc)
+            map = runllhskymap_mp(roi, outroot, response, ra1, dec1, data_radius, region_name, Modelname,
+                            detector=detector, ifres=1, s=s, e=e, jc=jc, name=outname)
             return map
         elif llhmode == "ipy":
             if s is None:
                 s = binc[0]
             if e is None:
                 e = binc[-1]
-            map = runllhskymap_ipy(roi, outroot, response, ra1, dec1, data_radius, outname, Modelname,
+            map = runllhskymap_ipy(roi, outroot, response, ra1, dec1, data_radius, region_name, Modelname,
                              detector=detector, ifres=1, s=s, e=e, jc=jc)
             return map
     return outname + "_res"
