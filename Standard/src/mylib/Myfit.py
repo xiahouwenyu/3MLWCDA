@@ -230,7 +230,7 @@ if parb != None:
         xc=xc*1e9
         xcb=(xcb[0]*1e9, xcb[1]*1e9)
         setspecParameter("index",index,indexf,indexb,delta=deltaspec)
-        setspecParameter("xc",xc,xcf,xcb)
+        setspecParameter("xc",xc,xcf,xcb, delta=1e9)
     elif spec.name == "Powerlaw" or spec.name == "PowerlawM" or spec.name == "PowerlawN":
         setspecParameter("index",index,indexf,indexb,delta=deltaspec)
     #### set spatial

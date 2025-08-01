@@ -9,8 +9,6 @@ from threeML import *
 silence_warnings()
 try:
     from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
-    from hawc_hal.psf_fast.psf_convolutor import PYFFTW_AVAILABLE
-    PYFFTW_AVAILABLE = False
 except:
     from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 import healpy as hp
