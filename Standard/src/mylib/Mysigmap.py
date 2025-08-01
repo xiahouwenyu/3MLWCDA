@@ -1330,9 +1330,10 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
             # Vectorized computation of residual map
             val_m = bkg_counts.copy()
-            roi_mask = np.isin(np.arange(npix), pixid)
-            roi_indices = np.searchsorted(pixid, np.arange(npix)[roi_mask])
-            val_m[roi_mask] += model[roi_indices]
+            val_m += model
+            # roi_mask = np.isin(np.arange(npix), pixid)
+            # roi_indices = np.searchsorted(pixid, np.arange(npix)[roi_mask])
+            # val_m[roi_mask] += model[roi_indices]
 
             # Write to output file with uproot
             with uproot.update(outroot) as fout_uproot:

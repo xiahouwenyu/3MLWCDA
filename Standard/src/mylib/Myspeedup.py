@@ -21,6 +21,7 @@ except:
 from Myspec import PowerlawM as PowLaw
 # 导入 ipyparallel
 import ipyparallel as ipp
+import traceback
 
 libdir = os.path.dirname(os.path.dirname(inspect.getfile(Mycoord)))
 # libdir = subprocess.run("pwd -P", shell=True, capture_output=True, text=True).stdout.replace("\n","")
@@ -75,13 +76,16 @@ def getllh_for_one_pixel(pid):
         results = jl_global.results
         TS = jl_global.compute_TS("Pixel", like_df)
         ts = TS.values[0][2]
-        K_fitted = results.optimized_model.Pixel.spectrum.main.Powerlaw.K.value
+        K_fitted = results.optimized_model.Pixel.spectrum.main.PowerlawM.K.value*1e9
+        indexfitted = results.optimized_model.Pixel.spectrum.main.PowerlawM.index.value
         if ts >= 0:
             sig = np.sqrt(ts) if K_fitted >= 0 else -np.sqrt(ts)
         else:
             sig = hp.UNSEEN
-        return [pid, sig]
+        return [pid, sig, K_fitted, indexfitted]
     except Exception as e:
+        print(e)
+        traceback.print_exc()
         return [pid, hp.UNSEEN]
     
 def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname, detector="WCDA", ifres=False, jc=30, s=None, e=None, ifplot=False, index=None, indexf=True, name = None):
@@ -95,8 +99,8 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
             >>> None
     """
     # 这部分函数保持不变
-    silence_logs()
-    silence_warnings()
+    # silence_logs()
+    # silence_warnings()
     outdir = f"{libdir}/../res/{region_name}/{Modelname}"
     if ifres:
         region_name=region_name+"_res"
@@ -150,7 +154,9 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
     WCDA.set_active_measurements(s, e)
     data = DataList(WCDA)
     jl = JointLikelihood(model, data, verbose=False)
-    jl.set_minimizer("ROOT")
+    minuitmini = LocalMinimization("minuit")
+    minuitmini.setup(ftol=1, max_iter = 500000, strategy=2, print_level=0)
+    jl.set_minimizer(minuitmini)
     print("Data and model loaded.")
 
     # 获取所有像素部分保持不变
@@ -190,6 +196,15 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
     skymap = np.full(npix, hp.UNSEEN)
     skymap[results_array[:, 0].astype(int)] = results_array[:, 1]
     skymap = hp.ma(skymap)
+
+    fluxmap = np.full(npix, hp.UNSEEN)
+    fluxmap[results_array[:, 0].astype(int)] = results_array[:, 2]
+    fluxmap = hp.ma(fluxmap)
+
+    indexmap = np.full(npix, hp.UNSEEN)
+    indexmap[results_array[:, 0].astype(int)] = results_array[:, 3]
+    indexmap = hp.ma(indexmap)
+
     outpath = f"{outdir}/{detector}_{name}_fullmap.fits"
     hp.write_map(f"{outdir}/{detector}_{name}_fullmap.fits", skymap, overwrite=True)
     # np.save(outpath, results_array)
@@ -201,9 +216,9 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         hp.graticule()
         # Show the plot
         plt.show()
-    activate_logs()
-    activate_warnings()
-    return skymap
+    # activate_logs()
+    # activate_warnings()
+    return skymap, fluxmap, indexmap
 
 def runllhskymap_ipy(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname,
                             detector="WCDA", ifres=0, s=None, e=None, pixelsize = 0.1, index=-2.63, indexf=False):
