@@ -36,7 +36,7 @@ class ConvolvedPointSource(object):
         # (see get_expected_signal_per_transit)
         self._last_processed_position = (-999, -999)
 
-        self._sname = [it for it in self._source.free_parameters.keys() if "spectrum" in it]
+        self._sname = [it for it in self._source.parameters.keys() if "spectrum" in it]
 
         self._last_sp = [[0 for it in self._sname] for _ in range(self._response.n_energy_planes)]
 
@@ -65,14 +65,14 @@ class ConvolvedPointSource(object):
     def get_source_map(self, response_bin_id, tag=None, integrate=False, psf_integration_method='fast'):
         # import time
         # 初始化时间统计字典
-        time_stats = {
-            'position_update': 0,
-            'psf_image': 0,
-            'spectrum_calc': 0,
-            'integration': 0,
-            'weight_update': 0,
-            'total': 0
-        }
+        # time_stats = {
+        #     'position_update': 0,
+        #     'psf_image': 0,
+        #     'spectrum_calc': 0,
+        #     'integration': 0,
+        #     'weight_update': 0,
+        #     'total': 0
+        # }
         # total_start = time.perf_counter()
 
         # Get current point source position
@@ -80,7 +80,7 @@ class ConvolvedPointSource(object):
         # that's why it is here
         # pos_start = time.perf_counter()
         ra_src, dec_src = self._source.position.ra.value, self._source.position.dec.value
-        specp = [self._source.free_parameters[it].value for it in self._sname]
+        specp = [self._source.parameters[it].value for it in self._sname]
 
         if (ra_src, dec_src) != self._last_processed_position:
             # print("Recomputing %s" % self._name)
@@ -108,7 +108,7 @@ class ConvolvedPointSource(object):
                                                                     response_bin_id,
                                                                     map_sum))
 
-        if specp != self._last_sp[int(response_bin_id)]:
+        if specp != self._last_sp[int(response_bin_id)] or abs(dec_src - self._last_processed_position[1]) > 0.1:
             # spec_start = time.perf_counter()
             # Compute the fluxes from the spectral function at the same energies as the simulated function
             energy_centers_keV = response_energy_bin.sim_energy_bin_centers * 1e9  # astromodels expects energies in keV

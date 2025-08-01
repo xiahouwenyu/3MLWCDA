@@ -24,6 +24,7 @@ from scipy.optimize import minimize
 from Mylightcurve import p2sigma
 from Myspeedup import libdir
 from Mycoord import distance
+import traceback
 
 log = setup_logger(__name__)
 log.propagate = False
@@ -321,6 +322,7 @@ def plot_all_model_maps(WCDA, lm, ra1, dec1, max_component_id=None, radius=10, r
             maps.append(m)
             valid_ids.append(i)
         except Exception as e:
+            # traceback.print_exc()
             print(f"Component {i} skipped: {e}")
 
     n_maps = len(maps)
