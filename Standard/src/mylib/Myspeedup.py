@@ -99,8 +99,8 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
             >>> None
     """
     # 这部分函数保持不变
-    # silence_logs()
-    # silence_warnings()
+    silence_logs()
+    silence_warnings()
     outdir = f"{libdir}/../res/{region_name}/{Modelname}"
     if ifres:
         region_name=region_name+"_res"
@@ -216,8 +216,8 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
         hp.graticule()
         # Show the plot
         plt.show()
-    # activate_logs()
-    # activate_warnings()
+    activate_logs()
+    activate_warnings()
     return skymap, fluxmap, indexmap
 
 def runllhskymap_ipy(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname,

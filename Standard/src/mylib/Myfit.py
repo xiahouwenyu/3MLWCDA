@@ -230,7 +230,7 @@ if parb != None:
         xc=xc*1e9
         xcb=(xcb[0]*1e9, xcb[1]*1e9)
         setspecParameter("index",index,indexf,indexb,delta=deltaspec)
-        setspecParameter("xc",xc,xcf,xcb,1e9)
+        setspecParameter("xc",xc,xcf,xcb)
     elif spec.name == "Powerlaw" or spec.name == "PowerlawM" or spec.name == "PowerlawN":
         setspecParameter("index",index,indexf,indexb,delta=deltaspec)
     #### set spatial
@@ -2732,8 +2732,8 @@ def get_sources(lm,result=None):
                     puv = result[1][0].loc[p,"positive_error"]
                     plv = result[1][0].loc[p,"negative_error"]
                 else:
-                    puv=0
-                    plv=0
+                    puv = 0
+                    plv = 0
                 source[p.split('.')[-1]] = (1,par,par.value,puv,plv)
             else:
                 source[p.split('.')[-1]] = (0,par,par.value,0,0)
