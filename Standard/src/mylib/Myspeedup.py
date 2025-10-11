@@ -84,9 +84,9 @@ def getllh_for_one_pixel(pid):
             sig = hp.UNSEEN
         return [pid, sig, K_fitted, indexfitted]
     except Exception as e:
-        print(e)
-        traceback.print_exc()
-        return [pid, hp.UNSEEN]
+        # print(e)
+        # traceback.print_exc()
+        return [pid, 0, 0, hp.UNSEEN]
     
 def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name, Modelname, detector="WCDA", ifres=False, jc=30, s=None, e=None, ifplot=False, index=None, indexf=True, name = None):
     """
@@ -138,21 +138,23 @@ def runllhskymap_mp(roi, maptree, response, ra1, dec1, data_radius, region_name,
     # 数据加载和模型构建部分保持不变
     print("Loading data and building model (ONCE!)...")
     # roi = HealpixConeROI(data_radius=radius, model_radius=radius + 1, ra=ra, dec=dec)
-    WCDA = HAL("WCDA", mtfile, rsfile, roi, flat_sky_pixels_size=0.17)
+    mname = f"{Modelname}{detector}"
+    mname = mname.replace(" ", "_").replace("-", "_").replace(".", "_")
+    WCDA2 = HAL(mname, mtfile, rsfile, roi, flat_sky_pixels_size=0.17)
     spectrum = PowLaw()
     source = PointSource("Pixel", ra=ra, dec=dec, spectral_shape=spectrum)
     
     spectrum.K=flux 
     spectrum.K.fix=False
     spectrum.K.bounds=fluxb
-    spectrum.K.delta=1e-16*fluxUnit
+    # spectrum.K.delta=1e-16*fluxUnit
     spectrum.piv= piv*u.TeV
     spectrum.piv.fix=True
     spectrum.index=index
     spectrum.index.fix=indexf
     model = Model(source)
-    WCDA.set_active_measurements(s, e)
-    data = DataList(WCDA)
+    WCDA2.set_active_measurements(s, e)
+    data = DataList(WCDA2)
     jl = JointLikelihood(model, data, verbose=False)
     minuitmini = LocalMinimization("minuit")
     minuitmini.setup(ftol=1, max_iter = 500000, strategy=2, print_level=0)

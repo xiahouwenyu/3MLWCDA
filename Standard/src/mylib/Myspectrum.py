@@ -526,7 +526,7 @@ def getdatapoint(Detector, lm, maptree,response,roi, source="J0248", ifgeterror=
     activate_logs()
     return Flux_WCDA, results
 
-def Draw_sepctrum_points(region_name, Modelname, FFlux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None, scale=1, index=-2):
+def Draw_sepctrum_points(region_name, Modelname, FFlux_WCDA, label = "Coma_data", color="tab:blue", aserror=False, ifsimpleTS=False, threshold=2, usexerr = False, ncut=True, subplot=None, scale=1, index=-2, legend=True):
     Flux_WCDA = copy.deepcopy(FFlux_WCDA)
     Fluxdata = np.array([Flux_WCDA[:,0], 1e9*Flux_WCDA[:,3]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,4]*Flux_WCDA[:,0]**2, 1e9*Flux_WCDA[:,5]*Flux_WCDA[:,0]**2,  1e9*Flux_WCDA[:,6]*Flux_WCDA[:,0]**2, Flux_WCDA[:,7], Flux_WCDA[:,1], Flux_WCDA[:,2]])
     """
@@ -554,6 +554,8 @@ def Draw_sepctrum_points(region_name, Modelname, FFlux_WCDA, label = "Coma_data"
         ax = plt.gca()
 
     np.savetxt(f'{libdir}/../res/{region_name}/{Modelname}/Spectrum_{label}.txt', Fluxdata, delimiter='\t', fmt='%e')
+    if not legend:
+        label=None
     if ncut==True:
         Flux_WCDA[:,3][Flux_WCDA[:,3]<0]=0
         Flux_WCDA[:,3][Flux_WCDA[:,7]<=0]=0

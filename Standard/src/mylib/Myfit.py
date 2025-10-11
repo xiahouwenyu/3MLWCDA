@@ -2731,8 +2731,12 @@ def get_sources(lm,result=None):
             par = sc.parameters[p]
             if par.free:
                 if result is not None:
-                    puv = result[1][0].loc[p,"positive_error"]
-                    plv = result[1][0].loc[p,"negative_error"]
+                    try:
+                        puv = result[1][0].loc[p,"positive_error"]
+                        plv = result[1][0].loc[p,"negative_error"]
+                    except:
+                        puv = result.get_data_frame().loc[p,"positive_error"]
+                        plv = result.get_data_frame().loc[p,"negative_error"]
                 else:
                     puv = 0
                     plv = 0

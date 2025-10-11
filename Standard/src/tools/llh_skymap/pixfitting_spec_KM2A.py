@@ -9,7 +9,8 @@ from threeML import *
 silence_warnings()
 try:
     from hawc_hal import HAL, HealpixConeROI, HealpixMapROI
-except:
+except Exception as e:
+    print(e)
     from WCDA_hal import HAL, HealpixConeROI, HealpixMapROI
 import healpy as hp
 import numpy as np

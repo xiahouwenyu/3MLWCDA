@@ -1029,7 +1029,8 @@ def heal2fits(map, name, ra_min = 82, ra_max = 88, xsize=0.1, dec_min=26, dec_ma
         fits.writeto(name, np.array(array), wcs2.to_header(), overwrite=True)
 
 def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3, 5], save=False, savename=None, zmin=None, zmax=None, cat={ "LHAASO": [0, "P"],"TeVCat": [0, "s"], "PSR": [0, "*"],"SNR": [0, "o"],"3FHL": [0, "D"], "4FGL": [0, "d"], "YMC": [0, "^"], "GYMC":[0, "v"], "WR":[0, "X"], "size": 20, "markercolor": "grey", "labelcolor": "black", "angle": 60, "catext": 1}, color="Fermi", colorlabel="", legend=True, Drawdiff=False, ifdrawfits=False, fitsfile=None, vmin=None, vmax=None, drawalpha=False, iffilter=False, cmap=plt.cm.Greens, cutl=0.2, cutu=1, filter=1, alphaf=1,     
-    colors=None, grid=False, dpi=300, drawLHAASO=False, detector = "WCDA"
+    colors=None, grid=False, dpi=300, drawLHAASO=False, detector = "WCDA",
+    skyrange=None
         ):  # sourcery skip: extract-duplicate-method
     """Draw a healpix map with fitting results.
 
@@ -1051,7 +1052,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
     from matplotlib.patches import Ellipse
     fig = mt.hpDraw(region_name, Modelname, map,ra1,dec1,
             radx=rad/np.cos(dec1/180*np.pi),rady=rad, zmin=zmin, zmax=zmax,
-            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color, Drawdiff=Drawdiff, grid=grid, dpi=dpi
+            colorlabel=colorlabel, contours=contours, save=False, cat=cat, color=color, Drawdiff=Drawdiff, grid=grid, dpi=dpi, skyrange=skyrange
             )
     ax = plt.gca()
     if colors is None:
@@ -1143,7 +1144,7 @@ def drawmap(region_name, Modelname, sources, map, ra1, dec1, rad=6, contours=[3,
 def gaussian(x,a,mu,sigma):
     return a*np.exp(-((x-mu)/sigma)**2/2)
 
-def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=None):
+def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=True, ylimsclae=2, xlimscale=10, bins=None, cut0=False):
     """
         从healpix显著性天图S画一维显著性分布并保存
 
@@ -1153,6 +1154,8 @@ def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=
             >>> None
     """ 
     S=S[S!=0]
+    if cut0:
+        S = S[S != 0]
     if bins is None:
         bins = 4*int(max(S.compressed())+5)
         if bins<100:
@@ -1179,14 +1182,27 @@ def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=
             bin_y[:100],
             bounds=([100, -2, 0], [50000000, 2, 10]),
         )
+    finally:
+        
+        log.info("max Significance= %.1f"%(max(S.compressed())))
+
+        plt.figure()
+        #plt.plot([0.,0.],[1,1e6],'k--',linewidth=0.5)
+        plt.plot((bin_x[:bins] + bin_x[1:bins+1]) / 2, bin_y, label="data")
+        if logy:
+            plt.yscale('log')
+        plt.xlim(-xlimscale,xlimscale)
+        plt.ylim(1,max(bin_y*ylimsclae))
+        plt.grid(True)
+        
+        plt.xlabel(r'Significance($\sigma$)')
+        plt.ylabel("entries")
+        plt.legend()
     #popt,pcov = curve_fit(gaussian,bin_x[fit_range[0:-1]]+(bin_x[1]-bin_x[0])/2.,bin_y[fit_range[0:-1]],bounds=([100,-2,0],[50000000,2,10]))
     log.info("************************")
     log.info(popt)
     log.info("************************")
-    log.info("max Significance= %.1f"%(max(S.compressed())))
-
-    plt.figure()
-    #plt.plot([0.,0.],[1,1e6],'k--',linewidth=0.5)
+    plt.text(-xlimscale+0.5,max(bin_y),'mean = %f\n width = %f'%(popt[1],popt[2]))
     if showexp:
         plt.plot(
             (bin_x[:bins] + bin_x[1:bins+1]) / 2,
@@ -1194,22 +1210,13 @@ def getsig1D(S, region_name=None, Modelname=None, name=None, showexp=True, logy=
             '--',
             label='expectation',
         )
-    plt.plot((bin_x[:bins] + bin_x[1:bins+1]) / 2, bin_y, label="data")
     plt.plot(
         (bin_x[:bins] + bin_x[1:bins+1]) / 2,
         gaussian((bin_x[:bins] + bin_x[1:bins+1]) / 2, popt[0], popt[1], popt[2]),
         '--',
         label='fit',
     )
-    if logy:
-        plt.yscale('log')
-    plt.xlim(-xlimscale,xlimscale)
-    plt.ylim(1,max(bin_y*ylimsclae))
-    plt.grid(True)
-    plt.text(-xlimscale+0.5,max(bin_y),'mean = %f\n width = %f'%(popt[1],popt[2]))
-    plt.xlabel(r'Significance($\sigma$)')
-    plt.ylabel("entries")
-    plt.legend()
+    
     if region_name is not None and Modelname is not None and name is not None:
         plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.pdf")
         plt.savefig(f"{libdir}/../res/{region_name}/{Modelname}/hist_sig_{name}.png",dpi=300)
@@ -1307,6 +1314,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
              
             # Construct model map (point and extended sources)
             model = WCDA._get_model_map(bin, 0, 0).as_dense()
+            # model = np.zeros(len(model))
             for idx, keep in enumerate(pta):
                 if not keep:
                     model += WCDA._get_model_map(bin, idx + 1, 0).as_dense()
@@ -1319,6 +1327,9 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
                         model -= WCDA._get_model_map(bin, 0, idx).as_dense()
             # active_bin = WCDA._maptree._analysis_bins[bin_int]  # Use integer bin
             # Read data and background with uproot
+            # 新增诊断：检查 model 初始值
+            # model = WCDA._get_model_map(bin, npt, next).as_dense()
+
             try:
                 tdata = forg_uproot[f"nHit{bin_int:02d}/data"].arrays(library="np")
                 tbkg = forg_uproot[f"nHit{bin_int:02d}/bkg"].arrays(library="np")
@@ -1330,6 +1341,7 @@ def write_resmap(region_name, Modelname, WCDA, roi, maptree, response, ra1, dec1
 
             # Vectorized computation of residual map
             val_m = bkg_counts.copy()
+            model = np.nan_to_num(model, nan=0)
             val_m += model
             # roi_mask = np.isin(np.arange(npix), pixid)
             # roi_indices = np.searchsorted(pixid, np.arange(npix)[roi_mask])

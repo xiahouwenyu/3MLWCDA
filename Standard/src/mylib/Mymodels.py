@@ -634,14 +634,14 @@ class Ring_on_sphere(Function2D, metaclass=FunctionMeta):
                 desc : Radius of the disk
                 initial value : 4
                 min : 0
-                max : 20
+                max : 180
 
             sigmar :
                 
                 desc : Width of the disk
                 initial value : 1
                 min : 0
-                max : 20
+                max : 180
 
         """
 

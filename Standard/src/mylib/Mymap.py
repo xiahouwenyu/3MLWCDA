@@ -836,3 +836,216 @@ def merge_fits_files(file1, file2, output_file):
             # 写入新的FITS文件
             new_hdu.writeto(output_file, overwrite=True)
             print(f"成功合并文件并保存为 {output_file}")
+
+
+def create_dummy_root_file(file_path="skymap.root"):
+    """创建一个包含TH2D的虚拟ROOT文件用于测试。"""
+    try:
+        import ROOT
+    except ImportError:
+        print("警告：PyROOT未安装。将跳过创建虚拟ROOT文件的步骤。")
+        print("请确保您有一个名为 'skymap.root' 的文件来进行测试。")
+        return
+
+    ra_bins, ra_low, ra_high = 100, 180.0, 190.0
+    dec_bins, dec_low, dec_high = 100, 20.0, 30.0
+
+    f = ROOT.TFile(file_path, "RECREATE")
+    h1 = ROOT.TH2D("h1", "My Skymap Histogram", ra_bins, ra_low, ra_high, dec_bins, dec_low, dec_high)
+    h1.GetXaxis().SetTitle("Right Ascension (deg)")
+    h1.GetYaxis().SetTitle("Declination (deg)")
+    
+    center_ra = (ra_high + ra_low) / 2.0
+    center_dec = (dec_high + dec_low) / 2.0
+    for _ in range(100000):
+        h1.Fill(ROOT.gRandom.Gaus(center_ra, 1.0), ROOT.gRandom.Gaus(center_dec, 1.0))
+    
+    h1.Write()
+    f.Close()
+    print(f"已创建虚拟ROOT文件: '{file_path}'")
+
+
+import uproot
+from astropy.wcs import WCS
+
+def convert_th2d_to_fits_linear(root_file_path: str, hist_name: str, fits_file_path: str):
+    """
+    从ROOT文件中读取一个TH2D直方图，并将其转换为带有线性WCS的FITS文件。
+
+    此函数生成的FITS文件将像素坐标线性地映射到原始的坐标值上，
+    而不应用任何天球投影（如TAN, SIN等）。这保留了原始数据的笛卡尔特性。
+
+    Args:
+        root_file_path (str): 输入的ROOT文件的路径。
+        hist_name (str): ROOT文件中的TH2D直方图的名称。
+        fits_file_path (str): 输出的FITS文件的路径。
+    """
+    try:
+        with uproot.open(root_file_path) as file:
+            if hist_name not in file:
+                raise KeyError(f"在文件 '{root_file_path}' 中找不到名为 '{hist_name}' 的对象。")
+
+            hist = file[hist_name]
+            
+            if not hasattr(hist, "axis") or len(hist.axes) < 2:
+                raise TypeError(
+                    f"对象 '{hist_name}' 不是一个二维直方图 (TH2)。"
+                    "此函数需要一个二维直方图来创建FITS天图。"
+                )
+
+            # 1. 提取数据和坐标轴信息
+            values, xedges, yedges = hist.to_numpy()
+            image_data = values.T
+
+            xaxis = hist.axis("x")
+            yaxis = hist.axis("y")
+            
+            # 使用bin边缘(edges)数组的长度减1来稳健地获取bin的数量
+            naxis1 = len(xedges) - 1
+            naxis2 = len(yedges) - 1
+            
+            # 2. 创建一个WCS对象来描述线性的坐标系统
+            w = WCS(naxis=2)
+
+            # CRPIX: 参考像素的坐标 (FITS标准，从1开始计数)
+            # 设为图像中心
+            w.wcs.crpix = [naxis1 / 2.0 + 0.5, naxis2 / 2.0 + 0.5]
+
+            # CDELT: 每个像素的增量（即像素大小），单位为度
+            # 对于天文图像，RA轴（X轴）通常为负，因为RA向东（左）增加。
+            # 这确保了在DS9等查看器中显示时方向正确。
+            ra_pixel_scale = (xaxis.high - xaxis.low) / naxis1
+            dec_pixel_scale = (yaxis.high - yaxis.low) / naxis2
+            w.wcs.cdelt = [-ra_pixel_scale, dec_pixel_scale]
+
+            # CRVAL: 参考像素的物理坐标值（RA, Dec），单位为度
+            # 即图像中心点的坐标值
+            ra_center = (xaxis.high + xaxis.low) / 2.0
+            dec_center = (yaxis.high + yaxis.low) / 2.0
+            w.wcs.crval = [ra_center, dec_center]
+
+            # ==========================================================
+            # **** 关键修正 ****
+            # 为了定义一个线性的、笛卡尔的坐标系，我们直接使用坐标轴的名称，
+            # 而不添加任何投影代码 (如 '---TAN')。
+            w.wcs.ctype = ["RA", "DEC"]
+            # ==========================================================
+
+            # CUNIT: 坐标的单位
+            w.wcs.cunit = ["deg", "deg"]
+
+            # 3. 创建FITS HDU
+            header = w.to_header()
+            header['AUTHOR'] = 'convert_th2d_to_fits_linear function'
+            header['COMMENT'] = f"Converted from {root_file_path}:{hist_name}"
+            header['COMMENT'] = "WCS is linear Cartesian, not a sky projection."
+            
+            hdu = fits.PrimaryHDU(data=image_data.astype(np.float32), header=header)
+
+            # 4. 写入FITS文件
+            hdulist = fits.HDUList([hdu])
+            hdulist.writeto(fits_file_path, overwrite=True)
+            hdulist.close()
+            
+            print(f"成功将 '{root_file_path}' 中的 '{hist_name}' 转换为带有线性坐标系的 '{fits_file_path}'。")
+
+    except FileNotFoundError:
+        print(f"错误：文件 '{root_file_path}' 未找到。")
+    except Exception as e:
+        print(f"发生错误: {e}")
+
+from scipy.interpolate import RegularGridInterpolator
+def convert_th2d_to_healpix(
+    root_file_path: str, 
+    hist_name: str, 
+    fits_file_path: str, 
+    nside: int = 1024
+):
+    """
+    从ROOT TH2D直方图插值生成一个HEALPix FITS天图。
+
+    该函数执行以下步骤：
+    1. 从ROOT文件中读取TH2D的数据和坐标轴。
+    2. 基于TH2D的笛卡尔网格创建一个二维线性插值器。
+    3. 计算给定nside分辨率下所有HEALPix像素中心的(RA, Dec)坐标。
+    4. 对落在原始TH2D范围内的HEALPix像素进行插值。范围外的像素将被赋值为0。
+    5. 将生成的1D HEALPix数组保存为标准的FITS文件。
+
+    Args:
+        root_file_path (str): 输入的ROOT文件的路径。
+        hist_name (str): ROOT文件中的TH2D直方图的名称。
+        fits_file_path (str): 输出的HEALPix FITS文件的路径。
+        nside (int, optional): HEALPix地图的nside分辨率参数。默认为1024。
+                               nside决定了像素的总数 (12 * nside^2)。
+    """
+    try:
+        print("步骤 1/5: 正在从ROOT文件读取直方图...")
+        with uproot.open(root_file_path) as file:
+            if hist_name not in file:
+                raise KeyError(f"在文件 '{root_file_path}' 中找不到名为 '{hist_name}' 的对象。")
+
+            hist = file[hist_name]
+            
+            if not hasattr(hist, "axis") or len(hist.axes) < 2:
+                raise TypeError(f"对象 '{hist_name}' 不是一个二维直方图 (TH2)。")
+
+            values, xedges, yedges = hist.to_numpy()
+            # 转置以匹配 (Dec, RA) 的图像/数组约定
+            image_data = values.T 
+
+        # 2. 基于原始的笛卡尔网格设置一个插值函数
+        # Scipy的插值器需要每个维度的坐标点，我们使用bin的中心
+        print("步骤 2/5: 正在设置二维插值器...")
+        ra_centers = (xedges[:-1] + xedges[1:]) / 2
+        dec_centers = (yedges[:-1] + yedges[1:]) / 2
+
+        # 创建插值器。注意坐标的顺序(dec, ra)必须匹配image_data的维度顺序(ny, nx)。
+        # bounds_error=False 和 fill_value=0 是关键：
+        # 它允许我们查询网格外的点（这些点将返回0），而不会引发错误。
+        interpolator = RegularGridInterpolator(
+            (dec_centers, ra_centers), 
+            image_data, 
+            method='linear',
+            bounds_error=False, 
+            fill_value=0.0
+        )
+
+        # 3. 获取所有HEALPix像素中心的坐标
+        npix = hp.nside2npix(nside)
+        print(f"步骤 3/5: 正在为 nside={nside} ({npix:,} 个像素) 计算HEALPix像素坐标...")
+        
+        # hp.pix2ang返回的是(theta, phi)，单位是弧度 (物理学球坐标约定)
+        # theta是极角 (colatitude), phi是方位角 (longitude/RA)
+        theta, phi = hp.pix2ang(nside, np.arange(npix))
+
+        # 将物理学坐标转换为天文学坐标 (RA, Dec)，单位为度
+        # Dec = 90 - Colatitude_in_degrees
+        # RA = Longitude_in_degrees
+        ra_deg = np.rad2deg(phi)
+        dec_deg = 90.0 - np.rad2deg(theta)
+
+        # 4. 执行插值
+        print("步骤 4/5: 正在对所有HEALPix像素进行插值 (这可能需要一些时间)...")
+        # 准备查询点数组，其形状为 (N_points, 2)，第二维的顺序要和插值器匹配
+        query_points = np.vstack((dec_deg, ra_deg)).T
+        
+        healpix_map = interpolator(query_points)
+
+        # 5. 将HEALPix map写入FITS文件
+        print(f"步骤 5/5: 正在将HEALPix天图写入到 '{fits_file_path}'...")
+        # 使用healpy的write_map函数，它会处理好所有FITS头部的细节
+        # nest=False表示使用'RING'排序，这是最常用的。
+        hp.write_map(
+            fits_file_path, 
+            healpix_map, 
+            overwrite=True, 
+            nest=False, # 使用RING排序
+            coord='C' # 'C' for Celestial (Equatorial)
+        )
+        
+        print("\n转换成功完成！")
+
+    except FileNotFoundError:
+        print(f"错误：文件 '{root_file_path}' 未找到。")
+    except Exception as e:
+        print(f"发生错误: {e}")
