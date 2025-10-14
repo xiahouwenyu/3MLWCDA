@@ -4,7 +4,8 @@
 ## 如何使用
 ### 配置
 1. 拉取github的内容并安装3ML等相应环境:
-`conda env create -f environment.yaml`
+`conda env create -f environment.yaml` 或者
+`conda create -n 3MLhal -c conda-forge python=3.9 astropy gammapy healpy numpy scipy pandas matplotlib uproot root numba ipykernel reproject mamba`
 
 2. 将Env中的文件夹拷贝到对应环境的site-packages中
 
