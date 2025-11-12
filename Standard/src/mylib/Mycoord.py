@@ -61,6 +61,52 @@ def icrs2altaz(
     # print(f"方位角：{azimuth_angle} 度")
     return zenith_angle,azimuth_angle
 
+def altaz2icrs(
+    mjd=59861.55347211,
+    longitude=100.138794639,
+    latitude=29.357656306,
+    zenith_angle=45.0,
+    azimuth_angle=180.0
+):
+    """
+    地平坐标转赤道坐标
+
+    Parameters:
+        longitude, latitude: 地球经纬度（度）
+        zenith_angle: 天顶角（度）
+        azimuth_angle: 方位角（度，北点为0，向东增加）
+        
+    Returns:
+        ra, dec: 赤经、赤纬（度）
+    """
+    # 计算高度角（天顶角 = 90 - 高度角）
+    altitude = 90.0 - zenith_angle
+    
+    # 将MJD转换为Time对象
+    obs_time = Time(mjd, format='mjd')
+    
+    # 创建EarthLocation对象，表示观测位置
+    obs_location = EarthLocation(lat=latitude*u.deg, lon=longitude*u.deg)
+    
+    # 创建AltAz坐标系对象
+    altaz_frame = AltAz(obstime=obs_time, location=obs_location)
+    
+    # 创建SkyCoord对象，表示目标源的地平坐标
+    source_coord = SkyCoord(
+        alt=altitude*u.deg, 
+        az=azimuth_angle*u.deg, 
+        frame=altaz_frame
+    )
+    
+    # 转换到ICRS坐标系（赤道坐标）
+    icrs_coord = source_coord.icrs
+    
+    # 获取赤经和赤纬
+    ra = icrs_coord.ra.deg
+    dec = icrs_coord.dec.deg
+    
+    return ra, dec
+
 def change_coord(m, coord):
     """ Change coordinates of a HEALPIX map
 

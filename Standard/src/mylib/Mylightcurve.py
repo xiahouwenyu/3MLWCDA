@@ -506,7 +506,7 @@ class lc(object):
     #for GRB
     t90=None
 
-    def __init__(self, file = None, tname = None, ebin=None, funcfile=None, bkgfile=None, bkgscale=None):
+    def __init__(self, file = None, tname = None, ebin=None, funcfile=None, bkgfile=None, tname2=None, bkgscale=None):
         """ 
             从root文件里读取TH1D作为光变
         """
@@ -521,7 +521,10 @@ class lc(object):
                     self.counts = self.upfile[tname].values()
                     if bkgfile is not None:
                         bkgr = uproot.open(bkgfile)
-                        self.bkg = bkgr[tname].values()
+                        if tname2 is not None:
+                            self.bkg = bkgr[tname2].values()
+                        else:
+                            self.bkg = bkgr[tname].values()
                         if bkgscale is not None:
                             self.bkg = self.bkg * bkgscale
                 else:

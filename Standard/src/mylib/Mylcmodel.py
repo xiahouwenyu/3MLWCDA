@@ -477,7 +477,7 @@ class HEBS(Function1D, metaclass=FunctionMeta):
 
 
         def evaluate(self, x, A, ts, te, dt, bint):
-            hebsdata = np.loadtxt("../../data/lc_data/GRB221009A/hebs-2.txt")
+            hebsdata = np.loadtxt("/data/home/cwy/Science/3MLWCDA/data/lc_data/GRB221009A/hebs-2.txt")
             from scipy.interpolate import interp1d
             from scipy.integrate import quad
             xx = hebsdata[:,0]
@@ -502,6 +502,102 @@ class HEBS(Function1D, metaclass=FunctionMeta):
                     result.append(0)
             
             return np.array(result)
+        
+class HEBScdf(Function1D, metaclass=FunctionMeta):
+    r"""
+    description :
+        HEBS template in CDF form
+    latex : $  A \int_{t_s}^{t-dt} f(\tau) d\tau / \int_{t_s}^{t_e} f(\tau) d\tau $
+    parameters :
+        A :
+            desc : Normalization
+            initial value : 1000.0
+            is_normalization : True
+            transformation : log10
+            min : 1e-10
+            max : 1e20
+            delta : 0.1
+
+        ts :
+            desc : template start time
+            initial value : 250
+            fix : yes
+        te :
+            desc : template end time
+            min : 0
+            initial value : 270
+            fix : yes
+        dt :
+            desc : time delay
+            initial value : 1.6
+        bint :
+            desc : binning
+            initial value : 1
+            fix : yes
+    """
+
+    def _set_units(self, x_unit, y_unit):
+        # The index is always dimensionless
+        self.A.unit = u.dimensionless_unscaled
+        self.ts.unit = u.s
+        self.te.unit = u.s
+        self.dt.unit = u.s
+        self.bint.unit = u.s
+
+    def evaluate(self, x, A, ts, te, dt, bint):
+        from scipy.interpolate import interp1d
+        from scipy.integrate import quad
+        # 确保 hebs-2.txt 文件的路径正确
+        try:
+            # 您需要将 "../../data/lc_data/GRB221009A/hebs-2.txt" 替换为文件的实际路径
+            hebsdata = np.loadtxt("/data/home/cwy/Science/3MLWCDA/data/lc_data/GRB221009A/hebs-2.txt") 
+        except FileNotFoundError:
+            print("错误：找不到 hebs-2.txt 文件。请确保路径正确。")
+            # 创建一个虚拟数据以继续运行
+            xx_dummy = np.linspace(200, 300, 100)
+            yy_dummy = np.exp(-((xx_dummy - 260)**2) / 10)
+            hebsdata = np.vstack((xx_dummy, yy_dummy)).T
+
+
+        xx = hebsdata[:, 0]
+        y = hebsdata[:, 1]
+
+        # 减去幂律分量
+        y = y - powerlawlc(xx, 0.5e5, -1.5, 230)
+
+        # 重新分箱
+        if int(bint/0.05) > 1: # 避免除以0或1的情况
+            xx = nprebinmean(xx, int(bint / 0.05))
+            y = nprebin(y, int(bint / 0.05))
+
+        tcut = (xx - dt > ts) & (xx - dt < te)
+        # 创建插值函数
+        f = interp1d(xx, y - min(y[tcut]), bounds_error=False, fill_value=0)
+
+        def integrand(t):
+            return f(t)
+
+        # 计算总的归一化积分
+        norm, error = quad(integrand, ts, te)
+        if norm == 0:
+            return np.zeros_like(x) # 如果总积分为0，则返回全0数组
+
+        result = []
+        for xxx in x:
+            # 计算积分的上限
+            integration_upper_bound = xxx - dt
+            
+            if integration_upper_bound <= ts:
+                # 如果上限小于等于起始时间，CDF值为0
+                result.append(0)
+            # elif integration_upper_bound >= te:
+            #     # 如果上限大于等于结束时间，CDF值为归一化常数A
+            #     result.append(A)
+            else:
+                # 计算从 ts 到上限的积分
+                integral_value, _ = quad(integrand, ts, integration_upper_bound)
+                result.append(A * integral_value / norm)
+        return np.array(result)
         
 class Powerlaw_x0(Function1D, metaclass=FunctionMeta):
     r"""
@@ -584,7 +680,7 @@ class Powerlaw_x0(Function1D, metaclass=FunctionMeta):
 
         return result * unit_
 
-class StepFunction(Function1D, metaclass=FunctionMeta):
+class StepFunction2(Function1D, metaclass=FunctionMeta):
     r"""
     description :
 
@@ -632,6 +728,51 @@ class StepFunction(Function1D, metaclass=FunctionMeta):
         idx = (x >= mean-sigma/2) & (x <= mean+sigma/2)
         result[idx] = value
 
+        return result
+    
+class StepFunction2inf(Function1D, metaclass=FunctionMeta):
+    r"""
+    description :
+
+        A function which is constant on the interval lower_bound - upper_bound and 0 outside the interval. The
+        extremes of the interval are counted as part of the interval.
+
+    latex : $ f(x)=\begin{cases}0 & x < \text{lower_bound} \\\text{value} & \text{lower_bound} \le x \le \text{upper_bound} \\ 0 & x > \text{upper_bound} \end{cases}$
+
+    parameters :
+
+        lower_bound :
+
+            desc : Lower bound for the interval
+            initial value : 0
+
+        value :
+
+            desc : Value in the interval
+            initial value : 5.0
+
+    tests :
+        - { x : 0.5, function value: 1.0, tolerance: 1e-20}
+        - { x : -0.5, function value: 0, tolerance: 1e-20}
+
+    """
+
+    def _set_units(self, x_unit, y_unit):
+        # Lower and upper bound has the same unit as x
+        self.lower_bound.unit = x_unit
+
+        # value has the same unit as y
+        self.value.unit = y_unit
+
+    def evaluate(self, x, lower_bound, value):
+        # The value * 0 is to keep the units right
+
+        result = np.zeros(x.shape) * 1
+
+        idx = (x >= lower_bound)
+        idx2 = (x < lower_bound)
+        result[idx] = value
+        result[idx2] = 1
         return result
     
 class Log_parabola3(Function1D, metaclass=FunctionMeta):
